@@ -32,7 +32,11 @@ Node.js Express 기반 DonWorry 백엔드 API 서버입니다.
 
    npm run prisma:migrate
 
-6. 개발 서버 실행
+6. 초기 seed 데이터 입력
+
+   npm run seed
+
+7. 개발 서버 실행
 
    npm run dev
 
