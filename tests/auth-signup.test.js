@@ -4,7 +4,8 @@ import bcrypt from 'bcryptjs';
 import request from 'supertest';
 
 process.env.NODE_ENV = 'test';
-process.env.DATABASE_URL = 'mysql://donworry:donworry@localhost:3307/donworry_test';
+process.env.DATABASE_URL =
+  process.env.TEST_DATABASE_URL || 'mysql://donworry:donworry@localhost:3307/donworry_test';
 process.env.JWT_ACCESS_SECRET = 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 process.env.CORS_ORIGIN = 'http://localhost:5173';
@@ -58,7 +59,7 @@ test('POST /api/v1/auth/signup creates a local user from signup UI payload', asy
   assert.equal(response.body.data.loginId, 'signup123');
   assert.equal(response.body.data.name, 'holdon');
   assert.equal(response.body.data.phoneNumber, '010-0000-0000');
-  assert.equal(typeof response.body.data.userId, 'number');
+  assert.equal(typeof response.body.data.userId, 'string');
 
   const user = await prisma.user.findUnique({
     where: { email: 'signup@example.com' },

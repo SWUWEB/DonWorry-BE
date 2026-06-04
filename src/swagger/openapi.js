@@ -90,7 +90,7 @@ export const openApiDocument = {
           data: {
             type: 'object',
             properties: {
-              userId: { type: 'integer', example: 1 },
+              userId: { type: 'string', example: '1' },
               loginId: { type: 'string', example: 'gachi123' },
               name: { type: 'string', example: '홍길동' },
               email: { type: 'string', format: 'email', example: 'user@example.com' },

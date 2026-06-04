@@ -11,7 +11,7 @@ const emailVerificationJwtTtl = '10m';
 
 export const serializeSignupUser = (user) => {
   return {
-    userId: Number(user.id),
+    userId: user.id.toString(),
     loginId: user.loginId,
     name: user.nickname,
     email: user.email,
@@ -117,10 +117,11 @@ export const signup = async ({
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const target = error.meta?.target ?? [];
-      const message = target.includes('login_id')
+      const isLoginIdDuplicated = target.includes('loginId');
+      const message = isLoginIdDuplicated
         ? '이미 사용 중인 아이디입니다.'
         : '이미 가입된 이메일입니다.';
-      const errorCode = target.includes('login_id') ? ERROR_CODES.AUTH4092 : ERROR_CODES.AUTH4091;
+      const errorCode = isLoginIdDuplicated ? ERROR_CODES.AUTH4092 : ERROR_CODES.AUTH4091;
 
       throw new HttpError(409, message, { errorCode });
     }
