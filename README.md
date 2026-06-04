@@ -14,31 +14,75 @@ Node.js Express 기반 DonWorry 백엔드 API 서버입니다.
 
 1. 의존성 설치
 
+   ```bash
    npm install
+   ```
 
 2. 환경변수 설정
 
+   ```powershell
    copy .env.example .env
+   ```
 
 3. 로컬 MySQL 실행
 
+   ```bash
    docker compose up -d mysql
+   ```
 
 4. Prisma Client 생성
 
+   ```bash
    npm run prisma:generate
+   ```
 
 5. DB 마이그레이션
 
+   ```bash
    npm run prisma:migrate
+   ```
 
 6. 초기 seed 데이터 입력
 
+   ```bash
    npm run seed
+   ```
 
 7. 개발 서버 실행
 
+   ```bash
    npm run dev
+   ```
+
+## Test Setup
+
+로컬 테스트는 `donworry_test` 데이터베이스를 사용합니다.
+
+1. MySQL 컨테이너 실행
+
+   ```bash
+   docker compose up -d mysql
+   ```
+
+2. 테스트 DB 생성
+
+   ```bash
+   docker compose exec mysql mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS donworry_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON donworry_test.* TO 'donworry'@'%'; FLUSH PRIVILEGES;"
+   ```
+
+3. 테스트 DB 마이그레이션
+
+   PowerShell:
+
+   ```powershell
+   $env:DATABASE_URL="mysql://donworry:donworry@localhost:3307/donworry_test"; npx prisma migrate deploy
+   ```
+
+4. 테스트 실행
+
+   ```bash
+   npm test
+   ```
 
 ## Project Structure
 

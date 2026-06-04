@@ -39,6 +39,7 @@ export const openApiDocument = {
         type: 'object',
         properties: {
           success: { type: 'boolean', example: false },
+          code: { type: 'string', example: 'COMMON4001' },
           message: { type: 'string', example: 'Invalid request' },
         },
       },
@@ -59,12 +60,56 @@ export const openApiDocument = {
       },
       SignupRequest: {
         type: 'object',
-        required: ['email', 'password', 'nickname'],
+        required: [
+          'name',
+          'loginId',
+          'email',
+          'emailVerificationToken',
+          'password',
+          'passwordConfirm',
+          'phoneNumber',
+        ],
         properties: {
+          name: { type: 'string', example: '홍길동' },
+          loginId: { type: 'string', example: 'gachi123' },
           email: { type: 'string', format: 'email', example: 'user@example.com' },
-          password: { type: 'string', format: 'password', example: 'password123' },
-          nickname: { type: 'string', example: '돈워리' },
-          emailVerificationToken: { type: 'string', example: '123456' },
+          emailVerificationToken: {
+            type: 'string',
+            example: 'email-verification-token',
+          },
+          password: { type: 'string', format: 'password', example: 'Password123!' },
+          passwordConfirm: { type: 'string', format: 'password', example: 'Password123!' },
+          phoneNumber: { type: 'string', example: '010-0000-0000' },
+        },
+      },
+      SignupResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '회원가입이 완료되었습니다.' },
+          data: {
+            type: 'object',
+            properties: {
+              userId: { type: 'string', example: '1' },
+              loginId: { type: 'string', example: 'gachi123' },
+              name: { type: 'string', example: '홍길동' },
+              email: { type: 'string', format: 'email', example: 'user@example.com' },
+              phoneNumber: { type: 'string', example: '010-0000-0000' },
+            },
+          },
+        },
+      },
+      CheckLoginIdResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: {
+            type: 'object',
+            properties: {
+              available: { type: 'boolean', example: true },
+            },
+          },
         },
       },
       ConsumptionRecordRequest: {
@@ -189,7 +234,35 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/signup': {
-      post: publicJsonOperation('Auth', '회원가입', 'SignupRequest'),
+      post: {
+        ...publicJsonOperation('Auth', '회원가입', 'SignupRequest'),
+        responses: {
+          201: {
+            description: 'Signup completed',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SignupResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request or email verification token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          409: {
+            description: 'Duplicated email or login id',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/login': {
       post: publicJsonOperation('Auth', '로그인', 'LoginRequest'),
@@ -211,6 +284,39 @@ export const openApiDocument = {
             schema: { type: 'string', format: 'email' },
           },
         ],
+      },
+    },
+    '/api/v1/auth/check-login-id': {
+      get: {
+        tags: ['Auth'],
+        summary: '아이디 중복 확인',
+        security: [],
+        parameters: [
+          {
+            name: 'loginId',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', example: 'gachi123' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Login id availability',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/CheckLoginIdResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
       },
     },
     '/api/v1/auth/email-verifications': {
