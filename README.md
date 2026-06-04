@@ -105,3 +105,15 @@ Node.js Express 기반 DonWorry 백엔드 API 서버입니다.
 
 Swagger UI 오른쪽 상단의 Authorize 버튼에 access token을 입력하면 인증이 필요한 API 요청에
 Authorization: Bearer 토큰이 자동으로 포함됩니다.
+
+## Troubleshooting
+
+### Prisma migrate P3014
+
+`npm run prisma:migrate` 실행 중 shadow database 권한 오류가 발생하면 로컬 MySQL 컨테이너의
+`donworry` 사용자 권한을 갱신합니다.
+
+```bash
+docker exec donworry-mysql mysql -uroot -proot -e "GRANT ALL PRIVILEGES ON *.* TO 'donworry'@'%'; FLUSH PRIVILEGES;"
+npm run prisma:migrate
+```
