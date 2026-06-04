@@ -64,11 +64,13 @@ enum DecisionReasonType {
 model User {
   id                      BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
   email                   String        @unique @db.VarChar(255)
+  loginId                 String?       @unique @map("login_id") @db.VarChar(12)
   kakaoUserId             String?       @unique @map("kakao_user_id") @db.VarChar(100)
   passwordHash            String?       @map("password_hash") @db.VarChar(255)
   loginProvider           LoginProvider @default(LOCAL) @map("login_provider")
   emailVerifiedAt         DateTime?     @map("email_verified_at")
   nickname                String        @db.VarChar(50)
+  phoneNumber             String?       @map("phone_number") @db.VarChar(20)
   profileImageUrl         String?       @map("profile_image_url") @db.VarChar(500)
   interestTagsJson        Json?         @map("interest_tags_json")
   savingGoalText          String?       @map("saving_goal_text") @db.VarChar(255)
