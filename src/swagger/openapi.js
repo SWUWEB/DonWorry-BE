@@ -1,3 +1,39 @@
+import {
+  checkEmailDto,
+  checkLoginIdDto,
+  emailVerificationConfirmDto,
+  emailVerificationRequestDto,
+  loginDto,
+  passwordResetConfirmDto,
+  passwordResetRequestDto,
+  signupDto,
+} from '../features/auth/auth.dto.js';
+import {
+  consumptionRecordIdDto,
+  createConsumptionRecordDto,
+  updateConsumptionRecordDto,
+} from '../features/consumption-records/consumption-records.dto.js';
+import { calculateRiskScoreDto } from '../features/interventions/interventions.dto.js';
+import { notificationIdDto } from '../features/notifications/notifications.dto.js';
+import { upsertOnboardingDto } from '../features/onboarding/onboarding.dto.js';
+import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
+import {
+  createWishlistDecisionDto,
+  temptationIdDto,
+} from '../features/temptations/temptations.dto.js';
+import {
+  changePasswordDto,
+  notificationSettingsDto,
+  savingGoalDto,
+  updateMeDto,
+} from '../features/users/users.dto.js';
+import {
+  createWishlistItemDto,
+  updateWishlistItemDto,
+  wishlistItemIdDto,
+} from '../features/wishlist-items/wishlist-items.dto.js';
+import { withZodDto } from './zod-openapi.js';
+
 export const openApiDocument = {
   openapi: '3.0.3',
   info: {
@@ -50,38 +86,6 @@ export const openApiDocument = {
           message: { type: 'string', example: 'auth API is not implemented yet' },
         },
       },
-      LoginRequest: {
-        type: 'object',
-        required: ['email', 'password'],
-        properties: {
-          email: { type: 'string', format: 'email', example: 'user@example.com' },
-          password: { type: 'string', format: 'password', example: 'password123' },
-        },
-      },
-      SignupRequest: {
-        type: 'object',
-        required: [
-          'name',
-          'loginId',
-          'email',
-          'emailVerificationToken',
-          'password',
-          'passwordConfirm',
-          'phoneNumber',
-        ],
-        properties: {
-          name: { type: 'string', example: '홍길동' },
-          loginId: { type: 'string', example: 'gachi123' },
-          email: { type: 'string', format: 'email', example: 'user@example.com' },
-          emailVerificationToken: {
-            type: 'string',
-            example: 'email-verification-token',
-          },
-          password: { type: 'string', format: 'password', example: 'Password123!' },
-          passwordConfirm: { type: 'string', format: 'password', example: 'Password123!' },
-          phoneNumber: { type: 'string', example: '010-0000-0000' },
-        },
-      },
       SignupResponse: {
         type: 'object',
         properties: {
@@ -111,94 +115,6 @@ export const openApiDocument = {
             },
           },
         },
-      },
-      ConsumptionRecordRequest: {
-        type: 'object',
-        required: ['type', 'productName', 'price', 'occurredAt'],
-        properties: {
-          type: { type: 'string', enum: ['CONSUMED', 'SKIPPED'], example: 'SKIPPED' },
-          productName: { type: 'string', example: '무선 키보드' },
-          price: { type: 'number', example: 69000 },
-          productUrl: { type: 'string', format: 'uri', example: 'https://example.com/products/1' },
-          reason: { type: 'string', example: '작업 환경 개선' },
-          occurredAt: { type: 'string', format: 'date-time', example: '2026-06-03T12:00:00.000Z' },
-          interventionAnswers: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                questionId: { type: 'integer', example: 1 },
-                answerValue: { type: 'boolean', example: true },
-              },
-            },
-          },
-        },
-      },
-      WishlistItemRequest: {
-        type: 'object',
-        required: ['productName'],
-        properties: {
-          productName: { type: 'string', example: '운동화' },
-          productUrl: { type: 'string', format: 'uri', example: 'https://example.com/products/2' },
-          price: { type: 'integer', example: 129000 },
-          productImageUrl: {
-            type: 'string',
-            format: 'uri',
-            example: 'https://example.com/image.jpg',
-          },
-          waitType: { type: 'string', enum: ['1H', '1D', '3D', '1W'], example: '1D' },
-        },
-      },
-      WishlistDecisionRequest: {
-        type: 'object',
-        required: ['decisionType'],
-        properties: {
-          decisionType: { type: 'string', enum: ['BUY', 'SKIP', 'DELAY'], example: 'DELAY' },
-          reasonAlternative: { type: 'boolean', example: true },
-          reasonNeed: { type: 'boolean', example: false },
-          reasonRecentBuy: { type: 'boolean', example: false },
-          reasonType: {
-            type: 'string',
-            enum: [
-              'NECESSARY',
-              'HAS_ALTERNATIVE',
-              'LOW_NECESSITY',
-              'RECENT_SIMILAR_PURCHASE',
-              'PRICE_BURDEN',
-              'NEED_MORE_TIME',
-              'OTHER',
-            ],
-            example: 'NEED_MORE_TIME',
-          },
-          reasonDetail: { type: 'string', example: '하루 더 고민해보기' },
-          selectedWaitType: { type: 'string', enum: ['1H', '1D', '3D', '1W'], example: '1D' },
-        },
-      },
-    },
-    parameters: {
-      ConsumptionRecordId: {
-        name: 'consumptionRecordId',
-        in: 'path',
-        required: true,
-        schema: { type: 'integer', minimum: 1 },
-      },
-      NotificationId: {
-        name: 'notificationId',
-        in: 'path',
-        required: true,
-        schema: { type: 'integer', minimum: 1 },
-      },
-      WishlistId: {
-        name: 'wishlistId',
-        in: 'path',
-        required: true,
-        schema: { type: 'integer', minimum: 1 },
-      },
-      TemptationId: {
-        name: 'temptationId',
-        in: 'path',
-        required: true,
-        schema: { type: 'integer', minimum: 1 },
       },
     },
     responses: {
@@ -235,7 +151,7 @@ export const openApiDocument = {
     },
     '/api/v1/auth/signup': {
       post: {
-        ...publicJsonOperation('Auth', '회원가입', 'SignupRequest'),
+        ...publicJsonOperation('Auth', '회원가입', signupDto),
         responses: {
           201: {
             description: 'Signup completed',
@@ -265,7 +181,7 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/login': {
-      post: publicJsonOperation('Auth', '로그인', 'LoginRequest'),
+      post: publicJsonOperation('Auth', '로그인', loginDto),
     },
     '/api/v1/auth/logout': {
       post: securedOperation('Auth', '로그아웃'),
@@ -274,31 +190,11 @@ export const openApiDocument = {
       post: publicOperation('Auth', '토큰 재발급'),
     },
     '/api/v1/auth/check-email': {
-      get: {
-        ...publicOperation('Auth', '이메일 중복 확인'),
-        parameters: [
-          {
-            name: 'email',
-            in: 'query',
-            required: true,
-            schema: { type: 'string', format: 'email' },
-          },
-        ],
-      },
+      get: withZodDto(publicOperation('Auth', '이메일 중복 확인'), checkEmailDto),
     },
     '/api/v1/auth/check-login-id': {
       get: {
-        tags: ['Auth'],
-        summary: '아이디 중복 확인',
-        security: [],
-        parameters: [
-          {
-            name: 'loginId',
-            in: 'query',
-            required: true,
-            schema: { type: 'string', example: 'gachi123' },
-          },
-        ],
+        ...withZodDto(publicOperation('Auth', '아이디 중복 확인'), checkLoginIdDto),
         responses: {
           200: {
             description: 'Login id availability',
@@ -320,68 +216,38 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/email-verifications': {
-      post: publicJsonOperation('Auth', '이메일 인증 요청', null, {
-        email: { type: 'string', format: 'email', example: 'user@example.com' },
-      }),
+      post: publicJsonOperation('Auth', '이메일 인증 요청', emailVerificationRequestDto),
     },
     '/api/v1/auth/email-verifications/confirm': {
-      post: publicJsonOperation('Auth', '이메일 인증 확인', null, {
-        email: { type: 'string', format: 'email', example: 'user@example.com' },
-        token: { type: 'string', example: '123456' },
-      }),
+      post: publicJsonOperation('Auth', '이메일 인증 확인', emailVerificationConfirmDto),
     },
     '/api/v1/auth/password-reset/request': {
-      post: publicJsonOperation('Auth', '비밀번호 재설정 요청', null, {
-        email: { type: 'string', format: 'email', example: 'user@example.com' },
-      }),
+      post: publicJsonOperation('Auth', '비밀번호 재설정 요청', passwordResetRequestDto),
     },
     '/api/v1/auth/password-reset/confirm': {
-      patch: publicJsonOperation('Auth', '비밀번호 재설정 완료', null, {
-        token: { type: 'string', example: 'reset-token' },
-        newPassword: { type: 'string', format: 'password', example: 'newPassword123' },
-      }),
+      patch: publicJsonOperation('Auth', '비밀번호 재설정 완료', passwordResetConfirmDto),
     },
     '/api/v1/auth/kakao/login': {
       post: publicOperation('Auth', '카카오 로그인'),
     },
     '/api/v1/users/me': {
       get: securedOperation('Users', '내 정보 조회'),
-      patch: securedJsonOperation('Users', '내 정보 수정', null, {
-        nickname: { type: 'string', example: '돈워리' },
-        profileImageUrl: {
-          type: 'string',
-          format: 'uri',
-          example: 'https://example.com/profile.png',
-        },
-        interestTags: { type: 'array', items: { type: 'string' }, example: ['saving', 'fashion'] },
-      }),
+      patch: securedJsonOperation('Users', '내 정보 수정', updateMeDto),
       delete: securedOperation('Users', '회원 탈퇴'),
     },
     '/api/v1/users/me/password': {
-      patch: securedJsonOperation('Users', '비밀번호 변경', null, {
-        currentPassword: { type: 'string', format: 'password', example: 'password123' },
-        newPassword: { type: 'string', format: 'password', example: 'newPassword123' },
-      }),
+      patch: securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),
     },
     '/api/v1/users/me/saving-goal': {
-      put: securedJsonOperation('Users', '절약 목표 설정/수정', null, {
-        savingGoalText: { type: 'string', example: '여행 자금 모으기' },
-        targetSavingAmount: { type: 'integer', example: 1000000 },
-        savingGoalIsActive: { type: 'boolean', example: true },
-      }),
+      put: securedJsonOperation('Users', '절약 목표 설정/수정', savingGoalDto),
       delete: securedOperation('Users', '절약 목표 삭제/해제'),
     },
     '/api/v1/users/me/notification-settings': {
-      patch: securedJsonOperation('Users', '알림 설정 수정', null, {
-        notifyGoalEnabled: { type: 'boolean', example: true },
-        notifyTemptationEnabled: { type: 'boolean', example: true },
-        notifyGeneralEnabled: { type: 'boolean', example: true },
-        notifyPushEnabled: { type: 'boolean', example: true },
-      }),
+      patch: securedJsonOperation('Users', '알림 설정 수정', notificationSettingsDto),
     },
     '/api/v1/onboarding': {
       get: securedOperation('Onboarding', '온보딩 정보 조회'),
-      put: securedOperation('Onboarding', '온보딩 정보 저장/수정'),
+      put: securedJsonOperation('Onboarding', '온보딩 정보 저장/수정', upsertOnboardingDto),
     },
     '/api/v1/home/summary': {
       get: securedOperation('Home', '홈 요약 조회'),
@@ -397,42 +263,32 @@ export const openApiDocument = {
       post: securedJsonOperation(
         'ConsumptionRecords',
         '소비 기록 입력',
-        'ConsumptionRecordRequest',
+        createConsumptionRecordDto,
       ),
     },
     '/api/v1/consumption-records/{consumptionRecordId}': {
-      get: withParameters(securedOperation('ConsumptionRecords', '소비 기록 상세'), [
-        'ConsumptionRecordId',
-      ]),
-      patch: withParameters(
-        securedJsonOperation('ConsumptionRecords', '소비 기록 수정', 'ConsumptionRecordRequest'),
-        ['ConsumptionRecordId'],
+      get: withZodDto(
+        securedOperation('ConsumptionRecords', '소비 기록 상세'),
+        consumptionRecordIdDto,
       ),
-      delete: withParameters(securedOperation('ConsumptionRecords', '소비 기록 삭제'), [
-        'ConsumptionRecordId',
-      ]),
+      patch: securedJsonOperation(
+        'ConsumptionRecords',
+        '소비 기록 수정',
+        updateConsumptionRecordDto,
+      ),
+      delete: withZodDto(
+        securedOperation('ConsumptionRecords', '소비 기록 삭제'),
+        consumptionRecordIdDto,
+      ),
     },
     '/api/v1/intervention-questions': {
       get: securedOperation('Interventions', '개입 질문 목록 조회'),
     },
     '/api/v1/interventions/risk-score': {
-      post: securedJsonOperation('Interventions', '소비 위험도 계산', null, {
-        answers: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              questionId: { type: 'integer', example: 1 },
-              answerValue: { type: 'boolean', example: true },
-            },
-          },
-        },
-      }),
+      post: securedJsonOperation('Interventions', '소비 위험도 계산', calculateRiskScoreDto),
     },
     '/api/v1/product-url/parse': {
-      post: securedJsonOperation('ProductUrl', '상품 URL 파싱', null, {
-        productUrl: { type: 'string', format: 'uri', example: 'https://example.com/products/1' },
-      }),
+      post: securedJsonOperation('ProductUrl', '상품 URL 파싱', parseProductUrlDto),
     },
     '/api/v1/reports/consumption/summary': {
       get: securedOperation('Reports', '간단 소비 분석 리포트 조회'),
@@ -447,30 +303,20 @@ export const openApiDocument = {
       patch: securedOperation('Notifications', '알림 전체 읽음 처리'),
     },
     '/api/v1/notifications/{notificationId}/read': {
-      patch: withParameters(securedOperation('Notifications', '알림 읽음 처리'), [
-        'NotificationId',
-      ]),
+      patch: withZodDto(securedOperation('Notifications', '알림 읽음 처리'), notificationIdDto),
     },
     '/api/v1/wishlist-items': {
       get: securedOperation('WishlistItems', '위시리스트 목록 조회'),
-      post: securedJsonOperation('WishlistItems', '위시리스트 추가', 'WishlistItemRequest'),
+      post: securedJsonOperation('WishlistItems', '위시리스트 추가', createWishlistItemDto),
     },
     '/api/v1/wishlist-items/{wishlistId}': {
-      get: withParameters(securedOperation('WishlistItems', '위시리스트 상세 조회'), [
-        'WishlistId',
-      ]),
-      patch: withParameters(
-        securedJsonOperation('WishlistItems', '위시리스트 수정', 'WishlistItemRequest'),
-        ['WishlistId'],
-      ),
-      delete: withParameters(securedOperation('WishlistItems', '위시리스트 삭제'), ['WishlistId']),
+      get: withZodDto(securedOperation('WishlistItems', '위시리스트 상세 조회'), wishlistItemIdDto),
+      patch: securedJsonOperation('WishlistItems', '위시리스트 수정', updateWishlistItemDto),
+      delete: withZodDto(securedOperation('WishlistItems', '위시리스트 삭제'), wishlistItemIdDto),
     },
     '/api/v1/temptations/{temptationId}/decisions': {
-      get: withParameters(securedOperation('Temptations', '재판단 기록 조회'), ['TemptationId']),
-      post: withParameters(
-        securedJsonOperation('Temptations', '재판단 기록 추가', 'WishlistDecisionRequest'),
-        ['TemptationId'],
-      ),
+      get: withZodDto(securedOperation('Temptations', '재판단 기록 조회'), temptationIdDto),
+      post: securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
     },
   },
 };
@@ -498,38 +344,10 @@ function securedOperation(tag, summary) {
   };
 }
 
-function publicJsonOperation(tag, summary, schemaName, properties) {
-  return withJsonRequest(publicOperation(tag, summary), schemaName, properties);
+function publicJsonOperation(tag, summary, dto) {
+  return withZodDto(publicOperation(tag, summary), dto);
 }
 
-function securedJsonOperation(tag, summary, schemaName, properties) {
-  return withJsonRequest(securedOperation(tag, summary), schemaName, properties);
-}
-
-function withJsonRequest(operation, schemaName, properties) {
-  const schema = schemaName
-    ? { $ref: `#/components/schemas/${schemaName}` }
-    : {
-        type: 'object',
-        properties,
-      };
-
-  return {
-    ...operation,
-    requestBody: {
-      required: true,
-      content: {
-        'application/json': {
-          schema,
-        },
-      },
-    },
-  };
-}
-
-function withParameters(operation, parameterNames) {
-  return {
-    ...operation,
-    parameters: parameterNames.map((name) => ({ $ref: `#/components/parameters/${name}` })),
-  };
+function securedJsonOperation(tag, summary, dto) {
+  return withZodDto(securedOperation(tag, summary), dto);
 }
