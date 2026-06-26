@@ -100,7 +100,8 @@ test('GET /api-docs.json exposes check email response example as public API', as
     '#/components/schemas/CheckEmailResponse',
   );
   assert.equal(
-    response.body.components.schemas.CheckEmailResponse.properties.data.properties.available.example,
+    response.body.components.schemas.CheckEmailResponse.properties.data.properties.available
+      .example,
     true,
   );
 });
