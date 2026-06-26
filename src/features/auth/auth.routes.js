@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { validate } from '../../middlewares/validate.js';
 import { requireAuth } from '../../middlewares/auth.js';
 import {
+  checkEmailController,
   checkLoginIdController,
   createNotImplementedController,
   signupController,
@@ -25,7 +26,7 @@ authRouter.post('/signup', validate(signupDto), signupController);
 authRouter.post('/login', validate(loginDto), todo);
 authRouter.post('/logout', requireAuth, todo);
 authRouter.post('/refresh', todo);
-authRouter.get('/check-email', validate(checkEmailDto), todo);
+authRouter.get('/check-email', validate(checkEmailDto), checkEmailController);
 authRouter.get('/check-login-id', validate(checkLoginIdDto), checkLoginIdController);
 authRouter.post('/email-verifications', validate(emailVerificationRequestDto), todo);
 authRouter.post('/email-verifications/confirm', validate(emailVerificationConfirmDto), todo);
