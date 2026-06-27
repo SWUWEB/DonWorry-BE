@@ -65,8 +65,15 @@ test('GET /api-docs.json generates query and path parameters from Zod DTO', asyn
   assert.equal(response.status, 200);
 
   const loginIdParameter = response.body.paths['/api/v1/auth/check-login-id'].get.parameters[0];
+  const emailParameter = response.body.paths['/api/v1/auth/check-email'].get.parameters[0];
   const wishlistIdParameter =
     response.body.paths['/api/v1/wishlist-items/{wishlistId}'].get.parameters[0];
+
+  assert.equal(emailParameter.name, 'email');
+  assert.equal(emailParameter.in, 'query');
+  assert.equal(emailParameter.required, true);
+  assert.equal(emailParameter.schema.type, 'string');
+  assert.equal(emailParameter.schema.format, 'email');
 
   assert.equal(loginIdParameter.name, 'loginId');
   assert.equal(loginIdParameter.in, 'query');
@@ -78,4 +85,23 @@ test('GET /api-docs.json generates query and path parameters from Zod DTO', asyn
   assert.equal(wishlistIdParameter.required, true);
   assert.equal(wishlistIdParameter.schema.type, 'integer');
   assert.equal(wishlistIdParameter.schema.format, 'int64');
+});
+
+test('GET /api-docs.json exposes check email response example as public API', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const operation = response.body.paths['/api/v1/auth/check-email'].get;
+
+  assert.deepEqual(operation.security, []);
+  assert.equal(
+    operation.responses[200].content['application/json'].schema.$ref,
+    '#/components/schemas/CheckEmailResponse',
+  );
+  assert.equal(
+    response.body.components.schemas.CheckEmailResponse.properties.data.properties.available
+      .example,
+    true,
+  );
 });

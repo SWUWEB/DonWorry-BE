@@ -103,6 +103,19 @@ export const openApiDocument = {
           },
         },
       },
+      CheckEmailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: {
+            type: 'object',
+            properties: {
+              available: { type: 'boolean', example: true },
+            },
+          },
+        },
+      },
       CheckLoginIdResponse: {
         type: 'object',
         properties: {
@@ -190,7 +203,27 @@ export const openApiDocument = {
       post: publicOperation('Auth', '토큰 재발급'),
     },
     '/api/v1/auth/check-email': {
-      get: withZodDto(publicOperation('Auth', '이메일 중복 확인'), checkEmailDto),
+      get: {
+        ...withZodDto(publicOperation('Auth', '이메일 중복 확인'), checkEmailDto),
+        responses: {
+          200: {
+            description: 'Email availability',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/CheckEmailResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/check-login-id': {
       get: {
