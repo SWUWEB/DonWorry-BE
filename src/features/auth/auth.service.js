@@ -96,6 +96,15 @@ export const checkLoginId = async ({ loginId }) => {
   return { available: !user };
 };
 
+export const checkEmail = async ({ email }) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  return { available: !user };
+};
+
 export const requestEmailVerification = async ({ email }) => {
   await assertEmailAvailable(email);
 

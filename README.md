@@ -72,6 +72,9 @@ Node.js Express 기반 DonWorry 백엔드 API 서버입니다.
 
 3. 테스트 DB 마이그레이션
 
+   테스트 DB는 이미 만들어진 마이그레이션을 적용하는 목적이므로 `migrate deploy`를 사용합니다.
+   `migrate deploy`는 shadow database를 사용하지 않아 `migrate dev`에서 발생할 수 있는 P3014 권한 문제와는 관련이 없습니다.
+
    PowerShell:
 
    ```powershell
@@ -109,6 +112,14 @@ Authorization: Bearer 토큰이 자동으로 포함됩니다.
 ## Troubleshooting
 
 ### Prisma migrate P3014
+
+`npm run prisma:migrate`는 `prisma migrate dev`를 실행합니다. 로컬 개발 DB에 새 마이그레이션을
+생성하거나 적용하는 과정에서 shadow database를 사용하므로, MySQL 사용자 권한이 부족하면 P3014가
+발생할 수 있습니다.
+
+이 조치는 로컬 개발에서 `npm run prisma:migrate`를 실행할 때만 필요한 가이드입니다. Test Setup은
+`npx prisma migrate deploy`를 사용하며 shadow database를 만들지 않으므로 이 P3014 조치가 필요하지
+않습니다.
 
 `npm run prisma:migrate` 실행 중 shadow database 권한 오류가 발생하면 로컬 MySQL 컨테이너의
 `donworry` 사용자 권한을 갱신합니다.

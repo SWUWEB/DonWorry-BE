@@ -20,11 +20,12 @@ const signupEmails = [
   'email-verification@example.com',
   'email-verification-signup@example.com',
   'email-verification-duplicate@example.com',
+  'check-email-existing@example.com',
   'duplicate-email@example.com',
   'duplicate-login@example.com',
   'invalid-token@example.com',
 ];
-const signupLoginIds = ['signup123', 'duplicate1', 'sameid1'];
+const signupLoginIds = ['signup123', 'checkmail1', 'duplicate1', 'sameid1'];
 
 test.beforeEach(async () => {
   await prisma.user.deleteMany({
@@ -242,4 +243,43 @@ test('GET /api/v1/auth/check-login-id returns availability', async () => {
   assert.equal(response.status, 200);
   assert.equal(response.body.success, true);
   assert.equal(response.body.data.available, true);
+});
+
+test('GET /api/v1/auth/check-email returns false for existing email', async () => {
+  await prisma.user.create({
+    data: {
+      email: 'check-email-existing@example.com',
+      loginId: 'checkmail1',
+      passwordHash: await bcrypt.hash('Password123!', 12),
+      nickname: 'existing',
+    },
+  });
+
+  const response = await request(app)
+    .get('/api/v1/auth/check-email')
+    .query({ email: 'check-email-existing@example.com' });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.data.available, false);
+});
+
+test('GET /api/v1/auth/check-email returns true for unused email without auth', async () => {
+  const response = await request(app)
+    .get('/api/v1/auth/check-email')
+    .query({ email: 'check-email-new@example.com' });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.data.available, true);
+});
+
+test('GET /api/v1/auth/check-email rejects invalid email format', async () => {
+  const response = await request(app)
+    .get('/api/v1/auth/check-email')
+    .query({ email: 'invalid-email' });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'COMMON4001');
 });
