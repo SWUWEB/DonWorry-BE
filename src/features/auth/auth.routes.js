@@ -4,6 +4,7 @@ import { requireAuth } from '../../middlewares/auth.js';
 import {
   checkLoginIdController,
   createNotImplementedController,
+  requestEmailVerificationController,
   signupController,
 } from './auth.controller.js';
 import {
@@ -27,7 +28,11 @@ authRouter.post('/logout', requireAuth, todo);
 authRouter.post('/refresh', todo);
 authRouter.get('/check-email', validate(checkEmailDto), todo);
 authRouter.get('/check-login-id', validate(checkLoginIdDto), checkLoginIdController);
-authRouter.post('/email-verifications', validate(emailVerificationRequestDto), todo);
+authRouter.post(
+  '/email-verifications',
+  validate(emailVerificationRequestDto),
+  requestEmailVerificationController,
+);
 authRouter.post('/email-verifications/confirm', validate(emailVerificationConfirmDto), todo);
 authRouter.post('/password-reset/request', validate(passwordResetRequestDto), todo);
 authRouter.patch('/password-reset/confirm', validate(passwordResetConfirmDto), todo);

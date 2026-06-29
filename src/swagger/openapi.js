@@ -112,6 +112,30 @@ export const openApiDocument = {
           },
         },
       },
+      EmailVerificationRequest: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', format: 'email', example: 'user@example.com' },
+        },
+      },
+      EmailVerificationResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '이메일 인증 요청이 완료되었습니다.' },
+          data: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', format: 'email', example: 'user@example.com' },
+              emailVerificationToken: {
+                type: 'string',
+                example: 'email-verification-token',
+              },
+            },
+          },
+        },
+      },
       ConsumptionRecordRequest: {
         type: 'object',
         required: ['type', 'productName', 'price', 'occurredAt'],
@@ -320,9 +344,35 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/email-verifications': {
-      post: publicJsonOperation('Auth', '이메일 인증 요청', null, {
-        email: { type: 'string', format: 'email', example: 'user@example.com' },
-      }),
+      post: {
+        ...publicJsonOperation('Auth', '이메일 인증 요청', 'EmailVerificationRequest'),
+        responses: {
+          200: {
+            description: 'Email verification token issued',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/EmailVerificationResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          409: {
+            description: 'Duplicated email',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/email-verifications/confirm': {
       post: publicJsonOperation('Auth', '이메일 인증 확인', null, {

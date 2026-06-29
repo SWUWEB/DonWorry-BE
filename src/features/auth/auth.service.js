@@ -25,6 +25,23 @@ const formatPhoneNumber = (phoneNumber) => {
   return `${digits.slice(0, 3)}-${digits.slice(3, digits.length - 4)}-${digits.slice(-4)}`;
 };
 
+const throwDuplicatedEmailError = () => {
+  throw new HttpError(409, '이미 가입된 이메일입니다.', {
+    errorCode: ERROR_CODES.AUTH4091,
+  });
+};
+
+const assertEmailAvailable = async (email) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (user) {
+    throwDuplicatedEmailError();
+  }
+};
+
 export const createEmailVerificationToken = (email) => {
   return jwt.sign({ purpose: 'emailVerification', email }, env.JWT_ACCESS_SECRET, {
     expiresIn: emailVerificationJwtTtl,
@@ -60,9 +77,7 @@ const assertSignupUniqueFields = async ({ email, loginId }) => {
   });
 
   if (existingUser?.email === email) {
-    throw new HttpError(409, '이미 가입된 이메일입니다.', {
-      errorCode: ERROR_CODES.AUTH4091,
-    });
+    throwDuplicatedEmailError();
   }
 
   if (existingUser?.loginId === loginId) {
@@ -79,6 +94,15 @@ export const checkLoginId = async ({ loginId }) => {
   });
 
   return { available: !user };
+};
+
+export const requestEmailVerification = async ({ email }) => {
+  await assertEmailAvailable(email);
+
+  return {
+    email,
+    emailVerificationToken: createEmailVerificationToken(email),
+  };
 };
 
 export const signup = async ({

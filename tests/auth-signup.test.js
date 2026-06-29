@@ -17,6 +17,9 @@ const { createEmailVerificationToken } = await import('../src/features/auth/auth
 const app = createApp();
 const signupEmails = [
   'signup@example.com',
+  'email-verification@example.com',
+  'email-verification-signup@example.com',
+  'email-verification-duplicate@example.com',
   'duplicate-email@example.com',
   'duplicate-login@example.com',
   'invalid-token@example.com',
@@ -161,6 +164,69 @@ test('POST /api/v1/auth/signup validates request body', async () => {
     password: 'password',
     passwordConfirm: 'different',
     phoneNumber: '010-0000-0000',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'COMMON4001');
+});
+
+test('POST /api/v1/auth/email-verifications issues token for available email', async () => {
+  const response = await request(app).post('/api/v1/auth/email-verifications').send({
+    email: 'EMAIL-VERIFICATION@example.com',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.message, '이메일 인증 요청이 완료되었습니다.');
+  assert.equal(response.body.data.email, 'email-verification@example.com');
+  assert.equal(typeof response.body.data.emailVerificationToken, 'string');
+});
+
+test('POST /api/v1/auth/email-verifications returns token usable for signup', async () => {
+  const verificationResponse = await request(app).post('/api/v1/auth/email-verifications').send({
+    email: 'email-verification-signup@example.com',
+  });
+
+  assert.equal(verificationResponse.status, 200);
+
+  const signupResponse = await request(app).post('/api/v1/auth/signup').send({
+    name: 'verified-user',
+    loginId: 'verify1',
+    email: 'email-verification-signup@example.com',
+    emailVerificationToken: verificationResponse.body.data.emailVerificationToken,
+    password: 'Password123!',
+    passwordConfirm: 'Password123!',
+    phoneNumber: '010-2222-3333',
+  });
+
+  assert.equal(signupResponse.status, 201);
+  assert.equal(signupResponse.body.success, true);
+  assert.equal(signupResponse.body.data.email, 'email-verification-signup@example.com');
+});
+
+test('POST /api/v1/auth/email-verifications rejects duplicate email', async () => {
+  await prisma.user.create({
+    data: {
+      email: 'email-verification-duplicate@example.com',
+      loginId: 'verify2',
+      passwordHash: await bcrypt.hash('Password123!', 12),
+      nickname: 'existing',
+    },
+  });
+
+  const response = await request(app).post('/api/v1/auth/email-verifications').send({
+    email: 'email-verification-duplicate@example.com',
+  });
+
+  assert.equal(response.status, 409);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4091');
+});
+
+test('POST /api/v1/auth/email-verifications validates request body', async () => {
+  const response = await request(app).post('/api/v1/auth/email-verifications').send({
+    email: 'invalid-email',
   });
 
   assert.equal(response.status, 400);
