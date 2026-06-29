@@ -79,6 +79,34 @@ export const openApiDocument = {
           message: { type: 'string', example: 'Invalid request' },
         },
       },
+      ValidationErrorResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          code: { type: 'string', example: 'COMMON4001' },
+          message: { type: 'string', example: 'Invalid request' },
+          errors: {
+            type: 'object',
+            properties: {
+              formErrors: {
+                type: 'array',
+                items: { type: 'string' },
+                example: [],
+              },
+              fieldErrors: {
+                type: 'object',
+                additionalProperties: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                example: {
+                  email: ['올바른 이메일 형식이 아닙니다.'],
+                },
+              },
+            },
+          },
+        },
+      },
       NotImplementedResponse: {
         type: 'object',
         properties: {
@@ -195,7 +223,12 @@ export const openApiDocument = {
             description: 'Invalid request or email verification token',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: {
+                  oneOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
               },
             },
           },
@@ -235,7 +268,7 @@ export const openApiDocument = {
             description: 'Invalid request',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
               },
             },
           },
@@ -258,7 +291,7 @@ export const openApiDocument = {
             description: 'Invalid request',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
               },
             },
           },
@@ -281,7 +314,7 @@ export const openApiDocument = {
             description: 'Invalid request',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
               },
             },
           },
