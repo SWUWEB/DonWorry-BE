@@ -121,10 +121,7 @@ test('GET /api-docs.json documents validation error response shape', async () =>
       .schema;
 
   assert.equal(validationErrorSchema.properties.errors.type, 'object');
-  assert.equal(
-    validationErrorSchema.properties.errors.properties.fieldErrors.type,
-    'object',
-  );
+  assert.equal(validationErrorSchema.properties.errors.properties.fieldErrors.type, 'object');
   assert.deepEqual(emailVerification400, {
     $ref: '#/components/schemas/ValidationErrorResponse',
   });
