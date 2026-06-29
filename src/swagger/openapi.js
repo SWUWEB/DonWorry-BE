@@ -224,7 +224,7 @@ export const openApiDocument = {
             content: {
               'application/json': {
                 schema: {
-                  oneOf: [
+                  anyOf: [
                     { $ref: '#/components/schemas/ValidationErrorResponse' },
                     { $ref: '#/components/schemas/ErrorResponse' },
                   ],

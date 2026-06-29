@@ -125,7 +125,7 @@ test('GET /api-docs.json documents validation error response shape', async () =>
   assert.deepEqual(emailVerification400, {
     $ref: '#/components/schemas/ValidationErrorResponse',
   });
-  assert.deepEqual(signup400.oneOf, [
+  assert.deepEqual(signup400.anyOf, [
     { $ref: '#/components/schemas/ValidationErrorResponse' },
     { $ref: '#/components/schemas/ErrorResponse' },
   ]);
