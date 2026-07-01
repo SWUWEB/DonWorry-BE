@@ -83,7 +83,11 @@ const getValidatedItem = async (userId, wishlistId) => {
   } catch (err) {
     if (err.status || err.statusCode) throw err;
 
-    if (err.code === 'P2025' || err.message.includes('not found') || err.message.includes('BigInt')) {
+    if (
+      err.code === 'P2025' ||
+      err.message.includes('not found') ||
+      err.message.includes('BigInt')
+    ) {
       const error = new Error('해당 위시리스트 항목을 찾을 수 없습니다.');
       error.status = 404;
       error.statusCode = 404;
