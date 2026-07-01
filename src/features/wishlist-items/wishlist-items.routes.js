@@ -1,7 +1,7 @@
 import { Router } from 'express';
 // import { requireAuth } from '../../middlewares/auth.js'; // 💡 우선 주석 처리 (비인증 개발)
 import { validate } from '../../middlewares/validate.js';
-import * as wishlistItemsController from './wishlist-items.controller.js'; // 💡 변경
+import * as wishlistItemsController from './wishlist-items.controller.js';
 import {
   createWishlistItemDto,
   updateWishlistItemDto,
