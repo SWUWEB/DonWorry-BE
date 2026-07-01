@@ -22,7 +22,7 @@ const serializeWishlistItem = (item) => {
 // 1. 위시리스트 추가
 export const createItem = async (req, res, next) => {
   try {
-    const itemData = req.body;
+    const itemData = req.validated;
     const newItem = await wishlistItemsService.createWishlistItem(MOCK_USER_ID, itemData);
 
     return res.status(201).json({

@@ -106,7 +106,12 @@ export const getWishlistItemById = async (userId, wishlistId) => {
 export const updateWishlistItem = async (userId, wishlistId, updateData) => {
   await getValidatedItem(userId, wishlistId);
 
-  const dataToUpdate = { ...updateData };
+  const dataToUpdate = {
+    productName: updateData.productName,
+    price: updateData.price,
+    productUrl: updateData.productUrl,
+    productImageUrl: updateData.productImageUrl,
+  };
 
   if (updateData.waitType) {
     dataToUpdate.waitUntil = calculateWaitUntil(updateData.waitType);
