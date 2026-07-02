@@ -21,13 +21,24 @@ const createVerificationCodeCells = (code) => {
     .join('');
 };
 
-const formatTtlMinutes = (codeTtlSeconds) => {
-  return Math.ceil(codeTtlSeconds / 60);
+const formatTtlDuration = (codeTtlSeconds) => {
+  const minutes = Math.floor(codeTtlSeconds / 60);
+  const seconds = codeTtlSeconds % 60;
+
+  if (minutes > 0 && seconds > 0) {
+    return `${minutes}분 ${seconds}초`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}분`;
+  }
+
+  return `${seconds}초`;
 };
 
 const createEmailVerificationHtml = ({ code, codeTtlSeconds }) => {
   const codeCells = createVerificationCodeCells(code);
-  const expiresInMinutes = formatTtlMinutes(codeTtlSeconds);
+  const expiresIn = formatTtlDuration(codeTtlSeconds);
 
   return `<!doctype html>
 <html lang="ko">
@@ -50,7 +61,7 @@ const createEmailVerificationHtml = ({ code, codeTtlSeconds }) => {
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:320px;margin:0 auto;table-layout:fixed;">
                   <tr>${codeCells}</tr>
                 </table>
-                <p style="margin:38px 0 0;font-size:14px;line-height:22px;font-weight:500;letter-spacing:0;color:${brand.textSecondary};">이 코드는 <strong style="font-weight:600;color:${brand.textPrimary};">${expiresInMinutes}분</strong> 뒤에 만료됩니다.</p>
+                <p style="margin:38px 0 0;font-size:14px;line-height:22px;font-weight:500;letter-spacing:0;color:${brand.textSecondary};">이 코드는 <strong style="font-weight:600;color:${brand.textPrimary};">${expiresIn}</strong> 뒤에 만료됩니다.</p>
                 <div style="height:1px;background:#e8ecec;margin:54px 0 28px;"></div>
                 <p style="margin:0 auto 8px;max-width:420px;font-size:12px;line-height:16px;font-weight:500;letter-spacing:0;color:${brand.textSecondary};word-break:keep-all;">본 메일은 발신 전용이며, 서비스 회원가입을 위한 이메일 인증을 위하여 발송하였습니다.</p>
                 <p style="margin:0 auto 28px;max-width:420px;font-size:12px;line-height:16px;font-weight:500;letter-spacing:0;color:${brand.textSecondary};word-break:keep-all;">직접 요청하신 경우가 아니라면, 이 메일을 무시하셔도 됩니다.</p>
@@ -98,7 +109,7 @@ export const sendEmailVerificationCode = async ({ email, code, codeTtlSeconds })
       '이메일 인증 코드',
       '회원가입을 완료하려면 아래 인증 코드를 입력해주세요.',
       code,
-      `이 코드는 ${formatTtlMinutes(codeTtlSeconds)}분 뒤에 만료됩니다.`,
+      `이 코드는 ${formatTtlDuration(codeTtlSeconds)} 뒤에 만료됩니다.`,
       '본 메일은 발신 전용이며, 서비스 회원가입을 위한 이메일 인증을 위하여 발송하였습니다.',
       '직접 요청하신 경우가 아니라면, 이 메일을 무시하셔도 됩니다.',
       '홈페이지 | 개인정보 처리방침 | 서비스 이용약관',
