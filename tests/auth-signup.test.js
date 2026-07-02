@@ -28,6 +28,9 @@ const signupEmails = [
 const signupLoginIds = ['signup123', 'checkmail1', 'duplicate1', 'sameid1'];
 
 test.beforeEach(async () => {
+  await prisma.authToken.deleteMany({
+    where: { emailSnapshot: { in: signupEmails } },
+  });
   await prisma.user.deleteMany({
     where: {
       OR: [{ email: { in: signupEmails } }, { loginId: { in: signupLoginIds } }],
@@ -36,6 +39,9 @@ test.beforeEach(async () => {
 });
 
 test.after(async () => {
+  await prisma.authToken.deleteMany({
+    where: { emailSnapshot: { in: signupEmails } },
+  });
   await prisma.user.deleteMany({
     where: {
       OR: [{ email: { in: signupEmails } }, { loginId: { in: signupLoginIds } }],
@@ -172,7 +178,8 @@ test('POST /api/v1/auth/signup validates request body', async () => {
   assert.equal(response.body.code, 'COMMON4001');
 });
 
-test('POST /api/v1/auth/email-verifications issues token for available email', async () => {
+test('POST /api/v1/auth/email-verifications sends code for available email', async () => {
+  const requestedAt = new Date();
   const response = await request(app).post('/api/v1/auth/email-verifications').send({
     email: 'EMAIL-VERIFICATION@example.com',
   });
@@ -181,29 +188,94 @@ test('POST /api/v1/auth/email-verifications issues token for available email', a
   assert.equal(response.body.success, true);
   assert.equal(response.body.message, '이메일 인증 요청이 완료되었습니다.');
   assert.equal(response.body.data.email, 'email-verification@example.com');
-  assert.equal(typeof response.body.data.emailVerificationToken, 'string');
+  assert.equal(response.body.data.expiresInMinutes, 10);
+  assert.equal(response.body.data.debugCode, undefined);
+  assert.equal(response.body.data.emailVerificationToken, undefined);
+
+  const authToken = await prisma.authToken.findFirst({
+    where: {
+      emailSnapshot: 'email-verification@example.com',
+      tokenType: 'EMAIL_VERIFY',
+    },
+    orderBy: { id: 'desc' },
+  });
+
+  assert.ok(authToken);
+  assert.match(authToken.tokenHash, /^\$2/);
+  assert.equal(authToken.usedAt, null);
+  assert.ok(authToken.expiresAt > requestedAt);
+  assert.ok(authToken.expiresAt <= new Date(requestedAt.getTime() + 10 * 60 * 1000 + 5000));
 });
 
-test('POST /api/v1/auth/email-verifications returns token usable for signup', async () => {
-  const verificationResponse = await request(app).post('/api/v1/auth/email-verifications').send({
+test('POST /api/v1/auth/email-verifications invalidates previous unused code after cooldown', async () => {
+  const oldRequestDate = new Date(Date.now() - 61 * 1000);
+
+  await prisma.authToken.create({
+    data: {
+      emailSnapshot: 'email-verification-signup@example.com',
+      tokenType: 'EMAIL_VERIFY',
+      tokenHash: 'old-email-verification-code-hash',
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      createdAt: oldRequestDate,
+    },
+  });
+
+  const response = await request(app).post('/api/v1/auth/email-verifications').send({
     email: 'email-verification-signup@example.com',
   });
 
-  assert.equal(verificationResponse.status, 200);
+  assert.equal(response.status, 200);
 
-  const signupResponse = await request(app).post('/api/v1/auth/signup').send({
-    name: 'verified-user',
-    loginId: 'verify1',
-    email: 'email-verification-signup@example.com',
-    emailVerificationToken: verificationResponse.body.data.emailVerificationToken,
-    password: 'Password123!',
-    passwordConfirm: 'Password123!',
-    phoneNumber: '010-2222-3333',
+  const authTokens = await prisma.authToken.findMany({
+    where: {
+      emailSnapshot: 'email-verification-signup@example.com',
+      tokenType: 'EMAIL_VERIFY',
+    },
+    orderBy: { id: 'asc' },
   });
 
-  assert.equal(signupResponse.status, 201);
-  assert.equal(signupResponse.body.success, true);
-  assert.equal(signupResponse.body.data.email, 'email-verification-signup@example.com');
+  assert.equal(authTokens.length, 2);
+  assert.ok(authTokens[0].usedAt);
+  assert.equal(authTokens[1].usedAt, null);
+});
+
+test('POST /api/v1/auth/email-verifications limits resend within one minute', async () => {
+  const firstResponse = await request(app).post('/api/v1/auth/email-verifications').send({
+    email: 'email-verification-signup@example.com',
+  });
+  const secondResponse = await request(app).post('/api/v1/auth/email-verifications').send({
+    email: 'email-verification-signup@example.com',
+  });
+
+  assert.equal(firstResponse.status, 200);
+  assert.equal(secondResponse.status, 429);
+  assert.equal(secondResponse.body.success, false);
+  assert.equal(secondResponse.body.code, 'AUTH4291');
+});
+
+test('POST /api/v1/auth/email-verifications limits daily requests per email', async () => {
+  const now = Date.now();
+
+  for (let index = 0; index < 5; index += 1) {
+    await prisma.authToken.create({
+      data: {
+        emailSnapshot: 'email-verification-signup@example.com',
+        tokenType: 'EMAIL_VERIFY',
+        tokenHash: `daily-email-verification-code-hash-${index}`,
+        expiresAt: new Date(now + 10 * 60 * 1000),
+        createdAt: new Date(now - (index + 2) * 60 * 1000),
+        usedAt: new Date(now - (index + 1) * 60 * 1000),
+      },
+    });
+  }
+
+  const response = await request(app).post('/api/v1/auth/email-verifications').send({
+    email: 'email-verification-signup@example.com',
+  });
+
+  assert.equal(response.status, 429);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4291');
 });
 
 test('POST /api/v1/auth/email-verifications rejects duplicate email', async () => {

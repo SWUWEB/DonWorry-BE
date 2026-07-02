@@ -1,13 +1,18 @@
 import { Prisma } from '@prisma/client';
+import { randomInt } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { prisma } from '../../prisma/client.js';
 import { HttpError } from '../../utils/http-error.js';
+import { sendEmailVerificationCode } from './auth.mailer.js';
 
 const passwordSaltRounds = 12;
 const emailVerificationJwtTtl = '10m';
+const emailVerificationCodeExpiresInMinutes = 10;
+const emailVerificationResendCooldownSeconds = 60;
+const emailVerificationDailyRequestLimit = 5;
 
 export const serializeSignupUser = (user) => {
   return {
@@ -42,10 +47,50 @@ const assertEmailAvailable = async (email) => {
   }
 };
 
+const throwEmailVerificationRateLimitedError = () => {
+  throw new HttpError(429, '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
+    errorCode: ERROR_CODES.AUTH4291,
+  });
+};
+
 export const createEmailVerificationToken = (email) => {
   return jwt.sign({ purpose: 'emailVerification', email }, env.JWT_ACCESS_SECRET, {
     expiresIn: emailVerificationJwtTtl,
   });
+};
+
+const createEmailVerificationCode = () => {
+  return randomInt(0, 1_000_000).toString().padStart(6, '0');
+};
+
+const assertEmailVerificationRequestAllowed = async (email, now) => {
+  const cooldownStartedAt = new Date(now.getTime() - emailVerificationResendCooldownSeconds * 1000);
+  const dailyWindowStartedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  const recentRequest = await prisma.authToken.findFirst({
+    where: {
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+      createdAt: { gt: cooldownStartedAt },
+    },
+    select: { id: true },
+  });
+
+  if (recentRequest) {
+    throwEmailVerificationRateLimitedError();
+  }
+
+  const dailyRequestCount = await prisma.authToken.count({
+    where: {
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+      createdAt: { gte: dailyWindowStartedAt },
+    },
+  });
+
+  if (dailyRequestCount >= emailVerificationDailyRequestLimit) {
+    throwEmailVerificationRateLimitedError();
+  }
 };
 
 const verifyEmailVerificationJwt = (email, emailVerificationToken) => {
@@ -108,9 +153,50 @@ export const checkEmail = async ({ email }) => {
 export const requestEmailVerification = async ({ email }) => {
   await assertEmailAvailable(email);
 
+  const now = new Date();
+  await assertEmailVerificationRequestAllowed(email, now);
+
+  const code = createEmailVerificationCode();
+  const codeHash = await bcrypt.hash(code, passwordSaltRounds);
+  const expiresAt = new Date(now.getTime() + emailVerificationCodeExpiresInMinutes * 60 * 1000);
+
+  const authToken = await prisma.authToken.create({
+    data: {
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+      tokenHash: codeHash,
+      expiresAt,
+    },
+    select: { id: true },
+  });
+
+  try {
+    await sendEmailVerificationCode({
+      email,
+      code,
+      expiresInMinutes: emailVerificationCodeExpiresInMinutes,
+    });
+  } catch (error) {
+    await prisma.authToken.delete({
+      where: { id: authToken.id },
+    });
+
+    throw error;
+  }
+
+  await prisma.authToken.updateMany({
+    where: {
+      id: { not: authToken.id },
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+      usedAt: null,
+    },
+    data: { usedAt: now },
+  });
+
   return {
     email,
-    emailVerificationToken: createEmailVerificationToken(email),
+    expiresInMinutes: emailVerificationCodeExpiresInMinutes,
   };
 };
 

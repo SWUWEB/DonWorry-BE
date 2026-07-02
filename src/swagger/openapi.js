@@ -153,10 +153,7 @@ export const openApiDocument = {
             type: 'object',
             properties: {
               email: { type: 'string', format: 'email', example: 'user@example.com' },
-              emailVerificationToken: {
-                type: 'string',
-                example: 'email-verification-token',
-              },
+              expiresInMinutes: { type: 'integer', example: 10 },
             },
           },
         },
@@ -303,7 +300,7 @@ export const openApiDocument = {
         ...publicJsonOperation('Auth', '이메일 인증 요청', emailVerificationRequestDto),
         responses: {
           200: {
-            description: 'Email verification token issued',
+            description: 'Email verification code sent',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/EmailVerificationResponse' },
@@ -320,6 +317,14 @@ export const openApiDocument = {
           },
           409: {
             description: 'Duplicated email',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: 'Email verification request rate limited',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
