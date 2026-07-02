@@ -1,13 +1,18 @@
 import { Prisma } from '@prisma/client';
+import { randomInt } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { prisma } from '../../prisma/client.js';
 import { HttpError } from '../../utils/http-error.js';
+import { sendEmailVerificationCode } from './auth.mailer.js';
 
 const passwordSaltRounds = 12;
 const emailVerificationJwtTtl = '10m';
+const emailVerificationCodeExpiresInMinutes = 10;
+const emailVerificationResendCooldownSeconds = 60;
+const emailVerificationDailyRequestLimit = 5;
 
 export const serializeSignupUser = (user) => {
   return {
@@ -25,10 +30,67 @@ const formatPhoneNumber = (phoneNumber) => {
   return `${digits.slice(0, 3)}-${digits.slice(3, digits.length - 4)}-${digits.slice(-4)}`;
 };
 
+const throwDuplicatedEmailError = () => {
+  throw new HttpError(409, '이미 가입된 이메일입니다.', {
+    errorCode: ERROR_CODES.AUTH4091,
+  });
+};
+
+const assertEmailAvailable = async (email) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (user) {
+    throwDuplicatedEmailError();
+  }
+};
+
+const throwEmailVerificationRateLimitedError = () => {
+  throw new HttpError(429, '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
+    errorCode: ERROR_CODES.AUTH4291,
+  });
+};
+
 export const createEmailVerificationToken = (email) => {
   return jwt.sign({ purpose: 'emailVerification', email }, env.JWT_ACCESS_SECRET, {
     expiresIn: emailVerificationJwtTtl,
   });
+};
+
+const createEmailVerificationCode = () => {
+  return randomInt(0, 1_000_000).toString().padStart(6, '0');
+};
+
+const assertEmailVerificationRequestAllowed = async (email, now) => {
+  const cooldownStartedAt = new Date(now.getTime() - emailVerificationResendCooldownSeconds * 1000);
+  const dailyWindowStartedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  const recentRequest = await prisma.authToken.findFirst({
+    where: {
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+      createdAt: { gt: cooldownStartedAt },
+    },
+    select: { id: true },
+  });
+
+  if (recentRequest) {
+    throwEmailVerificationRateLimitedError();
+  }
+
+  const dailyRequestCount = await prisma.authToken.count({
+    where: {
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+      createdAt: { gte: dailyWindowStartedAt },
+    },
+  });
+
+  if (dailyRequestCount >= emailVerificationDailyRequestLimit) {
+    throwEmailVerificationRateLimitedError();
+  }
 };
 
 const verifyEmailVerificationJwt = (email, emailVerificationToken) => {
@@ -60,9 +122,7 @@ const assertSignupUniqueFields = async ({ email, loginId }) => {
   });
 
   if (existingUser?.email === email) {
-    throw new HttpError(409, '이미 가입된 이메일입니다.', {
-      errorCode: ERROR_CODES.AUTH4091,
-    });
+    throwDuplicatedEmailError();
   }
 
   if (existingUser?.loginId === loginId) {
@@ -88,6 +148,56 @@ export const checkEmail = async ({ email }) => {
   });
 
   return { available: !user };
+};
+
+export const requestEmailVerification = async ({ email }) => {
+  await assertEmailAvailable(email);
+
+  const now = new Date();
+  await assertEmailVerificationRequestAllowed(email, now);
+
+  const code = createEmailVerificationCode();
+  const codeHash = await bcrypt.hash(code, passwordSaltRounds);
+  const expiresAt = new Date(now.getTime() + emailVerificationCodeExpiresInMinutes * 60 * 1000);
+
+  const authToken = await prisma.authToken.create({
+    data: {
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+      tokenHash: codeHash,
+      expiresAt,
+    },
+    select: { id: true },
+  });
+
+  try {
+    await sendEmailVerificationCode({
+      email,
+      code,
+      expiresInMinutes: emailVerificationCodeExpiresInMinutes,
+    });
+  } catch (error) {
+    await prisma.authToken.delete({
+      where: { id: authToken.id },
+    });
+
+    throw error;
+  }
+
+  await prisma.authToken.updateMany({
+    where: {
+      id: { not: authToken.id },
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+      usedAt: null,
+    },
+    data: { usedAt: now },
+  });
+
+  return {
+    email,
+    expiresInMinutes: emailVerificationCodeExpiresInMinutes,
+  };
 };
 
 export const signup = async ({

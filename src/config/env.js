@@ -15,6 +15,15 @@ const envSchema = z.object({
   PRISMA_LOG_QUERIES: z.enum(['true', 'false']).default('false'),
   KAKAO_CLIENT_ID: z.string().optional().default(''),
   KAKAO_REDIRECT_URI: z.string().optional().default(''),
+  SMTP_HOST: z.string().optional().default(''),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  SMTP_USER: z.string().optional().default(''),
+  SMTP_PASS: z.string().optional().default(''),
+  SMTP_FROM: z.string().optional().default(''),
 });
 
 export const env = envSchema.parse(process.env);

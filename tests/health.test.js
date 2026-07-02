@@ -105,3 +105,28 @@ test('GET /api-docs.json exposes check email response example as public API', as
     true,
   );
 });
+
+test('GET /api-docs.json documents validation error response shape', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const validationErrorSchema = response.body.components.schemas.ValidationErrorResponse;
+  const emailVerification400 =
+    response.body.paths['/api/v1/auth/email-verifications'].post.responses[400].content[
+      'application/json'
+    ].schema;
+  const signup400 =
+    response.body.paths['/api/v1/auth/signup'].post.responses[400].content['application/json']
+      .schema;
+
+  assert.equal(validationErrorSchema.properties.errors.type, 'object');
+  assert.equal(validationErrorSchema.properties.errors.properties.fieldErrors.type, 'object');
+  assert.deepEqual(emailVerification400, {
+    $ref: '#/components/schemas/ValidationErrorResponse',
+  });
+  assert.deepEqual(signup400.anyOf, [
+    { $ref: '#/components/schemas/ValidationErrorResponse' },
+    { $ref: '#/components/schemas/ErrorResponse' },
+  ]);
+});

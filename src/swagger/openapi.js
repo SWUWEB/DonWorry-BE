@@ -79,6 +79,34 @@ export const openApiDocument = {
           message: { type: 'string', example: 'Invalid request' },
         },
       },
+      ValidationErrorResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          code: { type: 'string', example: 'COMMON4001' },
+          message: { type: 'string', example: 'Invalid request' },
+          errors: {
+            type: 'object',
+            properties: {
+              formErrors: {
+                type: 'array',
+                items: { type: 'string' },
+                example: [],
+              },
+              fieldErrors: {
+                type: 'object',
+                additionalProperties: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                example: {
+                  email: ['올바른 이메일 형식이 아닙니다.'],
+                },
+              },
+            },
+          },
+        },
+      },
       NotImplementedResponse: {
         type: 'object',
         properties: {
@@ -112,6 +140,20 @@ export const openApiDocument = {
             type: 'object',
             properties: {
               available: { type: 'boolean', example: true },
+            },
+          },
+        },
+      },
+      EmailVerificationResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '이메일 인증 요청이 완료되었습니다.' },
+          data: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', format: 'email', example: 'user@example.com' },
+              expiresInMinutes: { type: 'integer', example: 10 },
             },
           },
         },
@@ -178,7 +220,12 @@ export const openApiDocument = {
             description: 'Invalid request or email verification token',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
               },
             },
           },
@@ -218,7 +265,7 @@ export const openApiDocument = {
             description: 'Invalid request',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
               },
             },
           },
@@ -241,7 +288,7 @@ export const openApiDocument = {
             description: 'Invalid request',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
               },
             },
           },
@@ -249,7 +296,43 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/email-verifications': {
-      post: publicJsonOperation('Auth', '이메일 인증 요청', emailVerificationRequestDto),
+      post: {
+        ...publicJsonOperation('Auth', '이메일 인증 요청', emailVerificationRequestDto),
+        responses: {
+          200: {
+            description: 'Email verification code sent',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/EmailVerificationResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          409: {
+            description: 'Duplicated email',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: 'Email verification request rate limited',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/email-verifications/confirm': {
       post: publicJsonOperation('Auth', '이메일 인증 확인', emailVerificationConfirmDto),
