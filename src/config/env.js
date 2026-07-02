@@ -15,6 +15,10 @@ const envSchema = z.object({
   PRISMA_LOG_QUERIES: z.enum(['true', 'false']).default('false'),
   KAKAO_CLIENT_ID: z.string().optional().default(''),
   KAKAO_REDIRECT_URI: z.string().optional().default(''),
+  AUTH_EMAIL_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  AUTH_EMAIL_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
+  AUTH_EMAIL_SEND_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(300),
+  AUTH_EMAIL_SEND_LIMIT: z.coerce.number().int().positive().default(3),
   SMTP_HOST: z.string().optional().default(''),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_SECURE: z

@@ -21,8 +21,13 @@ const createVerificationCodeCells = (code) => {
     .join('');
 };
 
-const createEmailVerificationHtml = ({ code, expiresInMinutes }) => {
+const formatTtlMinutes = (codeTtlSeconds) => {
+  return Math.ceil(codeTtlSeconds / 60);
+};
+
+const createEmailVerificationHtml = ({ code, codeTtlSeconds }) => {
   const codeCells = createVerificationCodeCells(code);
+  const expiresInMinutes = formatTtlMinutes(codeTtlSeconds);
 
   return `<!doctype html>
 <html lang="ko">
@@ -61,7 +66,7 @@ const createEmailVerificationHtml = ({ code, expiresInMinutes }) => {
 </html>`;
 };
 
-export const sendEmailVerificationCode = async ({ email, code, expiresInMinutes }) => {
+export const sendEmailVerificationCode = async ({ email, code, codeTtlSeconds }) => {
   if (env.NODE_ENV === 'test') {
     return;
   }
@@ -93,12 +98,12 @@ export const sendEmailVerificationCode = async ({ email, code, expiresInMinutes 
       '이메일 인증 코드',
       '회원가입을 완료하려면 아래 인증 코드를 입력해주세요.',
       code,
-      `이 코드는 ${expiresInMinutes}분 뒤에 만료됩니다.`,
+      `이 코드는 ${formatTtlMinutes(codeTtlSeconds)}분 뒤에 만료됩니다.`,
       '본 메일은 발신 전용이며, 서비스 회원가입을 위한 이메일 인증을 위하여 발송하였습니다.',
       '직접 요청하신 경우가 아니라면, 이 메일을 무시하셔도 됩니다.',
       '홈페이지 | 개인정보 처리방침 | 서비스 이용약관',
       '@ 2026 DonWorry. All rights reserved.',
     ].join('\n'),
-    html: createEmailVerificationHtml({ code, expiresInMinutes }),
+    html: createEmailVerificationHtml({ code, codeTtlSeconds }),
   });
 };
