@@ -24,6 +24,7 @@ const signupEmails = [
   'email-confirm-expired@example.com',
   'email-confirm-wrong-code@example.com',
   'email-confirm-used@example.com',
+  'email-confirm-locked@example.com',
   'check-email-existing@example.com',
   'duplicate-email@example.com',
   'duplicate-login@example.com',
@@ -36,6 +37,8 @@ const createEmailVerificationAuthToken = async ({
   code = '123456',
   expiresAt = new Date(Date.now() + 600 * 1000),
   usedAt = null,
+  failedAttemptCount = 0,
+  blockedUntil = null,
 }) => {
   return prisma.authToken.create({
     data: {
@@ -44,6 +47,8 @@ const createEmailVerificationAuthToken = async ({
       tokenHash: await bcrypt.hash(code, 12),
       expiresAt,
       usedAt,
+      failedAttemptCount,
+      blockedUntil,
     },
   });
 };
@@ -409,6 +414,68 @@ test('POST /api/v1/auth/email-verifications/confirm rejects wrong code', async (
   });
 
   assert.equal(unchangedAuthToken.usedAt, null);
+  assert.equal(unchangedAuthToken.failedAttemptCount, 1);
+  assert.equal(unchangedAuthToken.blockedUntil, null);
+});
+
+test('POST /api/v1/auth/email-verifications/confirm locks after too many wrong codes', async () => {
+  const authToken = await createEmailVerificationAuthToken({
+    email: 'email-confirm-locked@example.com',
+    code: '123456',
+    failedAttemptCount: 4,
+  });
+
+  const lockedResponse = await request(app).post('/api/v1/auth/email-verifications/confirm').send({
+    email: 'email-confirm-locked@example.com',
+    code: '654321',
+  });
+
+  assert.equal(lockedResponse.status, 429);
+  assert.equal(lockedResponse.body.success, false);
+  assert.equal(lockedResponse.body.code, 'AUTH4291');
+
+  const lockedAuthToken = await prisma.authToken.findUnique({
+    where: { id: authToken.id },
+  });
+
+  assert.equal(lockedAuthToken.failedAttemptCount, 5);
+  assert.ok(lockedAuthToken.blockedUntil > new Date());
+
+  const correctCodeResponse = await request(app)
+    .post('/api/v1/auth/email-verifications/confirm')
+    .send({
+      email: 'email-confirm-locked@example.com',
+      code: '123456',
+    });
+
+  assert.equal(correctCodeResponse.status, 429);
+  assert.equal(correctCodeResponse.body.success, false);
+  assert.equal(correctCodeResponse.body.code, 'AUTH4291');
+});
+
+test('POST /api/v1/auth/email-verifications/confirm resets attempts after lock expires', async () => {
+  const authToken = await createEmailVerificationAuthToken({
+    email: 'email-confirm-locked@example.com',
+    code: '123456',
+    failedAttemptCount: 5,
+    blockedUntil: new Date(Date.now() - 1000),
+  });
+
+  const response = await request(app).post('/api/v1/auth/email-verifications/confirm').send({
+    email: 'email-confirm-locked@example.com',
+    code: '654321',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4001');
+
+  const updatedAuthToken = await prisma.authToken.findUnique({
+    where: { id: authToken.id },
+  });
+
+  assert.equal(updatedAuthToken.failedAttemptCount, 1);
+  assert.equal(updatedAuthToken.blockedUntil, null);
 });
 
 test('POST /api/v1/auth/email-verifications/confirm rejects already used code', async () => {

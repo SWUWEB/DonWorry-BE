@@ -385,6 +385,14 @@ export const openApiDocument = {
               },
             },
           },
+          429: {
+            description: 'Email verification confirm rate limited',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
         },
       },
     },
