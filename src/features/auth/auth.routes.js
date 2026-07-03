@@ -4,6 +4,7 @@ import { requireAuth } from '../../middlewares/auth.js';
 import {
   checkEmailController,
   checkLoginIdController,
+  confirmEmailVerificationController,
   createNotImplementedController,
   requestEmailVerificationController,
   signupController,
@@ -34,7 +35,11 @@ authRouter.post(
   validate(emailVerificationRequestDto),
   requestEmailVerificationController,
 );
-authRouter.post('/email-verifications/confirm', validate(emailVerificationConfirmDto), todo);
+authRouter.post(
+  '/email-verifications/confirm',
+  validate(emailVerificationConfirmDto),
+  confirmEmailVerificationController,
+);
 authRouter.post('/password-reset/request', validate(passwordResetRequestDto), todo);
 authRouter.patch('/password-reset/confirm', validate(passwordResetConfirmDto), todo);
 authRouter.post('/kakao/login', todo);

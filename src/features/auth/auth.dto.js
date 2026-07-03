@@ -22,6 +22,10 @@ const phoneNumber = z
   .string()
   .trim()
   .regex(/^01[016789]-?\d{3,4}-?\d{4}$/, '올바른 전화번호 형식이 아닙니다.');
+const emailVerificationCode = z
+  .string()
+  .trim()
+  .regex(/^\d{6}$/, '인증 코드는 6자리 숫자여야 합니다.');
 
 export const signupDto = z.object({
   body: z
@@ -57,7 +61,7 @@ export const emailVerificationRequestDto = z.object({
 });
 
 export const emailVerificationConfirmDto = z.object({
-  body: z.object({ email, token: z.string().min(1) }),
+  body: z.object({ email, code: emailVerificationCode }),
 });
 
 export const passwordResetRequestDto = z.object({

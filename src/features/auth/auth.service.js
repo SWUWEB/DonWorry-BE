@@ -54,6 +54,12 @@ const throwEmailVerificationRateLimitedError = () => {
   });
 };
 
+const throwEmailVerificationConfirmError = (message = '이메일 인증 코드가 올바르지 않습니다.') => {
+  throw new HttpError(400, message, {
+    errorCode: ERROR_CODES.AUTH4001,
+  });
+};
+
 export const createEmailVerificationToken = (email) => {
   return jwt.sign({ purpose: 'emailVerification', email }, env.JWT_ACCESS_SECRET, {
     expiresIn: emailVerificationJwtTtl,
@@ -201,6 +207,60 @@ export const requestEmailVerification = async ({ email }) => {
     email,
     codeTtlSeconds: emailVerificationCodeTtlSeconds,
     resendCooldownSeconds: emailVerificationResendCooldownSeconds,
+  };
+};
+
+export const confirmEmailVerification = async ({ email, code }) => {
+  await assertEmailAvailable(email);
+
+  const now = new Date();
+  const authToken = await prisma.authToken.findFirst({
+    where: {
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: {
+      id: true,
+      tokenHash: true,
+      expiresAt: true,
+      usedAt: true,
+    },
+  });
+
+  if (!authToken) {
+    throwEmailVerificationConfirmError();
+  }
+
+  if (authToken.usedAt) {
+    throwEmailVerificationConfirmError('이미 사용된 이메일 인증 코드입니다.');
+  }
+
+  if (authToken.expiresAt <= now) {
+    throwEmailVerificationConfirmError('이메일 인증 코드가 만료되었습니다.');
+  }
+
+  const isCodeMatched = await bcrypt.compare(code, authToken.tokenHash);
+
+  if (!isCodeMatched) {
+    throwEmailVerificationConfirmError();
+  }
+
+  const updateResult = await prisma.authToken.updateMany({
+    where: {
+      id: authToken.id,
+      usedAt: null,
+    },
+    data: { usedAt: now },
+  });
+
+  if (updateResult.count !== 1) {
+    throwEmailVerificationConfirmError('이미 사용된 이메일 인증 코드입니다.');
+  }
+
+  return {
+    email,
+    emailVerificationToken: createEmailVerificationToken(email),
   };
 };
 

@@ -1,6 +1,12 @@
 import { asyncHandler } from '../../utils/async-handler.js';
 import { created, ok, notImplemented } from '../../utils/api-response.js';
-import { checkEmail, checkLoginId, requestEmailVerification, signup } from './auth.service.js';
+import {
+  checkEmail,
+  checkLoginId,
+  confirmEmailVerification,
+  requestEmailVerification,
+  signup,
+} from './auth.service.js';
 
 export const createNotImplementedController = (featureName) => (_req, res) => {
   return notImplemented(res, featureName);
@@ -28,4 +34,10 @@ export const requestEmailVerificationController = asyncHandler(async (req, res) 
   const result = await requestEmailVerification(req.validated.body);
 
   return ok(res, result, '이메일 인증 요청이 완료되었습니다.');
+});
+
+export const confirmEmailVerificationController = asyncHandler(async (req, res) => {
+  const result = await confirmEmailVerification(req.validated.body);
+
+  return ok(res, result, '이메일 인증이 완료되었습니다.');
 });

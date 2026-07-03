@@ -20,12 +20,33 @@ const signupEmails = [
   'email-verification@example.com',
   'email-verification-signup@example.com',
   'email-verification-duplicate@example.com',
+  'email-confirm@example.com',
+  'email-confirm-expired@example.com',
+  'email-confirm-wrong-code@example.com',
+  'email-confirm-used@example.com',
   'check-email-existing@example.com',
   'duplicate-email@example.com',
   'duplicate-login@example.com',
   'invalid-token@example.com',
 ];
-const signupLoginIds = ['signup123', 'checkmail1', 'duplicate1', 'sameid1'];
+const signupLoginIds = ['signup123', 'confirm1', 'checkmail1', 'duplicate1', 'sameid1'];
+
+const createEmailVerificationAuthToken = async ({
+  email,
+  code = '123456',
+  expiresAt = new Date(Date.now() + 600 * 1000),
+  usedAt = null,
+}) => {
+  return prisma.authToken.create({
+    data: {
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+      tokenHash: await bcrypt.hash(code, 12),
+      expiresAt,
+      usedAt,
+    },
+  });
+};
 
 test.beforeEach(async () => {
   await prisma.authToken.deleteMany({
@@ -302,6 +323,117 @@ test('POST /api/v1/auth/email-verifications rejects duplicate email', async () =
 test('POST /api/v1/auth/email-verifications validates request body', async () => {
   const response = await request(app).post('/api/v1/auth/email-verifications').send({
     email: 'invalid-email',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'COMMON4001');
+});
+
+test('POST /api/v1/auth/email-verifications/confirm returns signup token and supports signup', async () => {
+  await createEmailVerificationAuthToken({
+    email: 'email-confirm@example.com',
+    code: '123456',
+  });
+
+  const confirmResponse = await request(app)
+    .post('/api/v1/auth/email-verifications/confirm')
+    .send({
+      email: 'EMAIL-CONFIRM@example.com',
+      code: '123456',
+    });
+
+  assert.equal(confirmResponse.status, 200);
+  assert.equal(confirmResponse.body.success, true);
+  assert.equal(confirmResponse.body.data.email, 'email-confirm@example.com');
+  assert.equal(typeof confirmResponse.body.data.emailVerificationToken, 'string');
+
+  const usedAuthToken = await prisma.authToken.findFirst({
+    where: {
+      emailSnapshot: 'email-confirm@example.com',
+      tokenType: 'EMAIL_VERIFY',
+    },
+  });
+
+  assert.ok(usedAuthToken.usedAt);
+
+  const signupResponse = await request(app).post('/api/v1/auth/signup').send({
+    name: 'confirmed-user',
+    loginId: 'confirm1',
+    email: 'email-confirm@example.com',
+    emailVerificationToken: confirmResponse.body.data.emailVerificationToken,
+    password: 'Password123!',
+    passwordConfirm: 'Password123!',
+    phoneNumber: '010-2222-3333',
+  });
+
+  assert.equal(signupResponse.status, 201);
+  assert.equal(signupResponse.body.success, true);
+  assert.equal(signupResponse.body.data.email, 'email-confirm@example.com');
+  assert.equal(signupResponse.body.data.loginId, 'confirm1');
+});
+
+test('POST /api/v1/auth/email-verifications/confirm rejects expired code', async () => {
+  await createEmailVerificationAuthToken({
+    email: 'email-confirm-expired@example.com',
+    code: '123456',
+    expiresAt: new Date(Date.now() - 1000),
+  });
+
+  const response = await request(app).post('/api/v1/auth/email-verifications/confirm').send({
+    email: 'email-confirm-expired@example.com',
+    code: '123456',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4001');
+  assert.equal(response.body.data, undefined);
+});
+
+test('POST /api/v1/auth/email-verifications/confirm rejects wrong code', async () => {
+  const authToken = await createEmailVerificationAuthToken({
+    email: 'email-confirm-wrong-code@example.com',
+    code: '123456',
+  });
+
+  const response = await request(app).post('/api/v1/auth/email-verifications/confirm').send({
+    email: 'email-confirm-wrong-code@example.com',
+    code: '654321',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4001');
+
+  const unchangedAuthToken = await prisma.authToken.findUnique({
+    where: { id: authToken.id },
+  });
+
+  assert.equal(unchangedAuthToken.usedAt, null);
+});
+
+test('POST /api/v1/auth/email-verifications/confirm rejects already used code', async () => {
+  await createEmailVerificationAuthToken({
+    email: 'email-confirm-used@example.com',
+    code: '123456',
+    usedAt: new Date(),
+  });
+
+  const response = await request(app).post('/api/v1/auth/email-verifications/confirm').send({
+    email: 'email-confirm-used@example.com',
+    code: '123456',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4001');
+});
+
+test('POST /api/v1/auth/email-verifications/confirm validates request body', async () => {
+  const response = await request(app).post('/api/v1/auth/email-verifications/confirm').send({
+    email: 'email-confirm@example.com',
+    code: '12345',
   });
 
   assert.equal(response.status, 400);
