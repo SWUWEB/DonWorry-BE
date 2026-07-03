@@ -153,7 +153,8 @@ export const openApiDocument = {
             type: 'object',
             properties: {
               email: { type: 'string', format: 'email', example: 'user@example.com' },
-              expiresInMinutes: { type: 'integer', example: 10 },
+              codeTtlSeconds: { type: 'integer', example: 600 },
+              resendCooldownSeconds: { type: 'integer', example: 60 },
             },
           },
         },

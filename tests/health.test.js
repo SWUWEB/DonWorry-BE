@@ -106,6 +106,19 @@ test('GET /api-docs.json exposes check email response example as public API', as
   );
 });
 
+test('GET /api-docs.json documents email verification timer fields', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const emailVerificationDataSchema =
+    response.body.components.schemas.EmailVerificationResponse.properties.data;
+
+  assert.equal(emailVerificationDataSchema.properties.codeTtlSeconds.example, 600);
+  assert.equal(emailVerificationDataSchema.properties.resendCooldownSeconds.example, 60);
+  assert.equal(emailVerificationDataSchema.properties.expiresInMinutes, undefined);
+});
+
 test('GET /api-docs.json documents validation error response shape', async () => {
   const response = await request(createApp()).get('/api-docs.json');
 

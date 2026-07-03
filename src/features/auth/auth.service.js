@@ -10,9 +10,10 @@ import { sendEmailVerificationCode } from './auth.mailer.js';
 
 const passwordSaltRounds = 12;
 const emailVerificationJwtTtl = '10m';
-const emailVerificationCodeExpiresInMinutes = 10;
-const emailVerificationResendCooldownSeconds = 60;
-const emailVerificationDailyRequestLimit = 5;
+const emailVerificationCodeTtlSeconds = env.AUTH_EMAIL_CODE_TTL_SECONDS;
+const emailVerificationResendCooldownSeconds = env.AUTH_EMAIL_RESEND_COOLDOWN_SECONDS;
+const emailVerificationSendLimitWindowSeconds = env.AUTH_EMAIL_SEND_LIMIT_WINDOW_SECONDS;
+const emailVerificationSendLimit = env.AUTH_EMAIL_SEND_LIMIT;
 
 export const serializeSignupUser = (user) => {
   return {
@@ -65,7 +66,9 @@ const createEmailVerificationCode = () => {
 
 const assertEmailVerificationRequestAllowed = async (email, now) => {
   const cooldownStartedAt = new Date(now.getTime() - emailVerificationResendCooldownSeconds * 1000);
-  const dailyWindowStartedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const limitWindowStartedAt = new Date(
+    now.getTime() - emailVerificationSendLimitWindowSeconds * 1000,
+  );
 
   const recentRequest = await prisma.authToken.findFirst({
     where: {
@@ -80,15 +83,15 @@ const assertEmailVerificationRequestAllowed = async (email, now) => {
     throwEmailVerificationRateLimitedError();
   }
 
-  const dailyRequestCount = await prisma.authToken.count({
+  const requestCountInWindow = await prisma.authToken.count({
     where: {
       emailSnapshot: email,
       tokenType: 'EMAIL_VERIFY',
-      createdAt: { gte: dailyWindowStartedAt },
+      createdAt: { gte: limitWindowStartedAt },
     },
   });
 
-  if (dailyRequestCount >= emailVerificationDailyRequestLimit) {
+  if (requestCountInWindow >= emailVerificationSendLimit) {
     throwEmailVerificationRateLimitedError();
   }
 };
@@ -158,7 +161,7 @@ export const requestEmailVerification = async ({ email }) => {
 
   const code = createEmailVerificationCode();
   const codeHash = await bcrypt.hash(code, passwordSaltRounds);
-  const expiresAt = new Date(now.getTime() + emailVerificationCodeExpiresInMinutes * 60 * 1000);
+  const expiresAt = new Date(now.getTime() + emailVerificationCodeTtlSeconds * 1000);
 
   const authToken = await prisma.authToken.create({
     data: {
@@ -174,7 +177,7 @@ export const requestEmailVerification = async ({ email }) => {
     await sendEmailVerificationCode({
       email,
       code,
-      expiresInMinutes: emailVerificationCodeExpiresInMinutes,
+      codeTtlSeconds: emailVerificationCodeTtlSeconds,
     });
   } catch (error) {
     await prisma.authToken.delete({
@@ -196,7 +199,8 @@ export const requestEmailVerification = async ({ email }) => {
 
   return {
     email,
-    expiresInMinutes: emailVerificationCodeExpiresInMinutes,
+    codeTtlSeconds: emailVerificationCodeTtlSeconds,
+    resendCooldownSeconds: emailVerificationResendCooldownSeconds,
   };
 };
 

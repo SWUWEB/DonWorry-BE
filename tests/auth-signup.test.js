@@ -188,7 +188,9 @@ test('POST /api/v1/auth/email-verifications sends code for available email', asy
   assert.equal(response.body.success, true);
   assert.equal(response.body.message, '이메일 인증 요청이 완료되었습니다.');
   assert.equal(response.body.data.email, 'email-verification@example.com');
-  assert.equal(response.body.data.expiresInMinutes, 10);
+  assert.equal(response.body.data.codeTtlSeconds, 600);
+  assert.equal(response.body.data.resendCooldownSeconds, 60);
+  assert.equal(response.body.data.expiresInMinutes, undefined);
   assert.equal(response.body.data.debugCode, undefined);
   assert.equal(response.body.data.emailVerificationToken, undefined);
 
@@ -204,7 +206,7 @@ test('POST /api/v1/auth/email-verifications sends code for available email', asy
   assert.match(authToken.tokenHash, /^\$2/);
   assert.equal(authToken.usedAt, null);
   assert.ok(authToken.expiresAt > requestedAt);
-  assert.ok(authToken.expiresAt <= new Date(requestedAt.getTime() + 10 * 60 * 1000 + 5000));
+  assert.ok(authToken.expiresAt <= new Date(requestedAt.getTime() + 600 * 1000 + 5000));
 });
 
 test('POST /api/v1/auth/email-verifications invalidates previous unused code after cooldown', async () => {
@@ -215,7 +217,7 @@ test('POST /api/v1/auth/email-verifications invalidates previous unused code aft
       emailSnapshot: 'email-verification-signup@example.com',
       tokenType: 'EMAIL_VERIFY',
       tokenHash: 'old-email-verification-code-hash',
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 600 * 1000),
       createdAt: oldRequestDate,
     },
   });
@@ -253,16 +255,16 @@ test('POST /api/v1/auth/email-verifications limits resend within one minute', as
   assert.equal(secondResponse.body.code, 'AUTH4291');
 });
 
-test('POST /api/v1/auth/email-verifications limits daily requests per email', async () => {
+test('POST /api/v1/auth/email-verifications limits requests within send limit window', async () => {
   const now = Date.now();
 
-  for (let index = 0; index < 5; index += 1) {
+  for (let index = 0; index < 3; index += 1) {
     await prisma.authToken.create({
       data: {
         emailSnapshot: 'email-verification-signup@example.com',
         tokenType: 'EMAIL_VERIFY',
-        tokenHash: `daily-email-verification-code-hash-${index}`,
-        expiresAt: new Date(now + 10 * 60 * 1000),
+        tokenHash: `window-email-verification-code-hash-${index}`,
+        expiresAt: new Date(now + 600 * 1000),
         createdAt: new Date(now - (index + 2) * 60 * 1000),
         usedAt: new Date(now - (index + 1) * 60 * 1000),
       },
