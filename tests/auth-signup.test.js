@@ -336,12 +336,10 @@ test('POST /api/v1/auth/email-verifications/confirm returns signup token and sup
     code: '123456',
   });
 
-  const confirmResponse = await request(app)
-    .post('/api/v1/auth/email-verifications/confirm')
-    .send({
-      email: 'EMAIL-CONFIRM@example.com',
-      code: '123456',
-    });
+  const confirmResponse = await request(app).post('/api/v1/auth/email-verifications/confirm').send({
+    email: 'EMAIL-CONFIRM@example.com',
+    code: '123456',
+  });
 
   assert.equal(confirmResponse.status, 200);
   assert.equal(confirmResponse.body.success, true);
