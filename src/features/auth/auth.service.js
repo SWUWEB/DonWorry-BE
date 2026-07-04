@@ -222,6 +222,73 @@ export const requestEmailVerification = async ({ email }) => {
   };
 };
 
+const recordEmailVerificationFailedAttempt = async (authToken, now) => {
+  const lockUntil = new Date(now.getTime() + emailVerificationConfirmLockSeconds * 1000);
+
+  if (authToken.blockedUntil && authToken.blockedUntil <= now) {
+    await prisma.authToken.updateMany({
+      where: {
+        id: authToken.id,
+        usedAt: null,
+        failedAttemptCount: authToken.failedAttemptCount,
+        blockedUntil: authToken.blockedUntil,
+      },
+      data: {
+        failedAttemptCount: 0,
+        blockedUntil: null,
+      },
+    });
+  }
+
+  const updateResult = await prisma.authToken.updateMany({
+    where: {
+      id: authToken.id,
+      usedAt: null,
+      failedAttemptCount: { lt: emailVerificationConfirmMaxAttempts },
+      OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
+    },
+    data: {
+      failedAttemptCount: { increment: 1 },
+      blockedUntil: null,
+    },
+  });
+
+  const updatedAuthToken = await prisma.authToken.findUnique({
+    where: { id: authToken.id },
+    select: {
+      failedAttemptCount: true,
+      blockedUntil: true,
+      usedAt: true,
+    },
+  });
+
+  if (!updatedAuthToken || updatedAuthToken.usedAt) {
+    throwEmailVerificationConfirmError();
+  }
+
+  if (updatedAuthToken.blockedUntil && updatedAuthToken.blockedUntil > now) {
+    throwEmailVerificationConfirmRateLimitedError();
+  }
+
+  if (updatedAuthToken.failedAttemptCount >= emailVerificationConfirmMaxAttempts) {
+    await prisma.authToken.updateMany({
+      where: {
+        id: authToken.id,
+        usedAt: null,
+        failedAttemptCount: { gte: emailVerificationConfirmMaxAttempts },
+        OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
+      },
+      data: { blockedUntil: lockUntil },
+    });
+
+    throwEmailVerificationConfirmRateLimitedError();
+  }
+
+  if (updateResult.count !== 1) {
+    throwEmailVerificationConfirmError();
+  }
+};
+
 export const confirmEmailVerification = async ({ email, code }) => {
   await assertEmailAvailable(email);
 
@@ -261,25 +328,7 @@ export const confirmEmailVerification = async ({ email, code }) => {
   const isCodeMatched = await bcrypt.compare(code, authToken.tokenHash);
 
   if (!isCodeMatched) {
-    const currentFailedAttemptCount =
-      authToken.blockedUntil && authToken.blockedUntil <= now ? 0 : authToken.failedAttemptCount;
-    const failedAttemptCount = currentFailedAttemptCount + 1;
-    const isBlocked = failedAttemptCount >= emailVerificationConfirmMaxAttempts;
-
-    await prisma.authToken.update({
-      where: { id: authToken.id },
-      data: {
-        failedAttemptCount,
-        blockedUntil: isBlocked
-          ? new Date(now.getTime() + emailVerificationConfirmLockSeconds * 1000)
-          : null,
-      },
-    });
-
-    if (isBlocked) {
-      throwEmailVerificationConfirmRateLimitedError();
-    }
-
+    await recordEmailVerificationFailedAttempt(authToken, now);
     throwEmailVerificationConfirmError();
   }
 
