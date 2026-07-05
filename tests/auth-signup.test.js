@@ -243,9 +243,10 @@ test('POST /api/v1/auth/login returns access token and user info with login id',
   assert.equal(response.body.data.user.phoneNumber, '010-3333-4444');
 
   const tokenPayload = jwt.verify(response.body.data.accessToken, process.env.JWT_ACCESS_SECRET);
-  assert.equal(tokenPayload.email, 'login@example.com');
-  assert.equal(tokenPayload.loginId, 'login123');
+  assert.equal(tokenPayload.purpose, 'access');
   assert.equal(tokenPayload.userId, response.body.data.user.userId);
+  assert.equal(tokenPayload.email, undefined);
+  assert.equal(tokenPayload.loginId, undefined);
 
   const user = await prisma.user.findUnique({
     where: { email: 'login@example.com' },

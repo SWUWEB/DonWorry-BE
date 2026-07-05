@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import jwt from 'jsonwebtoken';
 import request from 'supertest';
 
 process.env.NODE_ENV = 'test';
@@ -35,6 +36,26 @@ test('GET /api-docs.json exposes bearer auth OpenAPI config', async () => {
   assert.equal(response.body.components.securitySchemes.bearerAuth.type, 'http');
   assert.equal(response.body.components.securitySchemes.bearerAuth.scheme, 'bearer');
   assert.deepEqual(response.body.paths['/api/v1/users/me'].get.security, [{ bearerAuth: [] }]);
+});
+
+test('protected routes accept only access purpose JWT', async () => {
+  const app = createApp();
+  const emailVerificationToken = jwt.sign(
+    { purpose: 'emailVerification', email: 'user@example.com' },
+    process.env.JWT_ACCESS_SECRET,
+  );
+  const accessToken = jwt.sign({ purpose: 'access', userId: '1' }, process.env.JWT_ACCESS_SECRET);
+
+  const rejectedResponse = await request(app)
+    .get('/api/v1/users/me')
+    .set('Authorization', `Bearer ${emailVerificationToken}`);
+  const acceptedResponse = await request(app)
+    .get('/api/v1/users/me')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(rejectedResponse.status, 401);
+  assert.equal(rejectedResponse.body.success, false);
+  assert.equal(acceptedResponse.status, 501);
 });
 
 test('GET /api-docs.json generates request body schema from Zod DTO', async () => {

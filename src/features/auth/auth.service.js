@@ -16,6 +16,7 @@ const emailVerificationSendLimitWindowSeconds = env.AUTH_EMAIL_SEND_LIMIT_WINDOW
 const emailVerificationSendLimit = env.AUTH_EMAIL_SEND_LIMIT;
 const emailVerificationConfirmMaxAttempts = env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS;
 const emailVerificationConfirmLockSeconds = env.AUTH_EMAIL_CONFIRM_LOCK_SECONDS;
+const dummyPasswordHash = '$2b$12$nDS70w.TSxO.D2NgJnu9Ke6MCDX7bMWto3SoH4nXS9tmaTL06Okhu';
 
 export const serializeSignupUser = (user) => {
   return {
@@ -30,9 +31,8 @@ export const serializeSignupUser = (user) => {
 const createAccessToken = (user) => {
   return jwt.sign(
     {
+      purpose: 'access',
       userId: user.id.toString(),
-      email: user.email,
-      loginId: user.loginId,
     },
     env.JWT_ACCESS_SECRET,
     { expiresIn: env.ACCESS_TOKEN_EXPIRES_IN },
@@ -449,13 +449,9 @@ export const login = async ({ loginId, password }) => {
     },
   });
 
-  if (!user?.passwordHash) {
-    throwInvalidLoginCredentialsError();
-  }
+  const isPasswordMatched = await bcrypt.compare(password, user?.passwordHash ?? dummyPasswordHash);
 
-  const isPasswordMatched = await bcrypt.compare(password, user.passwordHash);
-
-  if (!isPasswordMatched) {
+  if (!user?.passwordHash || !isPasswordMatched) {
     throwInvalidLoginCredentialsError();
   }
 
