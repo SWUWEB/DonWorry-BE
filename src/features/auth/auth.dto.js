@@ -45,7 +45,7 @@ export const signupDto = z.object({
 });
 
 export const loginDto = z.object({
-  body: z.object({ email, password }),
+  body: z.object({ loginId, password }).strict(),
 });
 
 export const checkEmailDto = z.object({

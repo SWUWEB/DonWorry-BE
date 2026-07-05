@@ -6,6 +6,7 @@ import {
   checkLoginIdController,
   confirmEmailVerificationController,
   createNotImplementedController,
+  loginController,
   requestEmailVerificationController,
   signupController,
 } from './auth.controller.js';
@@ -25,7 +26,7 @@ export const authRouter = Router();
 const todo = createNotImplementedController('auth');
 
 authRouter.post('/signup', validate(signupDto), signupController);
-authRouter.post('/login', validate(loginDto), todo);
+authRouter.post('/login', validate(loginDto), loginController);
 authRouter.post('/logout', requireAuth, todo);
 authRouter.post('/refresh', todo);
 authRouter.get('/check-email', validate(checkEmailDto), checkEmailController);

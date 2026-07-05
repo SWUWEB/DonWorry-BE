@@ -57,6 +57,14 @@ test('GET /api-docs.json generates request body schema from Zod DTO', async () =
   ]);
   assert.equal(signupSchema.properties.email.format, 'email');
   assert.equal(signupSchema.properties.loginId.type, 'string');
+
+  const loginSchema =
+    response.body.paths['/api/v1/auth/login'].post.requestBody.content['application/json'].schema;
+
+  assert.deepEqual(loginSchema.required.sort(), ['loginId', 'password']);
+  assert.equal(loginSchema.properties.email, undefined);
+  assert.equal(loginSchema.properties.loginId.type, 'string');
+  assert.equal(loginSchema.additionalProperties, false);
 });
 
 test('GET /api-docs.json generates query and path parameters from Zod DTO', async () => {
@@ -106,6 +114,29 @@ test('GET /api-docs.json exposes check email response example as public API', as
   );
 });
 
+test('GET /api-docs.json documents login response and auth failure', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const operation = response.body.paths['/api/v1/auth/login'].post;
+
+  assert.deepEqual(operation.security, []);
+  assert.equal(
+    operation.responses[200].content['application/json'].schema.$ref,
+    '#/components/schemas/LoginResponse',
+  );
+  assert.equal(
+    operation.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/ErrorResponse',
+  );
+  assert.equal(
+    response.body.components.schemas.LoginResponse.properties.data.properties.user.properties.email
+      .format,
+    'email',
+  );
+});
+
 test('GET /api-docs.json documents email verification timer fields', async () => {
   const response = await request(createApp()).get('/api-docs.json');
 
@@ -116,6 +147,10 @@ test('GET /api-docs.json documents email verification timer fields', async () =>
 
   assert.equal(emailVerificationDataSchema.properties.codeTtlSeconds.example, 600);
   assert.equal(emailVerificationDataSchema.properties.resendCooldownSeconds.example, 60);
+  assert.equal(
+    emailVerificationDataSchema.properties.debugCode.description.includes('Development'),
+    true,
+  );
   assert.equal(emailVerificationDataSchema.properties.expiresInMinutes, undefined);
 });
 

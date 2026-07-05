@@ -4,6 +4,7 @@ import {
   checkEmail,
   checkLoginId,
   confirmEmailVerification,
+  login,
   requestEmailVerification,
   signup,
 } from './auth.service.js';
@@ -16,6 +17,12 @@ export const signupController = asyncHandler(async (req, res) => {
   const user = await signup(req.validated.body);
 
   return created(res, user, '회원가입이 완료되었습니다.');
+});
+
+export const loginController = asyncHandler(async (req, res) => {
+  const result = await login(req.validated.body);
+
+  return ok(res, result, '로그인이 완료되었습니다.');
 });
 
 export const checkEmailController = asyncHandler(async (req, res) => {

@@ -131,6 +131,33 @@ export const openApiDocument = {
           },
         },
       },
+      LoginResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '로그인이 완료되었습니다.' },
+          data: {
+            type: 'object',
+            properties: {
+              accessToken: {
+                type: 'string',
+                example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+              },
+              tokenType: { type: 'string', example: 'Bearer' },
+              user: {
+                type: 'object',
+                properties: {
+                  userId: { type: 'string', example: '1' },
+                  loginId: { type: 'string', example: 'gachi123' },
+                  name: { type: 'string', example: '홍길동' },
+                  email: { type: 'string', format: 'email', example: 'user@example.com' },
+                  phoneNumber: { type: 'string', example: '010-0000-0000' },
+                },
+              },
+            },
+          },
+        },
+      },
       CheckEmailResponse: {
         type: 'object',
         properties: {
@@ -155,6 +182,11 @@ export const openApiDocument = {
               email: { type: 'string', format: 'email', example: 'user@example.com' },
               codeTtlSeconds: { type: 'integer', example: 600 },
               resendCooldownSeconds: { type: 'integer', example: 60 },
+              debugCode: {
+                type: 'string',
+                example: '123456',
+                description: 'Development only. Returned when SMTP delivery is skipped or fails.',
+              },
             },
           },
         },
@@ -259,7 +291,35 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/login': {
-      post: publicJsonOperation('Auth', '로그인', loginDto),
+      post: {
+        ...publicJsonOperation('Auth', '로그인', loginDto),
+        responses: {
+          200: {
+            description: 'Login completed',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/LoginResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: {
+            description: 'Invalid login id or password',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/logout': {
       post: securedOperation('Auth', '로그아웃'),

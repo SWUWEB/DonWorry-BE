@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import request from 'supertest';
 
 process.env.NODE_ENV = 'test';
@@ -30,8 +31,18 @@ const signupEmails = [
   'duplicate-email@example.com',
   'duplicate-login@example.com',
   'invalid-token@example.com',
+  'login@example.com',
+  'login-missing-password@example.com',
 ];
-const signupLoginIds = ['signup123', 'confirm1', 'checkmail1', 'duplicate1', 'sameid1'];
+const signupLoginIds = [
+  'signup123',
+  'confirm1',
+  'checkmail1',
+  'duplicate1',
+  'sameid1',
+  'login123',
+  'loginpw1',
+];
 
 const createEmailVerificationAuthToken = async ({
   email,
@@ -198,6 +209,129 @@ test('POST /api/v1/auth/signup validates request body', async () => {
     password: 'password',
     passwordConfirm: 'different',
     phoneNumber: '010-0000-0000',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'COMMON4001');
+});
+
+test('POST /api/v1/auth/login returns access token and user info with login id', async () => {
+  await prisma.user.create({
+    data: {
+      email: 'login@example.com',
+      loginId: 'login123',
+      passwordHash: await bcrypt.hash('Password123!', 12),
+      nickname: 'login-user',
+      phoneNumber: '010-3333-4444',
+    },
+  });
+
+  const response = await request(app).post('/api/v1/auth/login').send({
+    loginId: 'login123',
+    password: 'Password123!',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.data.tokenType, 'Bearer');
+  assert.equal(typeof response.body.data.accessToken, 'string');
+  assert.equal(response.body.data.refreshToken, undefined);
+  assert.equal(response.body.data.user.email, 'login@example.com');
+  assert.equal(response.body.data.user.loginId, 'login123');
+  assert.equal(response.body.data.user.name, 'login-user');
+  assert.equal(response.body.data.user.phoneNumber, '010-3333-4444');
+
+  const tokenPayload = jwt.verify(response.body.data.accessToken, process.env.JWT_ACCESS_SECRET);
+  assert.equal(tokenPayload.email, 'login@example.com');
+  assert.equal(tokenPayload.loginId, 'login123');
+  assert.equal(tokenPayload.userId, response.body.data.user.userId);
+
+  const user = await prisma.user.findUnique({
+    where: { email: 'login@example.com' },
+  });
+
+  assert.ok(user.lastLoginAt);
+});
+
+test('POST /api/v1/auth/login rejects email identifier', async () => {
+  const response = await request(app).post('/api/v1/auth/login').send({
+    email: 'unknown-login@example.com',
+    password: 'Password123!',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'COMMON4001');
+});
+
+test('POST /api/v1/auth/login rejects unknown login id', async () => {
+  const response = await request(app).post('/api/v1/auth/login').send({
+    loginId: 'unknown1',
+    password: 'Password123!',
+  });
+
+  assert.equal(response.status, 401);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4011');
+});
+
+test('POST /api/v1/auth/login rejects wrong password', async () => {
+  await prisma.user.create({
+    data: {
+      email: 'login@example.com',
+      loginId: 'login123',
+      passwordHash: await bcrypt.hash('Password123!', 12),
+      nickname: 'login-user',
+    },
+  });
+
+  const response = await request(app).post('/api/v1/auth/login').send({
+    loginId: 'login123',
+    password: 'Password123?',
+  });
+
+  assert.equal(response.status, 401);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4011');
+});
+
+test('POST /api/v1/auth/login rejects local login when password hash is missing', async () => {
+  await prisma.user.create({
+    data: {
+      email: 'login-missing-password@example.com',
+      loginId: 'loginpw1',
+      nickname: 'oauth-user',
+      loginProvider: 'KAKAO',
+    },
+  });
+
+  const response = await request(app).post('/api/v1/auth/login').send({
+    loginId: 'loginpw1',
+    password: 'Password123!',
+  });
+
+  assert.equal(response.status, 401);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4011');
+});
+
+test('POST /api/v1/auth/login validates request body', async () => {
+  const response = await request(app).post('/api/v1/auth/login').send({
+    loginId: 'bad',
+    password: 'password',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'COMMON4001');
+});
+
+test('POST /api/v1/auth/login rejects extra email with login id', async () => {
+  const response = await request(app).post('/api/v1/auth/login').send({
+    email: 'login@example.com',
+    loginId: 'login123',
+    password: 'Password123!',
   });
 
   assert.equal(response.status, 400);

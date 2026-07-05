@@ -27,6 +27,18 @@ export const serializeSignupUser = (user) => {
   };
 };
 
+const createAccessToken = (user) => {
+  return jwt.sign(
+    {
+      userId: user.id.toString(),
+      email: user.email,
+      loginId: user.loginId,
+    },
+    env.JWT_ACCESS_SECRET,
+    { expiresIn: env.ACCESS_TOKEN_EXPIRES_IN },
+  );
+};
+
 const formatPhoneNumber = (phoneNumber) => {
   const digits = phoneNumber.replace(/\D/g, '');
 
@@ -48,6 +60,12 @@ const assertEmailAvailable = async (email) => {
   if (user) {
     throwDuplicatedEmailError();
   }
+};
+
+const throwInvalidLoginCredentialsError = () => {
+  throw new HttpError(401, '아이디 또는 비밀번호가 올바르지 않습니다.', {
+    errorCode: ERROR_CODES.AUTH4011,
+  });
 };
 
 const throwEmailVerificationRateLimitedError = () => {
@@ -187,18 +205,32 @@ export const requestEmailVerification = async ({ email }) => {
     select: { id: true },
   });
 
+  let emailDelivery;
+
   try {
-    await sendEmailVerificationCode({
+    emailDelivery = await sendEmailVerificationCode({
       email,
       code,
       codeTtlSeconds: emailVerificationCodeTtlSeconds,
     });
   } catch (error) {
+    if (env.NODE_ENV !== 'production') {
+      emailDelivery = { delivered: false, skipped: true };
+    } else {
+      await prisma.authToken.delete({
+        where: { id: authToken.id },
+      });
+
+      throw error;
+    }
+  }
+
+  if (env.NODE_ENV === 'production' && !emailDelivery?.delivered) {
     await prisma.authToken.delete({
       where: { id: authToken.id },
     });
 
-    throw error;
+    throw new Error('Email verification code was not delivered.');
   }
 
   await prisma.authToken.updateMany({
@@ -219,6 +251,7 @@ export const requestEmailVerification = async ({ email }) => {
     email,
     codeTtlSeconds: emailVerificationCodeTtlSeconds,
     resendCooldownSeconds: emailVerificationResendCooldownSeconds,
+    ...(env.NODE_ENV === 'development' && !emailDelivery?.delivered ? { debugCode: code } : {}),
   };
 };
 
@@ -401,4 +434,39 @@ export const signup = async ({
 
     throw error;
   }
+};
+
+export const login = async ({ loginId, password }) => {
+  const user = await prisma.user.findUnique({
+    where: { loginId },
+    select: {
+      id: true,
+      loginId: true,
+      email: true,
+      nickname: true,
+      phoneNumber: true,
+      passwordHash: true,
+    },
+  });
+
+  if (!user?.passwordHash) {
+    throwInvalidLoginCredentialsError();
+  }
+
+  const isPasswordMatched = await bcrypt.compare(password, user.passwordHash);
+
+  if (!isPasswordMatched) {
+    throwInvalidLoginCredentialsError();
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
+
+  return {
+    accessToken: createAccessToken(user),
+    tokenType: 'Bearer',
+    user: serializeSignupUser(user),
+  };
 };
