@@ -159,6 +159,23 @@ export const openApiDocument = {
           },
         },
       },
+      EmailVerificationConfirmResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '이메일 인증이 완료되었습니다.' },
+          data: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', format: 'email', example: 'user@example.com' },
+              emailVerificationToken: {
+                type: 'string',
+                example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+              },
+            },
+          },
+        },
+      },
       CheckLoginIdResponse: {
         type: 'object',
         properties: {
@@ -336,7 +353,48 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/email-verifications/confirm': {
-      post: publicJsonOperation('Auth', '이메일 인증 확인', emailVerificationConfirmDto),
+      post: {
+        ...publicJsonOperation('Auth', '이메일 인증 확인', emailVerificationConfirmDto),
+        responses: {
+          200: {
+            description: 'Email verification confirmed',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/EmailVerificationConfirmResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request, expired code, wrong code, or already used code',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+              },
+            },
+          },
+          409: {
+            description: 'Duplicated email',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: 'Email verification confirm rate limited',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/password-reset/request': {
       post: publicJsonOperation('Auth', '비밀번호 재설정 요청', passwordResetRequestDto),

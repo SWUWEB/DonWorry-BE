@@ -14,6 +14,8 @@ const emailVerificationCodeTtlSeconds = env.AUTH_EMAIL_CODE_TTL_SECONDS;
 const emailVerificationResendCooldownSeconds = env.AUTH_EMAIL_RESEND_COOLDOWN_SECONDS;
 const emailVerificationSendLimitWindowSeconds = env.AUTH_EMAIL_SEND_LIMIT_WINDOW_SECONDS;
 const emailVerificationSendLimit = env.AUTH_EMAIL_SEND_LIMIT;
+const emailVerificationConfirmMaxAttempts = env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS;
+const emailVerificationConfirmLockSeconds = env.AUTH_EMAIL_CONFIRM_LOCK_SECONDS;
 
 export const serializeSignupUser = (user) => {
   return {
@@ -50,6 +52,18 @@ const assertEmailAvailable = async (email) => {
 
 const throwEmailVerificationRateLimitedError = () => {
   throw new HttpError(429, '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
+    errorCode: ERROR_CODES.AUTH4291,
+  });
+};
+
+const throwEmailVerificationConfirmError = (message = '이메일 인증 코드가 올바르지 않습니다.') => {
+  throw new HttpError(400, message, {
+    errorCode: ERROR_CODES.AUTH4001,
+  });
+};
+
+const throwEmailVerificationConfirmRateLimitedError = () => {
+  throw new HttpError(429, '이메일 인증 확인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
     errorCode: ERROR_CODES.AUTH4291,
   });
 };
@@ -194,13 +208,149 @@ export const requestEmailVerification = async ({ email }) => {
       tokenType: 'EMAIL_VERIFY',
       usedAt: null,
     },
-    data: { usedAt: now },
+    data: {
+      usedAt: now,
+      failedAttemptCount: 0,
+      blockedUntil: null,
+    },
   });
 
   return {
     email,
     codeTtlSeconds: emailVerificationCodeTtlSeconds,
     resendCooldownSeconds: emailVerificationResendCooldownSeconds,
+  };
+};
+
+const recordEmailVerificationFailedAttempt = async (authToken, now) => {
+  const lockUntil = new Date(now.getTime() + emailVerificationConfirmLockSeconds * 1000);
+
+  if (authToken.blockedUntil && authToken.blockedUntil <= now) {
+    await prisma.authToken.updateMany({
+      where: {
+        id: authToken.id,
+        usedAt: null,
+        failedAttemptCount: authToken.failedAttemptCount,
+        blockedUntil: authToken.blockedUntil,
+      },
+      data: {
+        failedAttemptCount: 0,
+        blockedUntil: null,
+      },
+    });
+  }
+
+  const updateResult = await prisma.authToken.updateMany({
+    where: {
+      id: authToken.id,
+      usedAt: null,
+      failedAttemptCount: { lt: emailVerificationConfirmMaxAttempts },
+      OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
+    },
+    data: {
+      failedAttemptCount: { increment: 1 },
+      blockedUntil: null,
+    },
+  });
+
+  const updatedAuthToken = await prisma.authToken.findUnique({
+    where: { id: authToken.id },
+    select: {
+      failedAttemptCount: true,
+      blockedUntil: true,
+      usedAt: true,
+    },
+  });
+
+  if (!updatedAuthToken || updatedAuthToken.usedAt) {
+    throwEmailVerificationConfirmError();
+  }
+
+  if (updatedAuthToken.blockedUntil && updatedAuthToken.blockedUntil > now) {
+    throwEmailVerificationConfirmRateLimitedError();
+  }
+
+  if (updatedAuthToken.failedAttemptCount >= emailVerificationConfirmMaxAttempts) {
+    await prisma.authToken.updateMany({
+      where: {
+        id: authToken.id,
+        usedAt: null,
+        failedAttemptCount: { gte: emailVerificationConfirmMaxAttempts },
+        OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
+      },
+      data: { blockedUntil: lockUntil },
+    });
+
+    throwEmailVerificationConfirmRateLimitedError();
+  }
+
+  if (updateResult.count !== 1) {
+    throwEmailVerificationConfirmError();
+  }
+};
+
+export const confirmEmailVerification = async ({ email, code }) => {
+  await assertEmailAvailable(email);
+
+  const now = new Date();
+  const authToken = await prisma.authToken.findFirst({
+    where: {
+      emailSnapshot: email,
+      tokenType: 'EMAIL_VERIFY',
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: {
+      id: true,
+      tokenHash: true,
+      expiresAt: true,
+      usedAt: true,
+      failedAttemptCount: true,
+      blockedUntil: true,
+    },
+  });
+
+  if (!authToken) {
+    throwEmailVerificationConfirmError();
+  }
+
+  if (authToken.usedAt) {
+    throwEmailVerificationConfirmError('이미 사용된 이메일 인증 코드입니다.');
+  }
+
+  if (authToken.expiresAt <= now) {
+    throwEmailVerificationConfirmError('이메일 인증 코드가 만료되었습니다.');
+  }
+
+  if (authToken.blockedUntil && authToken.blockedUntil > now) {
+    throwEmailVerificationConfirmRateLimitedError();
+  }
+
+  const isCodeMatched = await bcrypt.compare(code, authToken.tokenHash);
+
+  if (!isCodeMatched) {
+    await recordEmailVerificationFailedAttempt(authToken, now);
+    throwEmailVerificationConfirmError();
+  }
+
+  const updateResult = await prisma.authToken.updateMany({
+    where: {
+      id: authToken.id,
+      usedAt: null,
+    },
+    data: {
+      usedAt: now,
+      failedAttemptCount: 0,
+      blockedUntil: null,
+    },
+  });
+
+  if (updateResult.count !== 1) {
+    throwEmailVerificationConfirmError('이미 사용된 이메일 인증 코드입니다.');
+  }
+
+  return {
+    email,
+    emailVerificationToken: createEmailVerificationToken(email),
   };
 };
 
