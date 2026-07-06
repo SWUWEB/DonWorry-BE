@@ -79,7 +79,7 @@ const createEmailVerificationHtml = ({ code, codeTtlSeconds }) => {
 
 export const sendEmailVerificationCode = async ({ email, code, codeTtlSeconds }) => {
   if (env.NODE_ENV === 'test') {
-    return;
+    return { delivered: false, skipped: true };
   }
 
   if (!isSmtpConfigured()) {
@@ -87,7 +87,7 @@ export const sendEmailVerificationCode = async ({ email, code, codeTtlSeconds })
       throw new Error('SMTP configuration is required to send email verification code.');
     }
 
-    return;
+    return { delivered: false, skipped: true };
   }
 
   const transporter = nodemailer.createTransport({
@@ -117,4 +117,6 @@ export const sendEmailVerificationCode = async ({ email, code, codeTtlSeconds })
     ].join('\n'),
     html: createEmailVerificationHtml({ code, codeTtlSeconds }),
   });
+
+  return { delivered: true, skipped: false };
 };
