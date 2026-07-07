@@ -289,6 +289,7 @@ test('POST /api/v1/auth/login returns access token and user info with login id',
 
   assert.ok(refreshTokenRecord);
   assert.match(refreshTokenRecord.tokenHash, /^[a-f0-9]{64}$/);
+  assert.equal(typeof refreshTokenRecord.tokenFamilyId, 'string');
   assert.equal(refreshTokenRecord.usedAt, null);
   assert.ok(refreshTokenRecord.expiresAt > new Date());
 });
@@ -328,11 +329,12 @@ test('POST /api/v1/auth/refresh rotates refresh token and returns a new access t
   assert.equal(refreshTokenRecords.length, 2);
   assert.ok(refreshTokenRecords[0].usedAt);
   assert.equal(refreshTokenRecords[1].usedAt, null);
+  assert.equal(refreshTokenRecords[0].tokenFamilyId, refreshTokenRecords[1].tokenFamilyId);
   assert.match(refreshTokenRecords[1].tokenHash, /^[a-f0-9]{64}$/);
 });
 
-test('POST /api/v1/auth/refresh rejects a refresh token that was already used', async () => {
-  await createLocalUser({
+test('POST /api/v1/auth/refresh rejects a used refresh token and revokes its family', async () => {
+  const user = await createLocalUser({
     email: 'refresh-used@example.com',
     loginId: 'refresh3',
   });
@@ -344,12 +346,26 @@ test('POST /api/v1/auth/refresh rejects a refresh token that was already used', 
   const refreshToken = loginResponse.body.data.refreshToken;
 
   const firstResponse = await request(app).post('/api/v1/auth/refresh').send({ refreshToken });
+  const rotatedRefreshToken = firstResponse.body.data.refreshToken;
   const secondResponse = await request(app).post('/api/v1/auth/refresh').send({ refreshToken });
+  const familyRevokedResponse = await request(app)
+    .post('/api/v1/auth/refresh')
+    .send({ refreshToken: rotatedRefreshToken });
 
   assert.equal(firstResponse.status, 200);
   assert.equal(secondResponse.status, 401);
   assert.equal(secondResponse.body.success, false);
   assert.equal(secondResponse.body.code, 'AUTH4011');
+  assert.equal(familyRevokedResponse.status, 401);
+  assert.equal(familyRevokedResponse.body.success, false);
+  assert.equal(familyRevokedResponse.body.code, 'AUTH4011');
+
+  const refreshTokenRecords = await prisma.authToken.findMany({
+    where: { userId: user.id, tokenType: 'REFRESH_TOKEN' },
+  });
+
+  assert.equal(refreshTokenRecords.length, 2);
+  assert.ok(refreshTokenRecords.every((authToken) => authToken.usedAt));
 });
 
 test('POST /api/v1/auth/refresh rejects an expired refresh token', async () => {
