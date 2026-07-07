@@ -13,3 +13,4 @@ yarn-error.log*
 !.vscode/extensions.json
 !.vscode/settings.json
 prisma/migrations/dev.db
+AGENTS.md
