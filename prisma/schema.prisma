@@ -15,6 +15,7 @@ enum LoginProvider {
 enum TokenType {
   EMAIL_VERIFY
   PASSWORD_RESET
+  REFRESH_TOKEN
 }
 
 enum ReportType {

@@ -33,6 +33,9 @@ const signupEmails = [
   'invalid-token@example.com',
   'login@example.com',
   'login-missing-password@example.com',
+  'refresh@example.com',
+  'refresh-expired@example.com',
+  'refresh-used@example.com',
 ];
 const signupLoginIds = [
   'signup123',
@@ -42,6 +45,9 @@ const signupLoginIds = [
   'sameid1',
   'login123',
   'loginpw1',
+  'refresh1',
+  'refresh2',
+  'refresh3',
 ];
 
 const createEmailVerificationAuthToken = async ({
@@ -65,26 +71,54 @@ const createEmailVerificationAuthToken = async ({
   });
 };
 
-test.beforeEach(async () => {
+const createLocalUser = async ({
+  email,
+  loginId,
+  password = 'Password123!',
+  nickname = 'login-user',
+  phoneNumber = '010-3333-4444',
+}) => {
+  return prisma.user.create({
+    data: {
+      email,
+      loginId,
+      passwordHash: await bcrypt.hash(password, 12),
+      nickname,
+      phoneNumber,
+    },
+  });
+};
+
+const deleteAuthTestData = async () => {
+  const users = await prisma.user.findMany({
+    where: {
+      OR: [{ email: { in: signupEmails } }, { loginId: { in: signupLoginIds } }],
+    },
+    select: { id: true },
+  });
+  const userIds = users.map((user) => user.id);
+
   await prisma.authToken.deleteMany({
-    where: { emailSnapshot: { in: signupEmails } },
+    where: {
+      OR: [
+        { emailSnapshot: { in: signupEmails } },
+        ...(userIds.length > 0 ? [{ userId: { in: userIds } }] : []),
+      ],
+    },
   });
   await prisma.user.deleteMany({
     where: {
       OR: [{ email: { in: signupEmails } }, { loginId: { in: signupLoginIds } }],
     },
   });
+};
+
+test.beforeEach(async () => {
+  await deleteAuthTestData();
 });
 
 test.after(async () => {
-  await prisma.authToken.deleteMany({
-    where: { emailSnapshot: { in: signupEmails } },
-  });
-  await prisma.user.deleteMany({
-    where: {
-      OR: [{ email: { in: signupEmails } }, { loginId: { in: signupLoginIds } }],
-    },
-  });
+  await deleteAuthTestData();
   await prisma.$disconnect();
 });
 
@@ -217,14 +251,9 @@ test('POST /api/v1/auth/signup validates request body', async () => {
 });
 
 test('POST /api/v1/auth/login returns access token and user info with login id', async () => {
-  await prisma.user.create({
-    data: {
-      email: 'login@example.com',
-      loginId: 'login123',
-      passwordHash: await bcrypt.hash('Password123!', 12),
-      nickname: 'login-user',
-      phoneNumber: '010-3333-4444',
-    },
+  await createLocalUser({
+    email: 'login@example.com',
+    loginId: 'login123',
   });
 
   const response = await request(app).post('/api/v1/auth/login').send({
@@ -236,7 +265,7 @@ test('POST /api/v1/auth/login returns access token and user info with login id',
   assert.equal(response.body.success, true);
   assert.equal(response.body.data.tokenType, 'Bearer');
   assert.equal(typeof response.body.data.accessToken, 'string');
-  assert.equal(response.body.data.refreshToken, undefined);
+  assert.equal(typeof response.body.data.refreshToken, 'string');
   assert.equal(response.body.data.user.email, 'login@example.com');
   assert.equal(response.body.data.user.loginId, 'login123');
   assert.equal(response.body.data.user.name, 'login-user');
@@ -253,6 +282,116 @@ test('POST /api/v1/auth/login returns access token and user info with login id',
   });
 
   assert.ok(user.lastLoginAt);
+
+  const refreshTokenRecord = await prisma.authToken.findFirst({
+    where: { userId: user.id, tokenType: 'REFRESH_TOKEN' },
+  });
+
+  assert.ok(refreshTokenRecord);
+  assert.match(refreshTokenRecord.tokenHash, /^[a-f0-9]{64}$/);
+  assert.equal(refreshTokenRecord.usedAt, null);
+  assert.ok(refreshTokenRecord.expiresAt > new Date());
+});
+
+test('POST /api/v1/auth/refresh rotates refresh token and returns a new access token', async () => {
+  const user = await createLocalUser({
+    email: 'refresh@example.com',
+    loginId: 'refresh1',
+  });
+
+  const loginResponse = await request(app).post('/api/v1/auth/login').send({
+    loginId: 'refresh1',
+    password: 'Password123!',
+  });
+  const oldRefreshToken = loginResponse.body.data.refreshToken;
+
+  const response = await request(app).post('/api/v1/auth/refresh').send({
+    refreshToken: oldRefreshToken,
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.data.tokenType, 'Bearer');
+  assert.equal(typeof response.body.data.accessToken, 'string');
+  assert.equal(typeof response.body.data.refreshToken, 'string');
+  assert.notEqual(response.body.data.refreshToken, oldRefreshToken);
+
+  const tokenPayload = jwt.verify(response.body.data.accessToken, process.env.JWT_ACCESS_SECRET);
+  assert.equal(tokenPayload.purpose, 'access');
+  assert.equal(tokenPayload.userId, user.id.toString());
+
+  const refreshTokenRecords = await prisma.authToken.findMany({
+    where: { userId: user.id, tokenType: 'REFRESH_TOKEN' },
+    orderBy: { id: 'asc' },
+  });
+
+  assert.equal(refreshTokenRecords.length, 2);
+  assert.ok(refreshTokenRecords[0].usedAt);
+  assert.equal(refreshTokenRecords[1].usedAt, null);
+  assert.match(refreshTokenRecords[1].tokenHash, /^[a-f0-9]{64}$/);
+});
+
+test('POST /api/v1/auth/refresh rejects a refresh token that was already used', async () => {
+  await createLocalUser({
+    email: 'refresh-used@example.com',
+    loginId: 'refresh3',
+  });
+
+  const loginResponse = await request(app).post('/api/v1/auth/login').send({
+    loginId: 'refresh3',
+    password: 'Password123!',
+  });
+  const refreshToken = loginResponse.body.data.refreshToken;
+
+  const firstResponse = await request(app).post('/api/v1/auth/refresh').send({ refreshToken });
+  const secondResponse = await request(app).post('/api/v1/auth/refresh').send({ refreshToken });
+
+  assert.equal(firstResponse.status, 200);
+  assert.equal(secondResponse.status, 401);
+  assert.equal(secondResponse.body.success, false);
+  assert.equal(secondResponse.body.code, 'AUTH4011');
+});
+
+test('POST /api/v1/auth/refresh rejects an expired refresh token', async () => {
+  const user = await createLocalUser({
+    email: 'refresh-expired@example.com',
+    loginId: 'refresh2',
+  });
+
+  const loginResponse = await request(app).post('/api/v1/auth/login').send({
+    loginId: 'refresh2',
+    password: 'Password123!',
+  });
+  const refreshToken = loginResponse.body.data.refreshToken;
+
+  await prisma.authToken.updateMany({
+    where: { userId: user.id, tokenType: 'REFRESH_TOKEN' },
+    data: { expiresAt: new Date(Date.now() - 1000) },
+  });
+
+  const response = await request(app).post('/api/v1/auth/refresh').send({ refreshToken });
+
+  assert.equal(response.status, 401);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4011');
+});
+
+test('POST /api/v1/auth/refresh rejects a nonexistent or forged refresh token', async () => {
+  const response = await request(app).post('/api/v1/auth/refresh').send({
+    refreshToken: 'forged-refresh-token',
+  });
+
+  assert.equal(response.status, 401);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4011');
+});
+
+test('POST /api/v1/auth/refresh validates request body', async () => {
+  const response = await request(app).post('/api/v1/auth/refresh').send({});
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'COMMON4001');
 });
 
 test('POST /api/v1/auth/login rejects email identifier', async () => {

@@ -7,6 +7,7 @@ import {
   confirmEmailVerificationController,
   createNotImplementedController,
   loginController,
+  refreshTokenController,
   requestEmailVerificationController,
   signupController,
 } from './auth.controller.js';
@@ -18,6 +19,7 @@ import {
   loginDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
+  refreshTokenDto,
   signupDto,
 } from './auth.dto.js';
 
@@ -28,7 +30,7 @@ const todo = createNotImplementedController('auth');
 authRouter.post('/signup', validate(signupDto), signupController);
 authRouter.post('/login', validate(loginDto), loginController);
 authRouter.post('/logout', requireAuth, todo);
-authRouter.post('/refresh', todo);
+authRouter.post('/refresh', validate(refreshTokenDto), refreshTokenController);
 authRouter.get('/check-email', validate(checkEmailDto), checkEmailController);
 authRouter.get('/check-login-id', validate(checkLoginIdDto), checkLoginIdController);
 authRouter.post(
