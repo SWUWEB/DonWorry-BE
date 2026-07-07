@@ -112,7 +112,7 @@ model AuthToken {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
-  @@index([tokenFamilyId])
+  @@index([tokenFamilyId, tokenType, usedAt])
   @@map("auth_tokens")
 }
 
