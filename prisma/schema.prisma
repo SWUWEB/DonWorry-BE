@@ -189,6 +189,8 @@ model ConsumptionRecord {
   type            ConsumptionType
   productName     String          @map("product_name") @db.VarChar(255)
   price           Decimal         @db.Decimal(12, 2)
+  categoryCode    String?         @map("category_code") @db.VarChar(50)
+  categoryLabel   String?         @map("category_label") @db.VarChar(50)
   productUrl      String?         @map("product_url") @db.Text
   reason          String?         @db.VarChar(255)
   occurredAt      DateTime        @map("occurred_at")

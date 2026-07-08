@@ -221,6 +221,26 @@ export const openApiDocument = {
           },
         },
       },
+      ConsumptionRecordResult: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: '1' },
+          type: { type: 'string', example: 'CONSUMED' },
+          productName: { type: 'string', example: '쿠팡 상품' },
+          price: { type: ['number', 'null'], example: 12000 },
+          occurredAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
+        },
+      },
+      ConsumptionRecordCreatedResponse: {
+        type: 'object',
+        properties: {
+          isSuccess: { type: 'boolean', example: true },
+          status: { type: 'integer', example: 201 },
+          code: { type: ['string', 'null'], example: null },
+          message: { type: 'string', example: '소비 기록 생성에 성공했습니다.' },
+          result: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+        },
+      },
     },
     responses: {
       NotImplemented: {
@@ -495,11 +515,38 @@ export const openApiDocument = {
     },
     '/api/v1/consumption-records': {
       get: securedOperation('ConsumptionRecords', '소비 기록 목록 조회'),
-      post: securedJsonOperation(
-        'ConsumptionRecords',
-        '소비 기록 입력',
-        createConsumptionRecordDto,
-      ),
+      post: {
+        ...withZodDto(
+          securedOperation('ConsumptionRecords', '소비 기록 입력'),
+          createConsumptionRecordDto,
+        ),
+        responses: {
+          201: {
+            description: 'Consumption record created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ConsumptionRecordCreatedResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          401: {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/consumption-records/{consumptionRecordId}': {
       get: withZodDto(
