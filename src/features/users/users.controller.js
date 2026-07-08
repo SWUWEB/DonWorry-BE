@@ -7,6 +7,6 @@ export const createNotImplementedController = (featureName) => (_req, res) => {
 };
 
 export const getMeController = asyncHandler(async (req, res) => {
-  const result = await getMe(req.user.id);
+  const result = await getMe(BigInt(req.user.userId));
   return ok(res, result, '회원 정보 조회 성공');
 });
