@@ -6,6 +6,7 @@ import {
   loginDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
+  refreshTokenDto,
   signupDto,
 } from '../features/auth/auth.dto.js';
 import {
@@ -143,6 +144,10 @@ export const openApiDocument = {
                 type: 'string',
                 example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
               },
+              refreshToken: {
+                type: 'string',
+                example: '5JxQdKc0yW5rYIYqunzBMT4o62AofWYWfAVvUdGdXug',
+              },
               tokenType: { type: 'string', example: 'Bearer' },
               user: {
                 type: 'object',
@@ -153,6 +158,28 @@ export const openApiDocument = {
                   email: { type: 'string', format: 'email', example: 'user@example.com' },
                   phoneNumber: { type: 'string', example: '010-0000-0000' },
                 },
+              },
+            },
+          },
+        },
+      },
+      RefreshTokenResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '토큰 재발급이 완료되었습니다.' },
+          data: {
+            type: 'object',
+            properties: {
+              tokenType: { type: 'string', example: 'Bearer' },
+              accessToken: {
+                type: 'string',
+                example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+              },
+              refreshToken: {
+                type: 'string',
+                example: '5JxQdKc0yW5rYIYqunzBMT4o62AofWYWfAVvUdGdXug',
+                description: 'Rotated refresh token. Use this value for the next refresh request.',
               },
             },
           },
@@ -325,7 +352,35 @@ export const openApiDocument = {
       post: securedOperation('Auth', '로그아웃'),
     },
     '/api/v1/auth/refresh': {
-      post: publicOperation('Auth', '토큰 재발급'),
+      post: {
+        ...publicJsonOperation('Auth', '토큰 재발급', refreshTokenDto),
+        responses: {
+          200: {
+            description: 'Access token refreshed',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RefreshTokenResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: {
+            description: 'Invalid, expired, used, or revoked refresh token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/check-email': {
       get: {

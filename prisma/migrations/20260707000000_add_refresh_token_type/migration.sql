@@ -1,0 +1,2 @@
+ALTER TABLE `auth_tokens`
+    MODIFY `token_type` ENUM('EMAIL_VERIFY', 'PASSWORD_RESET', 'REFRESH_TOKEN') NOT NULL;
