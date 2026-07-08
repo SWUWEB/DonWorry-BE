@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { randomInt } from 'node:crypto';
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
@@ -17,6 +17,25 @@ const emailVerificationSendLimit = env.AUTH_EMAIL_SEND_LIMIT;
 const emailVerificationConfirmMaxAttempts = env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS;
 const emailVerificationConfirmLockSeconds = env.AUTH_EMAIL_CONFIRM_LOCK_SECONDS;
 const dummyPasswordHash = '$2b$12$nDS70w.TSxO.D2NgJnu9Ke6MCDX7bMWto3SoH4nXS9tmaTL06Okhu';
+
+const durationUnitToMs = {
+  s: 1000,
+  m: 60 * 1000,
+  h: 60 * 60 * 1000,
+  d: 24 * 60 * 60 * 1000,
+};
+
+const parseDurationToMs = (duration) => {
+  const match = /^(\d+)([smhd])$/.exec(duration);
+
+  if (!match) {
+    throw new Error('REFRESH_TOKEN_EXPIRES_IN must use s, m, h, or d suffix.');
+  }
+
+  return Number(match[1]) * durationUnitToMs[match[2]];
+};
+
+const refreshTokenTtlMs = parseDurationToMs(env.REFRESH_TOKEN_EXPIRES_IN);
 
 export const serializeSignupUser = (user) => {
   return {
@@ -37,6 +56,46 @@ const createAccessToken = (user) => {
     env.JWT_ACCESS_SECRET,
     { expiresIn: env.ACCESS_TOKEN_EXPIRES_IN },
   );
+};
+
+const createRefreshTokenValue = () => {
+  return randomBytes(32).toString('base64url');
+};
+
+const hashRefreshToken = (refreshToken) => {
+  // DB가 유출되어도 원문 refreshToken을 바로 대입해볼 수 없도록 서버 secret을 섞어 해시한다.
+  return createHash('sha256').update(`${env.JWT_REFRESH_SECRET}:${refreshToken}`).digest('hex');
+};
+
+const createRefreshToken = async (userId, now, tx = prisma, tokenFamilyId = randomUUID()) => {
+  const refreshToken = createRefreshTokenValue();
+
+  await tx.authToken.create({
+    data: {
+      userId,
+      tokenHash: hashRefreshToken(refreshToken),
+      tokenFamilyId,
+      tokenType: 'REFRESH_TOKEN',
+      expiresAt: new Date(now.getTime() + refreshTokenTtlMs),
+    },
+  });
+
+  return refreshToken;
+};
+
+const revokeRefreshTokenFamily = async (tokenFamilyId, now, tx = prisma) => {
+  if (!tokenFamilyId) {
+    return;
+  }
+
+  await tx.authToken.updateMany({
+    where: {
+      tokenType: 'REFRESH_TOKEN',
+      tokenFamilyId,
+      usedAt: null,
+    },
+    data: { usedAt: now },
+  });
 };
 
 const formatPhoneNumber = (phoneNumber) => {
@@ -64,6 +123,12 @@ const assertEmailAvailable = async (email) => {
 
 const throwInvalidLoginCredentialsError = () => {
   throw new HttpError(401, '아이디 또는 비밀번호가 올바르지 않습니다.', {
+    errorCode: ERROR_CODES.AUTH4011,
+  });
+};
+
+const throwInvalidRefreshTokenError = () => {
+  throw new HttpError(401, 'refreshToken이 만료되었거나 올바르지 않습니다.', {
     errorCode: ERROR_CODES.AUTH4011,
   });
 };
@@ -455,14 +520,87 @@ export const login = async ({ loginId, password }) => {
     throwInvalidLoginCredentialsError();
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
+  const now = new Date();
+  const refreshToken = await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: now },
+    });
+
+    return createRefreshToken(user.id, now, tx);
   });
 
   return {
     accessToken: createAccessToken(user),
+    refreshToken,
     tokenType: 'Bearer',
     user: serializeSignupUser(user),
+  };
+};
+
+export const refreshAccessToken = async ({ refreshToken }) => {
+  const now = new Date();
+  const tokenHash = hashRefreshToken(refreshToken);
+  const authToken = await prisma.authToken.findUnique({
+    where: { tokenHash },
+    select: {
+      id: true,
+      tokenFamilyId: true,
+      tokenType: true,
+      expiresAt: true,
+      usedAt: true,
+      user: {
+        select: {
+          id: true,
+          loginId: true,
+          email: true,
+          nickname: true,
+          phoneNumber: true,
+        },
+      },
+    },
+  });
+
+  if (!authToken || authToken.tokenType !== 'REFRESH_TOKEN') {
+    throwInvalidRefreshTokenError();
+  }
+
+  if (authToken.usedAt) {
+    await revokeRefreshTokenFamily(authToken.tokenFamilyId, now);
+    throwInvalidRefreshTokenError();
+  }
+
+  if (!authToken.user || authToken.expiresAt <= now) {
+    throwInvalidRefreshTokenError();
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const tokenFamilyId = authToken.tokenFamilyId ?? randomUUID();
+    const consumeResult = await tx.authToken.updateMany({
+      where: {
+        id: authToken.id,
+        tokenType: 'REFRESH_TOKEN',
+        usedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: { usedAt: now, tokenFamilyId },
+    });
+
+    if (consumeResult.count !== 1) {
+      throwInvalidRefreshTokenError();
+    }
+
+    // refreshToken은 한 번 쓰면 폐기하고 새 토큰을 내려 재사용 공격의 성공 범위를 줄인다.
+    const nextRefreshToken = await createRefreshToken(authToken.user.id, now, tx, tokenFamilyId);
+
+    return {
+      accessToken: createAccessToken(authToken.user),
+      refreshToken: nextRefreshToken,
+    };
+  });
+
+  return {
+    tokenType: 'Bearer',
+    ...result,
   };
 };

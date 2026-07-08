@@ -48,6 +48,14 @@ export const loginDto = z.object({
   body: z.object({ loginId, password }).strict(),
 });
 
+export const refreshTokenDto = z.object({
+  body: z
+    .object({
+      refreshToken: z.string().trim().min(1, 'refreshToken은 필수입니다.'),
+    })
+    .strict(),
+});
+
 export const checkEmailDto = z.object({
   query: z.object({ email }),
 });
