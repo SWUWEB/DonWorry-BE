@@ -499,7 +499,6 @@ export const openApiDocument = {
       get: {
         ...securedOperation('Users', '내 정보 조회'),
         responses: {
-          ...securedOperation('Users', '내 정보 조회').responses,
           200: {
             description: '회원 정보 조회 성공',
             content: {
@@ -508,6 +507,7 @@ export const openApiDocument = {
               },
             },
           },
+          401: { $ref: '#/components/responses/Unauthorized' },
         },
       },
       patch: securedJsonOperation('Users', '내 정보 수정', updateMeDto),
