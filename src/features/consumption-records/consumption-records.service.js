@@ -45,24 +45,30 @@ export const createConsumptionRecord = async ({ userId, data }) => {
     categoryLabel: category_label ?? null,
   };
 
-  // create consumption record
-  const record = await prisma.consumptionRecord.create({
-    data: toCreate,
+  const answersData = Array.isArray(interventionAnswers)
+    ? interventionAnswers.map((a) => ({
+        questionId: BigInt(a.questionId),
+        answerValue: a.answerValue,
+      }))
+    : [];
+
+  const record = await prisma.$transaction(async (tx) => {
+    const createdRecord = await tx.consumptionRecord.create({
+      data: toCreate,
+    });
+
+    if (answersData.length > 0) {
+      await tx.interventionAnswer.createMany({
+        data: answersData.map((a) => ({
+          recordId: createdRecord.id,
+          questionId: a.questionId,
+          answerValue: a.answerValue,
+        })),
+      });
+    }
+
+    return createdRecord;
   });
-
-  // create intervention answers if provided
-  if (Array.isArray(interventionAnswers) && interventionAnswers.length > 0) {
-    const answersData = interventionAnswers.map((a) => ({
-      recordId: record.id,
-      questionId: BigInt(a.questionId),
-      answerValue: a.answerValue,
-    }));
-
-    // use a transaction to insert answers
-    await prisma.$transaction(
-      answersData.map((a) => prisma.interventionAnswer.create({ data: a })),
-    );
-  }
 
   return record;
 };
