@@ -1,4 +1,6 @@
 import { prisma } from '../../prisma/client.js';
+import { ERROR_CODES } from '../../config/error-codes.js';
+import { HttpError } from '../../utils/http-error.js';
 
 const WAIT_TYPE_MAP = {
   '1H': 'ONE_HOUR',
@@ -72,21 +74,19 @@ const getValidatedItem = async (userId, wishlistId) => {
     });
 
     if (!item) {
-      const error = new Error('해당 위시리스트 항목을 찾을 수 없습니다.');
-      error.status = 404;
-      error.statusCode = 404;
-      throw error;
+      throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
+        errorCode: ERROR_CODES.WISH4041 || 'WISH4041',
+      });
     }
 
     if (item.userId !== userId) {
-      const error = new Error('접근 권한이 없습니다.');
-      error.status = 403;
-      error.statusCode = 403;
-      throw error;
+      throw new HttpError(403, '접근 권한이 없습니다.', {
+        errorCode: ERROR_CODES.WISH4031 || 'WISH4031',
+      });
     }
     return item;
   } catch (err) {
-    if (err.status || err.statusCode) throw err;
+    if (err instanceof HttpError) throw err;
 
     // Prisma 예외 및 BigInt 캐스팅 오류 시 일관된 404 예외 처리를 보장하기 위한 분기
     if (
@@ -94,10 +94,9 @@ const getValidatedItem = async (userId, wishlistId) => {
       err.message.includes('not found') ||
       err.message.includes('BigInt')
     ) {
-      const error = new Error('해당 위시리스트 항목을 찾을 수 없습니다.');
-      error.status = 404;
-      error.statusCode = 404;
-      throw error;
+      throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
+        errorCode: ERROR_CODES.WISH4041 || 'WISH4041',
+      });
     }
     throw err;
   }
