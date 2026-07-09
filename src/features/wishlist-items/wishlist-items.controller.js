@@ -5,10 +5,7 @@ export const createNotImplementedController = (featureName) => (_req, res) => {
   return notImplemented(res, featureName);
 };
 
-//임시 사용자 ID 설정 (BigInt형)
-const MOCK_USER_ID = 1n;
-
-//BigInt 직렬화 변환 함수 (Serializer)
+// BigInt 직렬화 변환 함수 (Serializer)
 const serializeWishlistItem = (item) => {
   if (!item || !item.id) return null;
   return {
@@ -22,8 +19,10 @@ const serializeWishlistItem = (item) => {
 // 1. 위시리스트 추가
 export const createItem = async (req, res, next) => {
   try {
-    const itemData = req.validated;
-    const newItem = await wishlistItemsService.createWishlistItem(MOCK_USER_ID, itemData);
+    const itemData = req.validated.body;
+    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+
+    const newItem = await wishlistItemsService.createWishlistItem(loggedInUserId, itemData);
 
     return res.status(201).json({
       success: true,
@@ -37,7 +36,8 @@ export const createItem = async (req, res, next) => {
 // 2. 위시리스트 목록 조회
 export const getItems = async (req, res, next) => {
   try {
-    const items = await wishlistItemsService.getWishlistItems(MOCK_USER_ID);
+    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+    const items = await wishlistItemsService.getWishlistItems(loggedInUserId);
 
     return res.status(200).json({
       success: true,
@@ -52,7 +52,8 @@ export const getItems = async (req, res, next) => {
 export const getItemById = async (req, res, next) => {
   try {
     const { wishlistId } = req.params;
-    const item = await wishlistItemsService.getWishlistItemById(MOCK_USER_ID, wishlistId);
+    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+    const item = await wishlistItemsService.getWishlistItemById(loggedInUserId, wishlistId);
 
     return res.status(200).json({
       success: true,
@@ -67,9 +68,11 @@ export const getItemById = async (req, res, next) => {
 export const updateItem = async (req, res, next) => {
   try {
     const { wishlistId } = req.params;
-    const updateData = req.body;
+    const updateData = req.validated.body; // 🔒 CodeRabbit 리뷰 반영 (req.body -> req.validated)
+    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+
     const updatedItem = await wishlistItemsService.updateWishlistItem(
-      MOCK_USER_ID,
+      loggedInUserId,
       wishlistId,
       updateData,
     );
@@ -87,7 +90,8 @@ export const updateItem = async (req, res, next) => {
 export const deleteItem = async (req, res, next) => {
   try {
     const { wishlistId } = req.params;
-    await wishlistItemsService.deleteWishlistItem(MOCK_USER_ID, wishlistId);
+    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+    await wishlistItemsService.deleteWishlistItem(loggedInUserId, wishlistId);
 
     return res.status(200).json({ success: true, message: '삭제 성공' });
   } catch (error) {

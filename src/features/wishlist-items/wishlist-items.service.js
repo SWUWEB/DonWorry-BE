@@ -59,7 +59,7 @@ export const getWishlistItems = async (userId) => {
   });
 };
 
-// 3. 단일 조회 및 소유권 검증 유틸
+// 3. 단일 조회 및 소유권 검증 유틸 (404, 403 관문)
 const getValidatedItem = async (userId, wishlistId) => {
   try {
     const item = await prisma.wishlistItem.findUnique({
@@ -104,8 +104,10 @@ export const getWishlistItemById = async (userId, wishlistId) => {
 
 // 4. 아이템 수정
 export const updateWishlistItem = async (userId, wishlistId, updateData) => {
+  // 소유권 및 존재 검증 먼저 실행
   await getValidatedItem(userId, wishlistId);
 
+  // 🔒 화이트리스트 데이터 맵핑 (보안 강화)
   const dataToUpdate = {
     productName: updateData.productName,
     price: updateData.price,
@@ -126,6 +128,7 @@ export const updateWishlistItem = async (userId, wishlistId, updateData) => {
 
 // 5. 아이템 삭제
 export const deleteWishlistItem = async (userId, wishlistId) => {
+  // 소유권 및 존재 검증 먼저 실행
   await getValidatedItem(userId, wishlistId);
 
   return await prisma.wishlistItem.delete({

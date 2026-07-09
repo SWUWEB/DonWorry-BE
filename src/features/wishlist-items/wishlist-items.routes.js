@@ -1,5 +1,5 @@
 import { Router } from 'express';
-// import { requireAuth } from '../../middlewares/auth.js'; // 💡 우선 주석 처리 (비인증 개발)
+import { requireAuth } from '../../middlewares/auth.js'; // 🔓 주석 해제 (인증 활성화)
 import { validate } from '../../middlewares/validate.js';
 import * as wishlistItemsController from './wishlist-items.controller.js';
 import {
@@ -10,9 +10,9 @@ import {
 
 export const wishlistItemsRouter = Router();
 
-// wishlistItemsRouter.use(requireAuth); // 💡 우선 주석 처리
+// 모든 위시리스트 API에 로그인 인증 미들웨어 적용 완료!
+wishlistItemsRouter.use(requireAuth);
 
-// 💡 todo 대신 실제 컨트롤러 메서드 매핑
 wishlistItemsRouter.get('/', wishlistItemsController.getItems);
 wishlistItemsRouter.post('/', validate(createWishlistItemDto), wishlistItemsController.createItem);
 wishlistItemsRouter.get(
