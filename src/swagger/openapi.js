@@ -242,6 +242,8 @@ export const openApiDocument = {
                 example: '충동구매 줄이기',
               },
               interestTagsJson: {
+                type: 'array',
+                items: { type: 'string' },
                 nullable: true,
                 example: ['쇼핑', '카페'],
               },
