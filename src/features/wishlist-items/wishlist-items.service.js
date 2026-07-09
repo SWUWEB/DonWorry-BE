@@ -7,7 +7,11 @@ const WAIT_TYPE_MAP = {
   '1W': 'ONE_WEEK',
 };
 
-// 대기 시간 계산 유틸 함수
+/**
+ * 사용자가 선택한 대기 타입을 기반으로 만료 날짜(waitUntil)를 계산하는 유틸 함수
+ * @param {string} waitType - 대기 타임 코드 ('1H', '1D', '3D', '1W')
+ * @returns {Date} 계산된 미래 시점의 Date 객체
+ */
 const calculateWaitUntil = (waitType) => {
   const now = new Date();
   switch (waitType) {
@@ -29,7 +33,6 @@ const calculateWaitUntil = (waitType) => {
   return now;
 };
 
-// 1. 아이템 생성
 export const createWishlistItem = async (userId, itemData) => {
   const { productName, productUrl, price, productImageUrl, waitType } = itemData;
   const waitUntil = calculateWaitUntil(waitType);
@@ -48,7 +51,6 @@ export const createWishlistItem = async (userId, itemData) => {
   });
 };
 
-// 2. 목록 조회 (해당 유저의 대기중인 상품만)
 export const getWishlistItems = async (userId) => {
   return await prisma.wishlistItem.findMany({
     where: {
@@ -59,7 +61,10 @@ export const getWishlistItems = async (userId) => {
   });
 };
 
-// 3. 단일 조회 및 소유권 검증 유틸 (404, 403 관문)
+/**
+ * 아이템의 존재 여부 및 현재 사용자의 소유권을 유효성 검사하는 비즈니스 유틸 함수
+ * @throws {Error} 존재하지 않는 경우 404 에러, 타인 소유인 경우 403 에러 발생
+ */
 const getValidatedItem = async (userId, wishlistId) => {
   try {
     const item = await prisma.wishlistItem.findUnique({
@@ -83,6 +88,7 @@ const getValidatedItem = async (userId, wishlistId) => {
   } catch (err) {
     if (err.status || err.statusCode) throw err;
 
+    // Prisma 예외 및 BigInt 캐스팅 오류 시 일관된 404 예외 처리를 보장하기 위한 분기
     if (
       err.code === 'P2025' ||
       err.message.includes('not found') ||
@@ -97,17 +103,13 @@ const getValidatedItem = async (userId, wishlistId) => {
   }
 };
 
-// 상세 조회 외부 노출
 export const getWishlistItemById = async (userId, wishlistId) => {
   return await getValidatedItem(userId, wishlistId);
 };
 
-// 4. 아이템 수정
 export const updateWishlistItem = async (userId, wishlistId, updateData) => {
-  // 소유권 및 존재 검증 먼저 실행
   await getValidatedItem(userId, wishlistId);
 
-  // 🔒 화이트리스트 데이터 맵핑 (보안 강화)
   const dataToUpdate = {
     productName: updateData.productName,
     price: updateData.price,
@@ -126,9 +128,7 @@ export const updateWishlistItem = async (userId, wishlistId, updateData) => {
   });
 };
 
-// 5. 아이템 삭제
 export const deleteWishlistItem = async (userId, wishlistId) => {
-  // 소유권 및 존재 검증 먼저 실행
   await getValidatedItem(userId, wishlistId);
 
   return await prisma.wishlistItem.delete({

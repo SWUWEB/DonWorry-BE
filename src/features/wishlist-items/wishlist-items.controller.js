@@ -5,7 +5,11 @@ export const createNotImplementedController = (featureName) => (_req, res) => {
   return notImplemented(res, featureName);
 };
 
-// BigInt 직렬화 변환 함수 (Serializer)
+/**
+ * Prisma 모델의 BigInt 필드를 JSON 직렬화가 가능한 문자열로 변환하는 유틸 함수
+ * @param {Object} item - 변환할 위시리스트 아이템 객체
+ * @returns {Object|null} 직렬화된 객체 또는 null
+ */
 const serializeWishlistItem = (item) => {
   if (!item || !item.id) return null;
   return {
@@ -16,11 +20,10 @@ const serializeWishlistItem = (item) => {
   };
 };
 
-// 1. 위시리스트 추가
 export const createItem = async (req, res, next) => {
   try {
     const itemData = req.validated.body;
-    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+    const loggedInUserId = BigInt(req.user.userId);
 
     const newItem = await wishlistItemsService.createWishlistItem(loggedInUserId, itemData);
 
@@ -33,10 +36,9 @@ export const createItem = async (req, res, next) => {
   }
 };
 
-// 2. 위시리스트 목록 조회
 export const getItems = async (req, res, next) => {
   try {
-    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+    const loggedInUserId = BigInt(req.user.userId);
     const items = await wishlistItemsService.getWishlistItems(loggedInUserId);
 
     return res.status(200).json({
@@ -48,11 +50,10 @@ export const getItems = async (req, res, next) => {
   }
 };
 
-// 3. 위시리스트 상세 조회
 export const getItemById = async (req, res, next) => {
   try {
     const { wishlistId } = req.params;
-    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+    const loggedInUserId = BigInt(req.user.userId);
     const item = await wishlistItemsService.getWishlistItemById(loggedInUserId, wishlistId);
 
     return res.status(200).json({
@@ -64,12 +65,11 @@ export const getItemById = async (req, res, next) => {
   }
 };
 
-// 4. 위시리스트 수정
 export const updateItem = async (req, res, next) => {
   try {
     const { wishlistId } = req.params;
-    const updateData = req.validated.body; // 🔒 CodeRabbit 리뷰 반영 (req.body -> req.validated)
-    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+    const updateData = req.validated.body;
+    const loggedInUserId = BigInt(req.user.userId);
 
     const updatedItem = await wishlistItemsService.updateWishlistItem(
       loggedInUserId,
@@ -86,11 +86,10 @@ export const updateItem = async (req, res, next) => {
   }
 };
 
-// 5. 위시리스트 삭제
 export const deleteItem = async (req, res, next) => {
   try {
     const { wishlistId } = req.params;
-    const loggedInUserId = BigInt(req.user.userId); // 🎉 진짜 로그인 사용자 ID 사용
+    const loggedInUserId = BigInt(req.user.userId);
     await wishlistItemsService.deleteWishlistItem(loggedInUserId, wishlistId);
 
     return res.status(200).json({ success: true, message: '삭제 성공' });
