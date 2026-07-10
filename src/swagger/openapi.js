@@ -612,14 +612,6 @@ export const openApiDocument = {
                       message: '동일한 질문에 대한 답변을 중복해서 등록할 수 없습니다.',
                     },
                   },
-                  questionNotFound: {
-                    summary: '질문을 찾을 수 없음',
-                    value: {
-                      success: false,
-                      code: 'CONSUMPTION_RECORD4042',
-                      message: '요청한 질문을 찾을 수 없습니다.',
-                    },
-                  },
                 },
               },
             },
@@ -643,9 +635,11 @@ export const openApiDocument = {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
                 example: {
-                  success: false,
-                  code: 'CONSUMPTION_RECORD4041',
-                  message: '요청한 소비 기록을 찾을 수 없습니다.',
+                  value: {
+                    success: false,
+                    code: 'CONSUMPTION_RECORD4042',
+                    message: '요청한 질문을 찾을 수 없습니다.',
+                  },
                 },
               },
             },
@@ -658,7 +652,7 @@ export const openApiDocument = {
                 example: {
                   success: false,
                   code: 'CONSUMPTION_RECORD5001',
-                  message: '소비 기록 처리 중 내부 서버 오류가 발생했습니다.',
+                  message: 'Internal server error',
                 },
               },
             },
