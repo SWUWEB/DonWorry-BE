@@ -261,11 +261,9 @@ export const openApiDocument = {
       ConsumptionRecordCreatedResponse: {
         type: 'object',
         properties: {
-          isSuccess: { type: 'boolean', example: true },
-          status: { type: 'integer', example: 201 },
-          code: { type: ['string', 'null'], example: null },
+          success: { type: 'boolean', example: true },
           message: { type: 'string', example: '소비 기록 생성에 성공했습니다.' },
-          result: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+          data: { $ref: '#/components/schemas/ConsumptionRecordResult' },
         },
       },
     },
@@ -585,10 +583,44 @@ export const openApiDocument = {
             },
           },
           400: {
-            description: 'Invalid request',
+            description: 'Bad Request',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidOccurredAt: {
+                    summary: 'occurredAt 형식 오류',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4001',
+                      message: 'occurredAt은 유효한 ISO 8601 날짜/시간 문자열이어야 합니다.',
+                    },
+                  },
+                  invalidCategoryCode: {
+                    summary: '허용되지 않은 카테고리 코드',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4002',
+                      message: '허용되지 않은 카테고리 코드입니다.',
+                    },
+                  },
+                  duplicateQuestionAnswer: {
+                    summary: '질문 답변 중복 등록',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4003',
+                      message: '동일한 질문에 대한 답변을 중복해서 등록할 수 없습니다.',
+                    },
+                  },
+                  questionNotFound: {
+                    summary: '질문을 찾을 수 없음',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4042',
+                      message: '요청한 질문을 찾을 수 없습니다.',
+                    },
+                  },
+                },
               },
             },
           },
@@ -597,22 +629,37 @@ export const openApiDocument = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH4011',
+                  message: '아이디 또는 비밀번호가 올바르지 않습니다.',
+                },
               },
             },
           },
           404: {
-            description: 'Category not found',
+            description: 'Not Found',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4041',
+                  message: '요청한 소비 기록을 찾을 수 없습니다.',
+                },
               },
             },
           },
           500: {
-            description: 'Internal server error',
+            description: 'Internal Server Error',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD5001',
+                  message: '소비 기록 처리 중 내부 서버 오류가 발생했습니다.',
+                },
               },
             },
           },

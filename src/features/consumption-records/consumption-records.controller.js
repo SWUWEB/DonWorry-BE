@@ -1,14 +1,9 @@
 import { asyncHandler } from '../../utils/async-handler.js';
 import { createConsumptionRecord } from './consumption-records.service.js';
+import { notImplemented, created } from '../../utils/api-response.js';
 
 export const createNotImplementedController = (featureName) => (_req, res) => {
-  return res.status(501).json({
-    isSuccess: false,
-    status: 501,
-    code: null,
-    message: `${featureName} is not implemented yet`,
-    result: null,
-  });
+  return notImplemented(res, featureName);
 };
 
 export const createConsumptionRecordController = asyncHandler(async (req, res) => {
@@ -36,11 +31,5 @@ export const createConsumptionRecordController = asyncHandler(async (req, res) =
     occurredAt: record.occurredAt ? new Date(record.occurredAt).toISOString() : null,
   };
 
-  return res.status(201).json({
-    isSuccess: true,
-    status: 201,
-    code: null,
-    message: '소비 기록 생성에 성공했습니다.',
-    result,
-  });
+  return created(res, result, '소비 기록 생성에 성공했습니다.');
 });
