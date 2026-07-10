@@ -19,10 +19,18 @@ export const errorHandler = (err, _req, res, _next) => {
   }
 
   const statusCode = err.statusCode ?? 500;
+
+  if (err.retryAfterSeconds !== undefined) {
+    res.set('Retry-After', String(err.retryAfterSeconds));
+  }
+
   return res.status(statusCode).json({
     success: false,
     code: err.errorCode,
     message: statusCode === 500 ? 'Internal server error' : err.message,
+    retryAfterSeconds: err.retryAfterSeconds,
+    retryAt: err.retryAt,
+    rateLimitType: err.rateLimitType,
     details: process.env.NODE_ENV === 'development' ? err.details : undefined,
   });
 };
