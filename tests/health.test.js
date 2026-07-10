@@ -189,6 +189,36 @@ test('GET /api-docs.json documents login response and auth failure', async () =>
       .format,
     'email',
   );
+  assert.equal(
+    response.body.components.schemas.LoginResponse.properties.data.properties.refreshToken.type,
+    'string',
+  );
+});
+
+test('GET /api-docs.json documents refresh token API', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const operation = response.body.paths['/api/v1/auth/refresh'].post;
+  const requestSchema = operation.requestBody.content['application/json'].schema;
+
+  assert.deepEqual(operation.security, []);
+  assert.deepEqual(requestSchema.required, ['refreshToken']);
+  assert.equal(requestSchema.properties.refreshToken.type, 'string');
+  assert.equal(
+    operation.responses[200].content['application/json'].schema.$ref,
+    '#/components/schemas/RefreshTokenResponse',
+  );
+  assert.equal(
+    operation.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/ErrorResponse',
+  );
+  assert.equal(
+    response.body.components.schemas.RefreshTokenResponse.properties.data.properties.accessToken
+      .type,
+    'string',
+  );
 });
 
 test('GET /api-docs.json documents email verification timer fields', async () => {

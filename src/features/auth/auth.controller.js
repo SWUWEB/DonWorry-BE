@@ -5,6 +5,7 @@ import {
   checkLoginId,
   confirmEmailVerification,
   login,
+  refreshAccessToken,
   requestEmailVerification,
   signup,
 } from './auth.service.js';
@@ -23,6 +24,12 @@ export const loginController = asyncHandler(async (req, res) => {
   const result = await login(req.validated.body);
 
   return ok(res, result, '로그인이 완료되었습니다.');
+});
+
+export const refreshTokenController = asyncHandler(async (req, res) => {
+  const result = await refreshAccessToken(req.validated.body);
+
+  return ok(res, result, '토큰 재발급이 완료되었습니다.');
 });
 
 export const checkEmailController = asyncHandler(async (req, res) => {
