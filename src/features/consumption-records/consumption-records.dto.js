@@ -130,8 +130,8 @@ export const validateConsumptionRecordDto = (req, res, next) => {
   } else if (
     issues.some((i) => i.path && i.path[0] === 'body' && i.path[1] === 'interventionAnswers')
   ) {
-    code = ERROR_CODES.CONSUMPTION_RECORD_NOT_FOUND;
-    message = '요청한 질문 정보를 찾을 수 없습니다.';
+    code = ERROR_CODES.COMMON4001;
+    message = 'interventionAnswers 형식이 올바르지 않습니다.';
   }
 
   return res.status(400).json({
