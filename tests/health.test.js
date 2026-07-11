@@ -8,6 +8,9 @@ process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL ||
   process.env.DATABASE_URL ||
   'mysql://donworry:donworry@localhost:3307/donworry_test';
+if (!process.env.DATABASE_URL.includes('_test')) {
+  throw new Error('DB write tests must run against a test database.');
+}
 process.env.JWT_ACCESS_SECRET = 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 process.env.CORS_ORIGIN = 'http://localhost:5173';
