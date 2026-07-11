@@ -563,6 +563,14 @@ export const openApiDocument = {
             },
           },
           401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
         },
       },
       patch: securedJsonOperation('Users', '내 정보 수정', updateMeDto),
