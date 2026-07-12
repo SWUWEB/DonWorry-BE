@@ -86,6 +86,14 @@ test('POST /api/v1/consumption-records creates a consumption record', async () =
   const accessToken = createAccessToken(user);
   const categoryCode = CATEGORY_CODES[0];
 
+  const question = await prisma.interventionQuestion.create({
+    data: {
+      questionText: '이 소비를 하기 전에 한 번 더 생각해보셨나요?',
+      isActive: true,
+      sortOrder: 1,
+    },
+  });
+
   const response = await request(app)
     .post('/api/v1/consumption-records')
     .set('Authorization', `Bearer ${accessToken}`)
@@ -95,21 +103,35 @@ test('POST /api/v1/consumption-records creates a consumption record', async () =
       price: 4500,
       occurredAt: '2026-07-09T12:30:00+09:00',
       category_code: categoryCode,
+      interventionAnswers: [
+        {
+          questionId: question.id.toString(),
+          answerValue: true,
+        },
+      ],
     });
 
   assert.equal(response.status, 201);
   assert.equal(response.body.success, true);
   assert.equal(response.body.data.productName, '아이스 아메리카노');
   assert.equal(response.body.data.price, 4500);
-
+  assert.equal(response.body.data.categoryCode, categoryCode);
+  assert.equal(response.body.data.categoryLabel, CATEGORY_MAP[categoryCode]);
   const record = await prisma.consumptionRecord.findUnique({
     where: { id: BigInt(response.body.data.id) },
+    include: {
+      interventionAnswers: true,
+    },
   });
 
   assert.ok(record);
   assert.equal(record.userId, user.id);
   assert.equal(record.categoryCode, categoryCode);
   assert.equal(record.categoryLabel, CATEGORY_MAP[categoryCode]);
+  assert.equal(record.interventionAnswers.length, 1);
+  assert.equal(record.interventionAnswers[0].recordId, record.id);
+  assert.equal(record.interventionAnswers[0].questionId, question.id);
+  assert.equal(record.interventionAnswers[0].answerValue, true);
 });
 
 test('POST /api/v1/consumption-records rejects empty occurredAt', async () => {

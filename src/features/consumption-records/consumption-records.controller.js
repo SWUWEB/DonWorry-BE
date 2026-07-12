@@ -28,6 +28,8 @@ export const createConsumptionRecordController = asyncHandler(async (req, res) =
     type: record.type,
     productName: record.productName,
     price: record.price !== null && record.price !== undefined ? Number(record.price) : null,
+    categoryCode: record.categoryCode,
+    categoryLabel: record.categoryLabel,
     occurredAt: record.occurredAt ? new Date(record.occurredAt).toISOString() : null,
   };
 

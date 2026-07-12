@@ -255,6 +255,8 @@ export const openApiDocument = {
           type: { type: 'string', example: 'CONSUMED' },
           productName: { type: 'string', example: '쿠팡 상품' },
           price: { type: ['number', 'null'], example: 12000 },
+          categoryCode: { type: 'string', example: 'CAFE_DESSERT' },
+          categoryLabel: { type: 'string', example: '카페/디저트' },
           occurredAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
         },
       },
@@ -635,11 +637,9 @@ export const openApiDocument = {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
                 example: {
-                  value: {
-                    success: false,
-                    code: 'CONSUMPTION_RECORD4042',
-                    message: '요청한 질문을 찾을 수 없습니다.',
-                  },
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4042',
+                  message: '요청한 질문을 찾을 수 없습니다.',
                 },
               },
             },
