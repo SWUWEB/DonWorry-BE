@@ -248,6 +248,26 @@ export const openApiDocument = {
           },
         },
       },
+      ConsumptionRecordResult: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: '1' },
+          type: { type: 'string', example: 'CONSUMED' },
+          productName: { type: 'string', example: '쿠팡 상품' },
+          price: { type: ['number', 'null'], example: 12000 },
+          categoryCode: { type: 'string', example: 'CAFE_DESSERT' },
+          categoryLabel: { type: 'string', example: '카페/디저트' },
+          occurredAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
+        },
+      },
+      ConsumptionRecordCreatedResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '소비 기록 생성에 성공했습니다.' },
+          data: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+        },
+      },
     },
     responses: {
       NotImplemented: {
@@ -550,11 +570,95 @@ export const openApiDocument = {
     },
     '/api/v1/consumption-records': {
       get: securedOperation('ConsumptionRecords', '소비 기록 목록 조회'),
-      post: securedJsonOperation(
-        'ConsumptionRecords',
-        '소비 기록 입력',
-        createConsumptionRecordDto,
-      ),
+      post: {
+        ...withZodDto(
+          securedOperation('ConsumptionRecords', '소비 기록 입력'),
+          createConsumptionRecordDto,
+        ),
+        responses: {
+          201: {
+            description: 'Consumption record created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ConsumptionRecordCreatedResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidOccurredAt: {
+                    summary: 'occurredAt 형식 오류',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4001',
+                      message: 'occurredAt은 유효한 ISO 8601 날짜/시간 문자열이어야 합니다.',
+                    },
+                  },
+                  invalidCategoryCode: {
+                    summary: '허용되지 않은 카테고리 코드',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4002',
+                      message: '허용되지 않은 카테고리 코드입니다.',
+                    },
+                  },
+                  duplicateQuestionAnswer: {
+                    summary: '질문 답변 중복 등록',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4003',
+                      message: '동일한 질문에 대한 답변을 중복해서 등록할 수 없습니다.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH4011',
+                  message: '아이디 또는 비밀번호가 올바르지 않습니다.',
+                },
+              },
+            },
+          },
+          404: {
+            description: 'Not Found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4042',
+                  message: '요청한 질문을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD5001',
+                  message: 'Internal server error',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/consumption-records/{consumptionRecordId}': {
       get: withZodDto(
