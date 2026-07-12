@@ -17,6 +17,11 @@ const emailVerificationSendLimit = env.AUTH_EMAIL_SEND_LIMIT;
 const emailVerificationConfirmMaxAttempts = env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS;
 const emailVerificationConfirmLockSeconds = env.AUTH_EMAIL_CONFIRM_LOCK_SECONDS;
 const dummyPasswordHash = '$2b$12$nDS70w.TSxO.D2NgJnu9Ke6MCDX7bMWto3SoH4nXS9tmaTL06Okhu';
+const emailVerificationRateLimitTypes = {
+  RESEND_COOLDOWN: 'RESEND_COOLDOWN',
+  SEND_LIMIT: 'SEND_LIMIT',
+  CONFIRM_LOCK: 'CONFIRM_LOCK',
+};
 
 const durationUnitToMs = {
   s: 1000,
@@ -133,9 +138,20 @@ const throwInvalidRefreshTokenError = () => {
   });
 };
 
-const throwEmailVerificationRateLimitedError = () => {
+const createRateLimitMetadata = (retryAt, now, rateLimitType) => {
+  const retryAfterSeconds = Math.max(1, Math.ceil((retryAt.getTime() - now.getTime()) / 1000));
+
+  return {
+    retryAfterSeconds,
+    retryAt: retryAt.toISOString(),
+    rateLimitType,
+  };
+};
+
+const throwEmailVerificationRateLimitedError = (retryAt, now, rateLimitType) => {
   throw new HttpError(429, '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
     errorCode: ERROR_CODES.AUTH4291,
+    ...createRateLimitMetadata(retryAt, now, rateLimitType),
   });
 };
 
@@ -145,9 +161,10 @@ const throwEmailVerificationConfirmError = (message = '이메일 인증 코드�
   });
 };
 
-const throwEmailVerificationConfirmRateLimitedError = () => {
+const throwEmailVerificationConfirmRateLimitedError = (retryAt, now) => {
   throw new HttpError(429, '이메일 인증 확인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
     errorCode: ERROR_CODES.AUTH4291,
+    ...createRateLimitMetadata(retryAt, now, emailVerificationRateLimitTypes.CONFIRM_LOCK),
   });
 };
 
@@ -173,23 +190,53 @@ const assertEmailVerificationRequestAllowed = async (email, now) => {
       tokenType: 'EMAIL_VERIFY',
       createdAt: { gt: cooldownStartedAt },
     },
-    select: { id: true },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
   });
 
-  if (recentRequest) {
-    throwEmailVerificationRateLimitedError();
-  }
-
-  const requestCountInWindow = await prisma.authToken.count({
+  const requestsInWindow = await prisma.authToken.findMany({
     where: {
       emailSnapshot: email,
       tokenType: 'EMAIL_VERIFY',
-      createdAt: { gte: limitWindowStartedAt },
+      createdAt: { gt: limitWindowStartedAt },
     },
+    orderBy: { createdAt: 'asc' },
+    select: { createdAt: true },
   });
 
-  if (requestCountInWindow >= emailVerificationSendLimit) {
-    throwEmailVerificationRateLimitedError();
+  const activeLimits = [];
+
+  if (recentRequest) {
+    activeLimits.push({
+      retryAt: new Date(
+        recentRequest.createdAt.getTime() + emailVerificationResendCooldownSeconds * 1000,
+      ),
+      rateLimitType: emailVerificationRateLimitTypes.RESEND_COOLDOWN,
+    });
+  }
+
+  if (requestsInWindow.length >= emailVerificationSendLimit) {
+    // 제한을 초과한 요청이 있더라도 요청 수가 한도 미만이 되는 실제 시점을 계산한다.
+    const releaseRequestIndex = requestsInWindow.length - emailVerificationSendLimit;
+    activeLimits.push({
+      retryAt: new Date(
+        requestsInWindow[releaseRequestIndex].createdAt.getTime() +
+          emailVerificationSendLimitWindowSeconds * 1000,
+      ),
+      rateLimitType: emailVerificationRateLimitTypes.SEND_LIMIT,
+    });
+  }
+
+  if (activeLimits.length > 0) {
+    const effectiveLimit = activeLimits.reduce((latestLimit, currentLimit) =>
+      currentLimit.retryAt > latestLimit.retryAt ? currentLimit : latestLimit,
+    );
+
+    throwEmailVerificationRateLimitedError(
+      effectiveLimit.retryAt,
+      now,
+      effectiveLimit.rateLimitType,
+    );
   }
 };
 
@@ -365,11 +412,11 @@ const recordEmailVerificationFailedAttempt = async (authToken, now) => {
   }
 
   if (updatedAuthToken.blockedUntil && updatedAuthToken.blockedUntil > now) {
-    throwEmailVerificationConfirmRateLimitedError();
+    throwEmailVerificationConfirmRateLimitedError(updatedAuthToken.blockedUntil, now);
   }
 
   if (updatedAuthToken.failedAttemptCount >= emailVerificationConfirmMaxAttempts) {
-    await prisma.authToken.updateMany({
+    const lockResult = await prisma.authToken.updateMany({
       where: {
         id: authToken.id,
         usedAt: null,
@@ -379,7 +426,20 @@ const recordEmailVerificationFailedAttempt = async (authToken, now) => {
       data: { blockedUntil: lockUntil },
     });
 
-    throwEmailVerificationConfirmRateLimitedError();
+    if (lockResult.count === 1) {
+      throwEmailVerificationConfirmRateLimitedError(lockUntil, now);
+    }
+
+    const lockedAuthToken = await prisma.authToken.findUnique({
+      where: { id: authToken.id },
+      select: { blockedUntil: true },
+    });
+
+    if (lockedAuthToken?.blockedUntil && lockedAuthToken.blockedUntil > now) {
+      throwEmailVerificationConfirmRateLimitedError(lockedAuthToken.blockedUntil, now);
+    }
+
+    throwEmailVerificationConfirmError();
   }
 
   if (updateResult.count !== 1) {
@@ -420,7 +480,7 @@ export const confirmEmailVerification = async ({ email, code }) => {
   }
 
   if (authToken.blockedUntil && authToken.blockedUntil > now) {
-    throwEmailVerificationConfirmRateLimitedError();
+    throwEmailVerificationConfirmRateLimitedError(authToken.blockedUntil, now);
   }
 
   const isCodeMatched = await bcrypt.compare(code, authToken.tokenHash);

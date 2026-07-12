@@ -80,6 +80,36 @@ export const openApiDocument = {
           message: { type: 'string', example: 'Invalid request' },
         },
       },
+      RateLimitErrorResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message', 'retryAfterSeconds', 'retryAt', 'rateLimitType'],
+        properties: {
+          success: { type: 'boolean', example: false },
+          code: { type: 'string', example: 'AUTH4291' },
+          message: {
+            type: 'string',
+            example: '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+          },
+          retryAfterSeconds: {
+            type: 'integer',
+            minimum: 1,
+            example: 42,
+            description: '요청 시점을 기준으로 다시 시도할 수 있을 때까지 남은 초',
+          },
+          retryAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-07-09T12:34:56.000Z',
+            description: '다시 시도할 수 있는 UTC 시각',
+          },
+          rateLimitType: {
+            type: 'string',
+            enum: ['RESEND_COOLDOWN', 'SEND_LIMIT', 'CONFIRM_LOCK'],
+            example: 'RESEND_COOLDOWN',
+            description: '적용된 이메일 인증 제한 종류',
+          },
+        },
+      },
       ValidationErrorResponse: {
         type: 'object',
         properties: {
@@ -478,9 +508,39 @@ export const openApiDocument = {
           },
           429: {
             description: 'Email verification request rate limited',
+            headers: {
+              'Retry-After': {
+                description: '요청을 다시 시도할 수 있을 때까지 남은 초',
+                schema: { type: 'integer', minimum: 1, example: 42 },
+              },
+            },
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+                examples: {
+                  resendCooldown: {
+                    summary: '60초 재전송 쿨다운',
+                    value: {
+                      success: false,
+                      code: 'AUTH4291',
+                      message: '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+                      retryAfterSeconds: 42,
+                      retryAt: '2026-07-09T12:34:56.000Z',
+                      rateLimitType: 'RESEND_COOLDOWN',
+                    },
+                  },
+                  sendLimit: {
+                    summary: '발송 횟수 제한',
+                    value: {
+                      success: false,
+                      code: 'AUTH4291',
+                      message: '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+                      retryAfterSeconds: 120,
+                      retryAt: '2026-07-09T12:36:56.000Z',
+                      rateLimitType: 'SEND_LIMIT',
+                    },
+                  },
+                },
               },
             },
           },
@@ -522,9 +582,23 @@ export const openApiDocument = {
           },
           429: {
             description: 'Email verification confirm rate limited',
+            headers: {
+              'Retry-After': {
+                description: '인증 확인을 다시 시도할 수 있을 때까지 남은 초',
+                schema: { type: 'integer', minimum: 1, example: 300 },
+              },
+            },
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH4291',
+                  message: '이메일 인증 확인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+                  retryAfterSeconds: 300,
+                  retryAt: '2026-07-09T12:39:56.000Z',
+                  rateLimitType: 'CONFIRM_LOCK',
+                },
               },
             },
           },

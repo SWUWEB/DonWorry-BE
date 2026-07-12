@@ -205,6 +205,36 @@ test('GET /api-docs.json documents email verification timer fields', async () =>
   assert.equal(emailVerificationDataSchema.properties.expiresInMinutes, undefined);
 });
 
+test('GET /api-docs.json documents email verification rate limit responses', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const rateLimitSchema = response.body.components.schemas.RateLimitErrorResponse;
+  const requestRateLimitResponse =
+    response.body.paths['/api/v1/auth/email-verifications'].post.responses[429];
+  const confirmRateLimitResponse =
+    response.body.paths['/api/v1/auth/email-verifications/confirm'].post.responses[429];
+
+  assert.deepEqual(rateLimitSchema.properties.rateLimitType.enum, [
+    'RESEND_COOLDOWN',
+    'SEND_LIMIT',
+    'CONFIRM_LOCK',
+  ]);
+  assert.equal(rateLimitSchema.properties.retryAfterSeconds.type, 'integer');
+  assert.equal(rateLimitSchema.properties.retryAt.format, 'date-time');
+  assert.equal(requestRateLimitResponse.headers['Retry-After'].schema.type, 'integer');
+  assert.equal(
+    requestRateLimitResponse.content['application/json'].schema.$ref,
+    '#/components/schemas/RateLimitErrorResponse',
+  );
+  assert.equal(confirmRateLimitResponse.headers['Retry-After'].schema.type, 'integer');
+  assert.equal(
+    confirmRateLimitResponse.content['application/json'].schema.$ref,
+    '#/components/schemas/RateLimitErrorResponse',
+  );
+});
+
 test('GET /api-docs.json documents validation error response shape', async () => {
   const response = await request(createApp()).get('/api-docs.json');
 
