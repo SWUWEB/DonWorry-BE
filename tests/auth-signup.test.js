@@ -71,6 +71,18 @@ const createEmailVerificationAuthToken = async ({
   });
 };
 
+const assertRateLimitResponse = (response, rateLimitType, maxRetryAfterSeconds) => {
+  assert.equal(response.status, 429);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'AUTH4291');
+  assert.equal(response.body.rateLimitType, rateLimitType);
+  assert.equal(Number.isInteger(response.body.retryAfterSeconds), true);
+  assert.ok(response.body.retryAfterSeconds >= 1);
+  assert.ok(response.body.retryAfterSeconds <= maxRetryAfterSeconds);
+  assert.equal(response.headers['retry-after'], String(response.body.retryAfterSeconds));
+  assert.equal(new Date(response.body.retryAt).toISOString(), response.body.retryAt);
+};
+
 const createLocalUser = async ({
   email,
   loginId,
@@ -567,9 +579,7 @@ test('POST /api/v1/auth/email-verifications limits resend within one minute', as
   });
 
   assert.equal(firstResponse.status, 200);
-  assert.equal(secondResponse.status, 429);
-  assert.equal(secondResponse.body.success, false);
-  assert.equal(secondResponse.body.code, 'AUTH4291');
+  assertRateLimitResponse(secondResponse, 'RESEND_COOLDOWN', 60);
 });
 
 test('POST /api/v1/auth/email-verifications limits requests within send limit window', async () => {
@@ -592,9 +602,31 @@ test('POST /api/v1/auth/email-verifications limits requests within send limit wi
     email: 'email-verification-signup@example.com',
   });
 
-  assert.equal(response.status, 429);
-  assert.equal(response.body.success, false);
-  assert.equal(response.body.code, 'AUTH4291');
+  assertRateLimitResponse(response, 'SEND_LIMIT', 60);
+});
+
+test('POST /api/v1/auth/email-verifications returns the latest retry time for overlapping limits', async () => {
+  const now = Date.now();
+  const requestAgesInSeconds = [240, 70, 10];
+
+  for (const [index, ageInSeconds] of requestAgesInSeconds.entries()) {
+    await prisma.authToken.create({
+      data: {
+        emailSnapshot: 'email-verification-signup@example.com',
+        tokenType: 'EMAIL_VERIFY',
+        tokenHash: `overlapping-limit-code-hash-${index}`,
+        expiresAt: new Date(now + 600 * 1000),
+        createdAt: new Date(now - ageInSeconds * 1000),
+        usedAt: new Date(now - ageInSeconds * 1000),
+      },
+    });
+  }
+
+  const response = await request(app).post('/api/v1/auth/email-verifications').send({
+    email: 'email-verification-signup@example.com',
+  });
+
+  assertRateLimitResponse(response, 'SEND_LIMIT', 60);
 });
 
 test('POST /api/v1/auth/email-verifications rejects duplicate email', async () => {
@@ -721,9 +753,7 @@ test('POST /api/v1/auth/email-verifications/confirm locks after too many wrong c
     code: '654321',
   });
 
-  assert.equal(lockedResponse.status, 429);
-  assert.equal(lockedResponse.body.success, false);
-  assert.equal(lockedResponse.body.code, 'AUTH4291');
+  assertRateLimitResponse(lockedResponse, 'CONFIRM_LOCK', 300);
 
   const lockedAuthToken = await prisma.authToken.findUnique({
     where: { id: authToken.id },
@@ -731,6 +761,7 @@ test('POST /api/v1/auth/email-verifications/confirm locks after too many wrong c
 
   assert.equal(lockedAuthToken.failedAttemptCount, 5);
   assert.ok(lockedAuthToken.blockedUntil > new Date());
+  assert.equal(lockedResponse.body.retryAt, lockedAuthToken.blockedUntil.toISOString());
 
   const correctCodeResponse = await request(app)
     .post('/api/v1/auth/email-verifications/confirm')
@@ -739,9 +770,8 @@ test('POST /api/v1/auth/email-verifications/confirm locks after too many wrong c
       code: '123456',
     });
 
-  assert.equal(correctCodeResponse.status, 429);
-  assert.equal(correctCodeResponse.body.success, false);
-  assert.equal(correctCodeResponse.body.code, 'AUTH4291');
+  assertRateLimitResponse(correctCodeResponse, 'CONFIRM_LOCK', 300);
+  assert.equal(correctCodeResponse.body.retryAt, lockedAuthToken.blockedUntil.toISOString());
 });
 
 test('POST /api/v1/auth/email-verifications/confirm counts concurrent wrong codes atomically', async () => {
