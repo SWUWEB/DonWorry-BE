@@ -306,6 +306,8 @@ export const openApiDocument = {
               },
             },
           },
+        },
+      },
       ConsumptionRecordResult: {
         type: 'object',
         properties: {
@@ -660,6 +662,11 @@ export const openApiDocument = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
               },
             },
           },
