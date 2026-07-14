@@ -278,6 +278,36 @@ export const openApiDocument = {
           },
         },
       },
+      GetMeResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '회원 정보 조회 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: '1' },
+              nickname: { type: 'string', example: '홍길동' },
+              profileImageUrl: {
+                type: 'string',
+                nullable: true,
+                example: 'https://image.com/profile.png',
+              },
+              savingGoalText: {
+                type: 'string',
+                nullable: true,
+                example: '충동구매 줄이기',
+              },
+              interestTagsJson: {
+                type: 'array',
+                items: { type: 'string' },
+                nullable: true,
+                example: ['쇼핑', '카페'],
+              },
+            },
+          },
+        },
+      },
       ConsumptionRecordResult: {
         type: 'object',
         properties: {
@@ -615,7 +645,33 @@ export const openApiDocument = {
       post: publicOperation('Auth', '카카오 로그인'),
     },
     '/api/v1/users/me': {
-      get: securedOperation('Users', '내 정보 조회'),
+      get: {
+        ...securedOperation('Users', '내 정보 조회'),
+        responses: {
+          200: {
+            description: '회원 정보 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GetMeResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
       patch: securedJsonOperation('Users', '내 정보 수정', updateMeDto),
       delete: securedOperation('Users', '회원 탈퇴'),
     },
