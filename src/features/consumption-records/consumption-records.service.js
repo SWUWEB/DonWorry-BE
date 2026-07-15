@@ -1,7 +1,6 @@
 import { HttpError } from '../../utils/http-error.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
-import { CATEGORY_CODE_SET } from '../../config/categories.js';
-import { CATEGORY_MAP } from '../../config/categories.js';
+import { CATEGORY_CODE_SET, CATEGORY_MAP } from '../../config/categories.js';
 import { prisma } from '../../prisma/client.js';
 
 const isValidIsoDatetime = (value) => {
@@ -176,6 +175,213 @@ export const createConsumptionRecord = async ({ userId, data }) => {
       errorCode: ERROR_CODES.CONSUMPTION_RECORD5001,
     });
   }
+};
+
+const consumptionRecordInclude = {
+  interventionAnswers: {
+    include: {
+      question: true,
+    },
+    orderBy: {
+      id: 'asc',
+    },
+  },
+};
+
+const throwNotFound = () => {
+  throw new HttpError(404, '요청한 소비 기록을 찾을 수 없습니다.', {
+    errorCode: ERROR_CODES.CONSUMPTION_RECORD4041,
+  });
+};
+
+const assertRecordOwner = (record, userId) => {
+  if (!record || record.userId !== BigInt(userId)) throwNotFound();
+};
+
+const normalizeInterventionAnswers = (interventionAnswers) => {
+  if (!Array.isArray(interventionAnswers)) return undefined;
+
+  const answersData = interventionAnswers.map((answer) => ({
+    questionId: BigInt(answer.questionId),
+    answerValue: answer.answerValue,
+  }));
+
+  const seen = new Set();
+  for (const answer of answersData) {
+    const key = answer.questionId.toString();
+    if (seen.has(key)) {
+      throw new HttpError(400, '동일한 질문에 대한 답변을 중복해서 등록할 수 없습니다.', {
+        errorCode: ERROR_CODES.CONSUMPTION_RECORD4003,
+      });
+    }
+    seen.add(key);
+  }
+
+  return answersData;
+};
+
+const assertActiveQuestionsExist = async (tx, answersData) => {
+  if (!answersData || answersData.length === 0) return;
+
+  const uniqueQuestionIds = [
+    ...new Set(answersData.map((answer) => answer.questionId.toString())),
+  ].map((id) => BigInt(id));
+
+  const questions = await tx.interventionQuestion.findMany({
+    where: { id: { in: uniqueQuestionIds }, isActive: true },
+    select: { id: true },
+  });
+
+  if (questions.length !== uniqueQuestionIds.length) {
+    throw new HttpError(404, '요청한 질문을 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.CONSUMPTION_RECORD4042,
+    });
+  }
+};
+
+const buildUpdateData = (data) => {
+  const updateData = {};
+
+  if (data.type !== undefined) updateData.type = data.type;
+  if (data.productName !== undefined) updateData.productName = data.productName;
+  if (data.price !== undefined) updateData.price = data.price;
+  if (data.productUrl !== undefined) updateData.productUrl = data.productUrl;
+  if (data.reason !== undefined) updateData.reason = data.reason;
+  if (data.occurredAt !== undefined) updateData.occurredAt = resolveOccurredAt(data.occurredAt);
+  if (data.riskScore !== undefined) updateData.riskScore = data.riskScore;
+  if (data.workHoursNeeded !== undefined) updateData.workHoursNeeded = data.workHoursNeeded;
+
+  if (data.category_code !== undefined) {
+    if (!CATEGORY_CODE_SET.has(data.category_code)) {
+      throw new HttpError(400, '허용되지 않은 카테고리 코드입니다.', {
+        errorCode: ERROR_CODES.CONSUMPTION_RECORD4002,
+      });
+    }
+    updateData.categoryCode = String(data.category_code);
+    updateData.categoryLabel = CATEGORY_MAP[data.category_code];
+  }
+
+  return updateData;
+};
+
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const CONSUMPTION_HISTORY_DAYS = 28;
+
+const getConsumptionHistoryRange = (now) => {
+  const kstNow = new Date(now.getTime() + KST_OFFSET_MS);
+  const startAt = new Date(
+    Date.UTC(
+      kstNow.getUTCFullYear(),
+      kstNow.getUTCMonth(),
+      kstNow.getUTCDate() - (CONSUMPTION_HISTORY_DAYS - 1),
+    ) - KST_OFFSET_MS,
+  );
+
+  return { startAt, endAt: now };
+};
+
+export const listConsumptionRecords = async ({ userId, type = 'ALL', now = new Date() }) => {
+  const { startAt, endAt } = getConsumptionHistoryRange(now);
+
+  return prisma.consumptionRecord.findMany({
+    where: {
+      userId: BigInt(userId),
+      occurredAt: {
+        gte: startAt,
+        lte: endAt,
+      },
+      ...(type === 'ALL' ? {} : { type }),
+    },
+    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+  });
+};
+
+export const getConsumptionRecord = async ({ userId, consumptionRecordId, now = new Date() }) => {
+  const record = await prisma.consumptionRecord.findUnique({
+    where: { id: BigInt(consumptionRecordId) },
+    include: consumptionRecordInclude,
+  });
+
+  assertRecordOwner(record, userId);
+
+  if (!record.categoryCode) {
+    return {
+      ...record,
+      recentCategoryConsumptionCount: 0,
+      recentCategoryConsumptions: [],
+    };
+  }
+
+  const { startAt, endAt } = getConsumptionHistoryRange(now);
+  const recentCategoryConsumptions = await prisma.consumptionRecord.findMany({
+    where: {
+      userId: BigInt(userId),
+      type: 'CONSUMED',
+      categoryCode: record.categoryCode,
+      occurredAt: {
+        gte: startAt,
+        lte: endAt,
+      },
+    },
+    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+  });
+
+  return {
+    ...record,
+    recentCategoryConsumptionCount: recentCategoryConsumptions.length,
+    recentCategoryConsumptions,
+  };
+};
+
+export const updateConsumptionRecord = async ({ userId, consumptionRecordId, data }) => {
+  const record = await prisma.consumptionRecord.findUnique({
+    where: { id: BigInt(consumptionRecordId) },
+    select: { id: true, userId: true },
+  });
+
+  assertRecordOwner(record, userId);
+
+  const updateData = buildUpdateData(data);
+  const answersData = normalizeInterventionAnswers(data.interventionAnswers);
+
+  return prisma.$transaction(async (tx) => {
+    await assertActiveQuestionsExist(tx, answersData);
+
+    if (answersData) {
+      await tx.interventionAnswer.deleteMany({
+        where: { recordId: BigInt(consumptionRecordId) },
+      });
+
+      if (answersData.length > 0) {
+        await tx.interventionAnswer.createMany({
+          data: answersData.map((answer) => ({
+            recordId: BigInt(consumptionRecordId),
+            questionId: answer.questionId,
+            answerValue: answer.answerValue,
+          })),
+        });
+      }
+    }
+
+    return tx.consumptionRecord.update({
+      where: { id: BigInt(consumptionRecordId) },
+      data: updateData,
+      include: consumptionRecordInclude,
+    });
+  });
+};
+
+export const deleteConsumptionRecord = async ({ userId, consumptionRecordId }) => {
+  const record = await prisma.consumptionRecord.findUnique({
+    where: { id: BigInt(consumptionRecordId) },
+    select: { id: true, userId: true },
+  });
+
+  assertRecordOwner(record, userId);
+
+  await prisma.consumptionRecord.delete({
+    where: { id: BigInt(consumptionRecordId) },
+  });
 };
 
 // follow project style: named exports (no default export)

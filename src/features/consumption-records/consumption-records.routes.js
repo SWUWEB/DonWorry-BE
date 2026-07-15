@@ -2,21 +2,45 @@ import { Router } from 'express';
 import { requireAuth } from '../../middlewares/auth.js';
 import { validate } from '../../middlewares/validate.js';
 import {
-  createNotImplementedController,
   createConsumptionRecordController,
+  deleteConsumptionRecordController,
+  getConsumptionRecordController,
+  listConsumptionRecordsController,
+  updateConsumptionRecordController,
 } from './consumption-records.controller.js';
 import {
   consumptionRecordIdDto,
+  createConsumptionRecordDto,
+  listConsumptionRecordsDto,
   updateConsumptionRecordDto,
-  validateConsumptionRecordDto,
+  validateConsumptionRecord,
 } from './consumption-records.dto.js';
 
 export const consumptionRecordsRouter = Router();
-const todo = createNotImplementedController('consumption records');
 
 consumptionRecordsRouter.use(requireAuth);
-consumptionRecordsRouter.get('/', todo);
-consumptionRecordsRouter.post('/', validateConsumptionRecordDto, createConsumptionRecordController);
-consumptionRecordsRouter.get('/:consumptionRecordId', validate(consumptionRecordIdDto), todo);
-consumptionRecordsRouter.patch('/:consumptionRecordId', validate(updateConsumptionRecordDto), todo);
-consumptionRecordsRouter.delete('/:consumptionRecordId', validate(consumptionRecordIdDto), todo);
+consumptionRecordsRouter.get(
+  '/',
+  validate(listConsumptionRecordsDto),
+  listConsumptionRecordsController,
+);
+consumptionRecordsRouter.post(
+  '/',
+  validateConsumptionRecord(createConsumptionRecordDto),
+  createConsumptionRecordController,
+);
+consumptionRecordsRouter.get(
+  '/:consumptionRecordId',
+  validate(consumptionRecordIdDto),
+  getConsumptionRecordController,
+);
+consumptionRecordsRouter.put(
+  '/:consumptionRecordId',
+  validateConsumptionRecord(updateConsumptionRecordDto),
+  updateConsumptionRecordController,
+);
+consumptionRecordsRouter.delete(
+  '/:consumptionRecordId',
+  validate(consumptionRecordIdDto),
+  deleteConsumptionRecordController,
+);
