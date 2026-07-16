@@ -308,6 +308,36 @@ export const openApiDocument = {
           },
         },
       },
+      UpdateMeResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '회원 정보 수정 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: '1' },
+              nickname: { type: 'string', example: '홍길동' },
+              profileImageUrl: {
+                type: 'string',
+                nullable: true,
+                example: 'https://image.com/profile.png',
+              },
+              savingGoalText: {
+                type: 'string',
+                nullable: true,
+                example: '충동구매 줄이기',
+              },
+              interestTagsJson: {
+                type: 'array',
+                items: { type: 'string' },
+                nullable: true,
+                example: ['패션', '뷰티'],
+              },
+            },
+          },
+        },
+      },
       ConsumptionRecordResult: {
         type: 'object',
         properties: {
@@ -672,7 +702,43 @@ export const openApiDocument = {
           },
         },
       },
-      patch: securedJsonOperation('Users', '내 정보 수정', updateMeDto),
+      patch: {
+        ...securedJsonOperation('Users', '내 정보 수정', updateMeDto),
+        responses: {
+          200: {
+            description: '회원 정보 수정 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/UpdateMeResponse',
+                },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
       delete: securedOperation('Users', '회원 탈퇴'),
     },
     '/api/v1/users/me/password': {
