@@ -81,8 +81,8 @@ const getValidatedItem = async (userId, validatedParams) => {
 
     if (
       err.code === 'P2025' ||
-      err.message.includes('not found') ||
-      err.message.includes('BigInt')
+      err.message?.includes('not found') ||
+      err.message?.includes('BigInt')
     ) {
       throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
         errorCode: ERROR_CODES.WISH4041,
