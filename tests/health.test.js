@@ -8,11 +8,15 @@ process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL ||
   process.env.DATABASE_URL ||
   'mysql://donworry:donworry@localhost:3307/donworry_test';
+if (!process.env.DATABASE_URL.includes('_test')) {
+  throw new Error('DB write tests must run against a test database.');
+}
 process.env.JWT_ACCESS_SECRET = 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 process.env.CORS_ORIGIN = 'http://localhost:5173';
 
 const { createApp } = await import('../src/app.js');
+const { prisma } = await import('../src/prisma/client.js');
 
 test('GET /health returns healthy status', async () => {
   const response = await request(createApp()).get('/health');
@@ -40,22 +44,54 @@ test('GET /api-docs.json exposes bearer auth OpenAPI config', async () => {
 
 test('protected routes accept only access purpose JWT', async () => {
   const app = createApp();
-  const emailVerificationToken = jwt.sign(
-    { purpose: 'emailVerification', email: 'user@example.com' },
-    process.env.JWT_ACCESS_SECRET,
-  );
-  const accessToken = jwt.sign({ purpose: 'access', userId: '1' }, process.env.JWT_ACCESS_SECRET);
 
-  const rejectedResponse = await request(app)
-    .get('/api/v1/users/me')
-    .set('Authorization', `Bearer ${emailVerificationToken}`);
-  const acceptedResponse = await request(app)
-    .get('/api/v1/users/me')
-    .set('Authorization', `Bearer ${accessToken}`);
+  await prisma.user.deleteMany({
+    where: {
+      OR: [{ email: 'auth-health@example.com' }, { loginId: 'authhl1' }],
+    },
+  });
 
-  assert.equal(rejectedResponse.status, 401);
-  assert.equal(rejectedResponse.body.success, false);
-  assert.equal(acceptedResponse.status, 501);
+  const user = await prisma.user.create({
+    data: {
+      email: 'auth-health@example.com',
+      loginId: 'authhl1',
+      nickname: 'auth-health-user',
+      passwordHash: 'test-password-hash',
+      emailVerifiedAt: new Date(),
+    },
+    select: { id: true },
+  });
+
+  try {
+    const emailVerificationToken = jwt.sign(
+      { purpose: 'emailVerification', email: 'user@example.com' },
+      process.env.JWT_ACCESS_SECRET,
+    );
+
+    const accessToken = jwt.sign(
+      { purpose: 'access', userId: user.id.toString() },
+      process.env.JWT_ACCESS_SECRET,
+    );
+
+    const rejectedResponse = await request(app)
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${emailVerificationToken}`);
+
+    const acceptedResponse = await request(app)
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    assert.equal(rejectedResponse.status, 401);
+    assert.equal(rejectedResponse.body.success, false);
+
+    assert.equal(acceptedResponse.status, 200);
+    assert.equal(acceptedResponse.body.success, true);
+    assert.equal(acceptedResponse.body.data.id, user.id.toString());
+  } finally {
+    await prisma.user.deleteMany({
+      where: { id: user.id },
+    });
+  }
 });
 
 test('GET /api-docs.json generates request body schema from Zod DTO', async () => {
@@ -203,6 +239,36 @@ test('GET /api-docs.json documents email verification timer fields', async () =>
     true,
   );
   assert.equal(emailVerificationDataSchema.properties.expiresInMinutes, undefined);
+});
+
+test('GET /api-docs.json documents email verification rate limit responses', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const rateLimitSchema = response.body.components.schemas.RateLimitErrorResponse;
+  const requestRateLimitResponse =
+    response.body.paths['/api/v1/auth/email-verifications'].post.responses[429];
+  const confirmRateLimitResponse =
+    response.body.paths['/api/v1/auth/email-verifications/confirm'].post.responses[429];
+
+  assert.deepEqual(rateLimitSchema.properties.rateLimitType.enum, [
+    'RESEND_COOLDOWN',
+    'SEND_LIMIT',
+    'CONFIRM_LOCK',
+  ]);
+  assert.equal(rateLimitSchema.properties.retryAfterSeconds.type, 'integer');
+  assert.equal(rateLimitSchema.properties.retryAt.format, 'date-time');
+  assert.equal(requestRateLimitResponse.headers['Retry-After'].schema.type, 'integer');
+  assert.equal(
+    requestRateLimitResponse.content['application/json'].schema.$ref,
+    '#/components/schemas/RateLimitErrorResponse',
+  );
+  assert.equal(confirmRateLimitResponse.headers['Retry-After'].schema.type, 'integer');
+  assert.equal(
+    confirmRateLimitResponse.content['application/json'].schema.$ref,
+    '#/components/schemas/RateLimitErrorResponse',
+  );
 });
 
 test('GET /api-docs.json documents validation error response shape', async () => {
