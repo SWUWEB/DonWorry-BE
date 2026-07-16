@@ -12,6 +12,6 @@ export const getMeController = asyncHandler(async (req, res) => {
 });
 
 export const updateMeController = asyncHandler(async (req, res) => {
-  const result = await updateMe(BigInt(req.user.userId), req.body);
+  const result = await updateMe(BigInt(req.user.userId), req.validated.body);
   return ok(res, result, '회원 정보 수정 성공');
 });
