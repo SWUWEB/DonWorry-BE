@@ -5,7 +5,7 @@ export const updateMeDto = z.object({
     .object({
       nickname: z.string().min(1).max(50).optional(),
       profileImageUrl: z.string().url().max(500).nullable().optional(),
-      interestTags: z.array(z.string()).optional(),
+      interestTags: z.array(z.string().max(50)).max(20).optional(),
     })
     .refine(
       (body) =>
