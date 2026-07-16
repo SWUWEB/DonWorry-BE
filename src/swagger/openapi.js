@@ -896,13 +896,293 @@ export const openApiDocument = {
       patch: withZodDto(securedOperation('Notifications', '알림 읽음 처리'), notificationIdDto),
     },
     '/api/v1/wishlist-items': {
-      get: securedOperation('WishlistItems', '위시리스트 목록 조회'),
-      post: securedJsonOperation('WishlistItems', '위시리스트 추가', createWishlistItemDto),
+      get: {
+        ...securedOperation('WishlistItems', '위시리스트 목록 조회'),
+        responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
+          200: {
+            description: '위시리스트 목록 조회 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string', example: '1' },
+                          userId: { type: 'string', example: '1' },
+                          productName: { type: 'string', example: '맥북 프로' },
+                          productUrl: { type: 'string', example: 'https://apple.com/kr/macbook' },
+                          price: { type: 'string', example: '2500000' },
+                          productImageUrl: {
+                            type: 'string',
+                            example: 'https://images.com/macbook.png',
+                          },
+                          waitType: { type: 'string', example: 'ONE_WEEK' },
+                          waitUntil: {
+                            type: 'string',
+                            format: 'date-time',
+                            example: '2026-07-23T18:00:00.000Z',
+                          },
+                          status: { type: 'string', example: 'WAITING' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      post: {
+        ...securedJsonOperation('WishlistItems', '위시리스트 추가', createWishlistItemDto),
+        responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
+          201: {
+            description: '위시리스트 추가 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', example: '1' },
+                        userId: { type: 'string', example: '1' },
+                        productName: { type: 'string', example: '맥북 프로' },
+                        productUrl: { type: 'string', example: 'https://apple.com/kr/macbook' },
+                        price: { type: 'string', example: '2500000' },
+                        productImageUrl: {
+                          type: 'string',
+                          example: 'https://images.com/macbook.png',
+                        },
+                        waitType: { type: 'string', example: 'ONE_WEEK' },
+                        waitUntil: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-23T18:00:00.000Z',
+                        },
+                        status: { type: 'string', example: 'WAITING' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/wishlist-items/{wishlistId}': {
-      get: withZodDto(securedOperation('WishlistItems', '위시리스트 상세 조회'), wishlistItemIdDto),
-      patch: securedJsonOperation('WishlistItems', '위시리스트 수정', updateWishlistItemDto),
-      delete: withZodDto(securedOperation('WishlistItems', '위시리스트 삭제'), wishlistItemIdDto),
+      get: {
+        ...withZodDto(securedOperation('WishlistItems', '위시리스트 상세 조회'), wishlistItemIdDto),
+        responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
+          200: {
+            description: '위시리스트 상세 조회 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', example: '1' },
+                        userId: { type: 'string', example: '1' },
+                        productName: { type: 'string', example: '맥북 프로' },
+                        productUrl: { type: 'string', example: 'https://apple.com/kr/macbook' },
+                        price: { type: 'string', example: '2500000' },
+                        productImageUrl: {
+                          type: 'string',
+                          example: 'https://images.com/macbook.png',
+                        },
+                        waitType: { type: 'string', example: 'ONE_WEEK' },
+                        waitUntil: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-23T18:00:00.000Z',
+                        },
+                        status: { type: 'string', example: 'WAITING' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          403: {
+            description: '접근 권한이 없음 (본인 소유가 아님)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4031',
+                  message: '접근 권한이 없습니다.',
+                },
+              },
+            },
+          },
+          404: {
+            description: '존재하지 않는 항목',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4041',
+                  message: '해당 위시리스트 항목을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+      patch: {
+        ...securedJsonOperation('WishlistItems', '위시리스트 수정', updateWishlistItemDto),
+        responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
+          200: {
+            description: '위시리스트 수정 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', example: '1' },
+                        userId: { type: 'string', example: '1' },
+                        productName: { type: 'string', example: '아이패드 프로' },
+                        productUrl: { type: 'string', example: 'https://apple.com/kr/ipad' },
+                        price: { type: 'string', example: '1500000' },
+                        productImageUrl: { type: 'string', example: 'https://images.com/ipad.png' },
+                        waitType: { type: 'string', example: 'ONE_DAY' },
+                        waitUntil: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-17T18:00:00.000Z',
+                        },
+                        status: { type: 'string', example: 'WAITING' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '수정할 데이터가 주어지지 않음 (빈 body)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'COMMON4001',
+                  message: '수정할 값이 없습니다.',
+                },
+              },
+            },
+          },
+          403: {
+            description: '접근 권한이 없음 (본인 소유가 아님)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4031',
+                  message: '접근 권한이 없습니다.',
+                },
+              },
+            },
+          },
+          404: {
+            description: '존재하지 않는 항목',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4041',
+                  message: '해당 위시리스트 항목을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+      delete: {
+        ...withZodDto(securedOperation('WishlistItems', '위시리스트 삭제'), wishlistItemIdDto),
+        responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
+          200: {
+            description: '위시리스트 삭제 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: '삭제 성공' },
+                  },
+                },
+              },
+            },
+          },
+          403: {
+            description: '접근 권한이 없음 (본인 소유가 아님)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4031',
+                  message: '접근 권한이 없습니다.',
+                },
+              },
+            },
+          },
+          404: {
+            description: '존재하지 않는 항목',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4041',
+                  message: '해당 위시리스트 항목을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/temptations/{temptationId}/decisions': {
       get: withZodDto(securedOperation('Temptations', '재판단 기록 조회'), temptationIdDto),
