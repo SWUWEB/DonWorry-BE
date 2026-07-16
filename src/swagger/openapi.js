@@ -80,6 +80,36 @@ export const openApiDocument = {
           message: { type: 'string', example: 'Invalid request' },
         },
       },
+      RateLimitErrorResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message', 'retryAfterSeconds', 'retryAt', 'rateLimitType'],
+        properties: {
+          success: { type: 'boolean', example: false },
+          code: { type: 'string', example: 'AUTH4291' },
+          message: {
+            type: 'string',
+            example: '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+          },
+          retryAfterSeconds: {
+            type: 'integer',
+            minimum: 1,
+            example: 42,
+            description: '요청 시점을 기준으로 다시 시도할 수 있을 때까지 남은 초',
+          },
+          retryAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-07-09T12:34:56.000Z',
+            description: '다시 시도할 수 있는 UTC 시각',
+          },
+          rateLimitType: {
+            type: 'string',
+            enum: ['RESEND_COOLDOWN', 'SEND_LIMIT', 'CONFIRM_LOCK'],
+            example: 'RESEND_COOLDOWN',
+            description: '적용된 이메일 인증 제한 종류',
+          },
+        },
+      },
       ValidationErrorResponse: {
         type: 'object',
         properties: {
@@ -246,6 +276,56 @@ export const openApiDocument = {
               available: { type: 'boolean', example: true },
             },
           },
+        },
+      },
+      GetMeResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '회원 정보 조회 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: '1' },
+              nickname: { type: 'string', example: '홍길동' },
+              profileImageUrl: {
+                type: 'string',
+                nullable: true,
+                example: 'https://image.com/profile.png',
+              },
+              savingGoalText: {
+                type: 'string',
+                nullable: true,
+                example: '충동구매 줄이기',
+              },
+              interestTagsJson: {
+                type: 'array',
+                items: { type: 'string' },
+                nullable: true,
+                example: ['쇼핑', '카페'],
+              },
+            },
+          },
+        },
+      },
+      ConsumptionRecordResult: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: '1' },
+          type: { type: 'string', example: 'CONSUMED' },
+          productName: { type: 'string', example: '쿠팡 상품' },
+          price: { type: ['number', 'null'], example: 12000 },
+          categoryCode: { type: 'string', example: 'CAFE_DESSERT' },
+          categoryLabel: { type: 'string', example: '카페/디저트' },
+          occurredAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
+        },
+      },
+      ConsumptionRecordCreatedResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '소비 기록 생성에 성공했습니다.' },
+          data: { $ref: '#/components/schemas/ConsumptionRecordResult' },
         },
       },
     },
@@ -458,9 +538,39 @@ export const openApiDocument = {
           },
           429: {
             description: 'Email verification request rate limited',
+            headers: {
+              'Retry-After': {
+                description: '요청을 다시 시도할 수 있을 때까지 남은 초',
+                schema: { type: 'integer', minimum: 1, example: 42 },
+              },
+            },
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+                examples: {
+                  resendCooldown: {
+                    summary: '60초 재전송 쿨다운',
+                    value: {
+                      success: false,
+                      code: 'AUTH4291',
+                      message: '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+                      retryAfterSeconds: 42,
+                      retryAt: '2026-07-09T12:34:56.000Z',
+                      rateLimitType: 'RESEND_COOLDOWN',
+                    },
+                  },
+                  sendLimit: {
+                    summary: '발송 횟수 제한',
+                    value: {
+                      success: false,
+                      code: 'AUTH4291',
+                      message: '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+                      retryAfterSeconds: 120,
+                      retryAt: '2026-07-09T12:36:56.000Z',
+                      rateLimitType: 'SEND_LIMIT',
+                    },
+                  },
+                },
               },
             },
           },
@@ -502,9 +612,23 @@ export const openApiDocument = {
           },
           429: {
             description: 'Email verification confirm rate limited',
+            headers: {
+              'Retry-After': {
+                description: '인증 확인을 다시 시도할 수 있을 때까지 남은 초',
+                schema: { type: 'integer', minimum: 1, example: 300 },
+              },
+            },
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH4291',
+                  message: '이메일 인증 확인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+                  retryAfterSeconds: 300,
+                  retryAt: '2026-07-09T12:39:56.000Z',
+                  rateLimitType: 'CONFIRM_LOCK',
+                },
               },
             },
           },
@@ -521,7 +645,33 @@ export const openApiDocument = {
       post: publicOperation('Auth', '카카오 로그인'),
     },
     '/api/v1/users/me': {
-      get: securedOperation('Users', '내 정보 조회'),
+      get: {
+        ...securedOperation('Users', '내 정보 조회'),
+        responses: {
+          200: {
+            description: '회원 정보 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GetMeResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
       patch: securedJsonOperation('Users', '내 정보 수정', updateMeDto),
       delete: securedOperation('Users', '회원 탈퇴'),
     },
@@ -550,11 +700,95 @@ export const openApiDocument = {
     },
     '/api/v1/consumption-records': {
       get: securedOperation('ConsumptionRecords', '소비 기록 목록 조회'),
-      post: securedJsonOperation(
-        'ConsumptionRecords',
-        '소비 기록 입력',
-        createConsumptionRecordDto,
-      ),
+      post: {
+        ...withZodDto(
+          securedOperation('ConsumptionRecords', '소비 기록 입력'),
+          createConsumptionRecordDto,
+        ),
+        responses: {
+          201: {
+            description: 'Consumption record created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ConsumptionRecordCreatedResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidOccurredAt: {
+                    summary: 'occurredAt 형식 오류',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4001',
+                      message: 'occurredAt은 유효한 ISO 8601 날짜/시간 문자열이어야 합니다.',
+                    },
+                  },
+                  invalidCategoryCode: {
+                    summary: '허용되지 않은 카테고리 코드',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4002',
+                      message: '허용되지 않은 카테고리 코드입니다.',
+                    },
+                  },
+                  duplicateQuestionAnswer: {
+                    summary: '질문 답변 중복 등록',
+                    value: {
+                      success: false,
+                      code: 'CONSUMPTION_RECORD4003',
+                      message: '동일한 질문에 대한 답변을 중복해서 등록할 수 없습니다.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH4011',
+                  message: '아이디 또는 비밀번호가 올바르지 않습니다.',
+                },
+              },
+            },
+          },
+          404: {
+            description: 'Not Found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4042',
+                  message: '요청한 질문을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD5001',
+                  message: 'Internal server error',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/consumption-records/{consumptionRecordId}': {
       get: withZodDto(
