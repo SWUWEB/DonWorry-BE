@@ -833,6 +833,7 @@ export const openApiDocument = {
       get: {
         ...securedOperation('WishlistItems', '위시리스트 목록 조회'),
         responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
           200: {
             description: '위시리스트 목록 조회 성공',
             content: {
@@ -875,6 +876,7 @@ export const openApiDocument = {
       post: {
         ...securedJsonOperation('WishlistItems', '위시리스트 추가', createWishlistItemDto),
         responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
           201: {
             description: '위시리스트 추가 성공',
             content: {
@@ -916,6 +918,7 @@ export const openApiDocument = {
       get: {
         ...withZodDto(securedOperation('WishlistItems', '위시리스트 상세 조회'), wishlistItemIdDto),
         responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
           200: {
             description: '위시리스트 상세 조회 성공',
             content: {
@@ -985,6 +988,7 @@ export const openApiDocument = {
       patch: {
         ...securedJsonOperation('WishlistItems', '위시리스트 수정', updateWishlistItemDto),
         responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
           200: {
             description: '위시리스트 수정 성공',
             content: {
@@ -1066,6 +1070,7 @@ export const openApiDocument = {
       delete: {
         ...withZodDto(securedOperation('WishlistItems', '위시리스트 삭제'), wishlistItemIdDto),
         responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
           200: {
             description: '위시리스트 삭제 성공',
             content: {
