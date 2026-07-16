@@ -52,9 +52,9 @@ export const getItems = async (req, res, next) => {
 
 export const getItemById = async (req, res, next) => {
   try {
-    const { wishlistId } = req.params;
+    const validatedParams = req.validated.params;
     const loggedInUserId = BigInt(req.user.userId);
-    const item = await wishlistItemsService.getWishlistItemById(loggedInUserId, wishlistId);
+    const item = await wishlistItemsService.getWishlistItemById(loggedInUserId, validatedParams);
 
     return res.status(200).json({
       success: true,
@@ -67,13 +67,13 @@ export const getItemById = async (req, res, next) => {
 
 export const updateItem = async (req, res, next) => {
   try {
-    const { wishlistId } = req.params;
+    const validatedParams = req.validated.params;
     const updateData = req.validated.body;
     const loggedInUserId = BigInt(req.user.userId);
 
     const updatedItem = await wishlistItemsService.updateWishlistItem(
       loggedInUserId,
-      wishlistId,
+      validatedParams,
       updateData,
     );
 
@@ -88,9 +88,9 @@ export const updateItem = async (req, res, next) => {
 
 export const deleteItem = async (req, res, next) => {
   try {
-    const { wishlistId } = req.params;
+    const validatedParams = req.validated.params;
     const loggedInUserId = BigInt(req.user.userId);
-    await wishlistItemsService.deleteWishlistItem(loggedInUserId, wishlistId);
+    await wishlistItemsService.deleteWishlistItem(loggedInUserId, validatedParams);
 
     return res.status(200).json({ success: true, message: '삭제 성공' });
   } catch (error) {
