@@ -1,11 +1,19 @@
 import { z } from 'zod';
 
 export const updateMeDto = z.object({
-  body: z.object({
-    nickname: z.string().min(1).max(50).optional(),
-    profileImageUrl: z.string().url().max(500).nullable().optional(),
-    interestTags: z.array(z.string()).optional(),
-  }),
+  body: z
+    .object({
+      nickname: z.string().min(1).max(50).optional(),
+      profileImageUrl: z.string().url().max(500).nullable().optional(),
+      interestTags: z.array(z.string()).optional(),
+    })
+    .refine(
+      (body) =>
+        body.nickname !== undefined ||
+        body.profileImageUrl !== undefined ||
+        body.interestTags !== undefined,
+      { message: '최소 하나 이상의 수정 필드를 입력해야 합니다.' },
+    ),
 });
 
 export const changePasswordDto = z.object({
