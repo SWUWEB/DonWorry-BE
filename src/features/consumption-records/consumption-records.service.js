@@ -171,7 +171,7 @@ export const createConsumptionRecord = async ({ userId, data }) => {
       throw err;
     }
 
-    throw new HttpError(500, '소비 기록 처리 중 내부 서버 오류가 발생했습니다.', {
+    throw new HttpError(500, 'Internal server error', {
       errorCode: ERROR_CODES.CONSUMPTION_RECORD5001,
     });
   }
@@ -252,6 +252,11 @@ const buildUpdateData = (data) => {
   if (data.workHoursNeeded !== undefined) updateData.workHoursNeeded = data.workHoursNeeded;
 
   if (data.category_code !== undefined) {
+    if (data.category_code === null) {
+      updateData.categoryCode = null;
+      updateData.categoryLabel = null;
+      return updateData;
+    }
     if (!CATEGORY_CODE_SET.has(data.category_code)) {
       throw new HttpError(400, '허용되지 않은 카테고리 코드입니다.', {
         errorCode: ERROR_CODES.CONSUMPTION_RECORD4002,
@@ -334,15 +339,9 @@ export const getConsumptionRecord = async ({ userId, consumptionRecordId, now = 
 };
 
 export const updateConsumptionRecord = async ({ userId, consumptionRecordId, data }) => {
-  const record = await prisma.consumptionRecord.findUnique({
-    where: { id: BigInt(consumptionRecordId) },
-    select: { id: true, userId: true },
-  });
-
-  assertRecordOwner(record, userId);
-
   const updateData = buildUpdateData(data);
   const answersData = normalizeInterventionAnswers(data.interventionAnswers);
+  const where = { id: BigInt(consumptionRecordId), userId: BigInt(userId) };
 
   return prisma.$transaction(async (tx) => {
     await assertActiveQuestionsExist(tx, answersData);
@@ -363,25 +362,34 @@ export const updateConsumptionRecord = async ({ userId, consumptionRecordId, dat
       }
     }
 
-    return tx.consumptionRecord.update({
-      where: { id: BigInt(consumptionRecordId) },
-      data: updateData,
-      include: consumptionRecordInclude,
-    });
+    try {
+      return await tx.consumptionRecord.update({
+        where,
+        data: updateData,
+        include: consumptionRecordInclude,
+      });
+    } catch (error) {
+      if (error?.code === 'P2025') {
+        throwNotFound();
+      }
+
+      throw error;
+    }
   });
 };
 
 export const deleteConsumptionRecord = async ({ userId, consumptionRecordId }) => {
-  const record = await prisma.consumptionRecord.findUnique({
-    where: { id: BigInt(consumptionRecordId) },
-    select: { id: true, userId: true },
-  });
+  const where = { id: BigInt(consumptionRecordId), userId: BigInt(userId) };
 
-  assertRecordOwner(record, userId);
+  try {
+    await prisma.consumptionRecord.delete({ where });
+  } catch (error) {
+    if (error?.code === 'P2025') {
+      throwNotFound();
+    }
 
-  await prisma.consumptionRecord.delete({
-    where: { id: BigInt(consumptionRecordId) },
-  });
+    throw error;
+  }
 };
 
 // follow project style: named exports (no default export)

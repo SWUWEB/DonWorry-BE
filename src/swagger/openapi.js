@@ -353,7 +353,7 @@ export const openApiDocument = {
           id: { type: 'string', example: '1' },
           type: { type: 'string', example: 'CONSUMED' },
           productName: { type: 'string', example: '쿠팡 상품' },
-          price: { type: 'number', example: 12000 },
+          price: { type: 'number', nullable: true, example: 12000 },
           categoryCode: { type: 'string', example: 'CAFE_DESSERT' },
           categoryLabel: { type: 'string', example: '카페/디저트' },
           reason: {

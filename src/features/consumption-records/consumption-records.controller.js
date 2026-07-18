@@ -1,4 +1,4 @@
-import { ERROR_CODES } from '../../config/error-codes.js';
+﻿import { ERROR_CODES } from '../../config/error-codes.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
 import { created, notImplemented, ok } from '../../utils/api-response.js';
@@ -58,7 +58,7 @@ const consumptionHandler = (handler) =>
     } catch (error) {
       if (error instanceof HttpError) throw error;
 
-      throw new HttpError(500, '소비 기록 처리 중 예상하지 못한 오류가 발생했습니다.', {
+      throw new HttpError(500, 'Internal server error', {
         errorCode: ERROR_CODES.CONSUMPTION_RECORD5001,
       });
     }
@@ -70,7 +70,7 @@ export const createConsumptionRecordController = consumptionHandler(async (req, 
     data: req.validated.body,
   });
 
-  return created(res, serializeConsumptionRecord(record), '소비 기록 생성에 성공했습니다.');
+  return created(res, serializeConsumptionRecord(record), '?뚮퉬 湲곕줉 ?앹꽦???깃났?덉뒿?덈떎.');
 });
 
 export const listConsumptionRecordsController = consumptionHandler(async (req, res) => {

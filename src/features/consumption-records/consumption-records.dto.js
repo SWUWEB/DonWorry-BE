@@ -148,7 +148,15 @@ export const validateConsumptionRecord = (dto) => (req, res, next) => {
   });
 };
 
-const updateConsumptionRecordBodyDto = createConsumptionRecordDto.shape.body.partial();
+const updateConsumptionRecordBodyDto = createConsumptionRecordDto.shape.body.partial().extend({
+  productUrl: createConsumptionRecordDto.shape.body.shape.productUrl.optional().nullable(),
+  reason: createConsumptionRecordDto.shape.body.shape.reason.optional().nullable(),
+  riskScore: createConsumptionRecordDto.shape.body.shape.riskScore.optional().nullable(),
+  workHoursNeeded: createConsumptionRecordDto.shape.body.shape.workHoursNeeded
+    .optional()
+    .nullable(),
+  category_code: createConsumptionRecordDto.shape.body.shape.category_code.optional().nullable(),
+});
 
 export const updateConsumptionRecordDto = consumptionRecordIdDto.extend({
   body: updateConsumptionRecordBodyDto,
