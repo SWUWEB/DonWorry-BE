@@ -148,15 +148,22 @@ export const validateConsumptionRecord = (dto) => (req, res, next) => {
   });
 };
 
-const updateConsumptionRecordBodyDto = createConsumptionRecordDto.shape.body.partial().extend({
-  productUrl: createConsumptionRecordDto.shape.body.shape.productUrl.optional().nullable(),
-  reason: createConsumptionRecordDto.shape.body.shape.reason.optional().nullable(),
-  riskScore: createConsumptionRecordDto.shape.body.shape.riskScore.optional().nullable(),
-  workHoursNeeded: createConsumptionRecordDto.shape.body.shape.workHoursNeeded
-    .optional()
-    .nullable(),
-  category_code: createConsumptionRecordDto.shape.body.shape.category_code.optional().nullable(),
-});
+const updateConsumptionRecordBodyDto = createConsumptionRecordDto.shape.body
+  .partial()
+  .extend({
+    productUrl: createConsumptionRecordDto.shape.body.shape.productUrl.optional().nullable(),
+    reason: createConsumptionRecordDto.shape.body.shape.reason.optional().nullable(),
+    riskScore: createConsumptionRecordDto.shape.body.shape.riskScore.optional().nullable(),
+    workHoursNeeded: createConsumptionRecordDto.shape.body.shape.workHoursNeeded
+      .optional()
+      .nullable(),
+    category_code: createConsumptionRecordDto.shape.body.shape.category_code
+      .optional()
+      .nullable(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: '수정할 필드가 최소 1개 이상 필요합니다.',
+  });
 
 export const updateConsumptionRecordDto = consumptionRecordIdDto.extend({
   body: updateConsumptionRecordBodyDto,

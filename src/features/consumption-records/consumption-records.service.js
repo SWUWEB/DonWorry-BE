@@ -346,6 +346,21 @@ export const updateConsumptionRecord = async ({ userId, consumptionRecordId, dat
   return prisma.$transaction(async (tx) => {
     await assertActiveQuestionsExist(tx, answersData);
 
+    let updatedRecord;
+    try {
+      updatedRecord = await tx.consumptionRecord.update({
+        where,
+        data: updateData,
+        include: consumptionRecordInclude,
+      });
+    } catch (error) {
+      if (error?.code === 'P2025') {
+        throwNotFound();
+      }
+
+      throw error;
+    }
+
     if (answersData) {
       await tx.interventionAnswer.deleteMany({
         where: { recordId: BigInt(consumptionRecordId) },
@@ -362,19 +377,7 @@ export const updateConsumptionRecord = async ({ userId, consumptionRecordId, dat
       }
     }
 
-    try {
-      return await tx.consumptionRecord.update({
-        where,
-        data: updateData,
-        include: consumptionRecordInclude,
-      });
-    } catch (error) {
-      if (error?.code === 'P2025') {
-        throwNotFound();
-      }
-
-      throw error;
-    }
+    return updatedRecord;
   });
 };
 

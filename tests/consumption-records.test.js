@@ -701,6 +701,38 @@ test('PUT /api/v1/consumption-records/:id returns 400 for unsupported category_c
   assert.ok(response.body.errors);
 });
 
+test('PUT /api/v1/consumption-records/:id returns 400 when body has no fields', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const record = await createTestRecord(user);
+
+  const response = await request(app)
+    .put(`/api/v1/consumption-records/${record.id}`)
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({});
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'COMMON4001');
+});
+
+test('PUT /api/v1/consumption-records/:id returns 404 when record does not exist even with interventionAnswers', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const question = await createTestQuestion();
+
+  const response = await request(app)
+    .put('/api/v1/consumption-records/999999999')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({
+      interventionAnswers: [{ questionId: question.id.toString(), answerValue: true }],
+    });
+
+  assert.equal(response.status, 404);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'CONSUMPTION_RECORD4041');
+});
+
 test('PUT /api/v1/consumption-records/:id returns 404 for another user record', async () => {
   const user = await createTestUser();
   const otherUser = await createTestUser({
