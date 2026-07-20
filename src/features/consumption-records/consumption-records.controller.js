@@ -70,7 +70,7 @@ export const createConsumptionRecordController = consumptionHandler(async (req, 
     data: req.validated.body,
   });
 
-  return created(res, serializeConsumptionRecord(record), '?뚮퉬 湲곕줉 ?앹꽦???깃났?덉뒿?덈떎.');
+  return created(res, serializeConsumptionRecord(record), '소비 기록 생성에 성공했습니다.');
 });
 
 export const listConsumptionRecordsController = consumptionHandler(async (req, res) => {
