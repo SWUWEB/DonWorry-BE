@@ -12,6 +12,7 @@ import {
 import {
   consumptionRecordIdDto,
   createConsumptionRecordDto,
+  listConsumptionRecordsDto,
   updateConsumptionRecordDto,
 } from '../features/consumption-records/consumption-records.dto.js';
 import { calculateRiskScoreDto } from '../features/interventions/interventions.dto.js';
@@ -78,6 +79,14 @@ export const openApiDocument = {
           success: { type: 'boolean', example: false },
           code: { type: 'string', example: 'COMMON4001' },
           message: { type: 'string', example: 'Invalid request' },
+        },
+      },
+      UnauthorizedResponse: {
+        type: 'object',
+        required: ['success', 'message'],
+        properties: {
+          success: { type: 'boolean', example: false },
+          message: { type: 'string', example: 'Authentication required' },
         },
       },
       RateLimitErrorResponse: {
@@ -344,9 +353,14 @@ export const openApiDocument = {
           id: { type: 'string', example: '1' },
           type: { type: 'string', example: 'CONSUMED' },
           productName: { type: 'string', example: '쿠팡 상품' },
-          price: { type: ['number', 'null'], example: 12000 },
+          price: { type: 'number', nullable: true, example: 12000 },
           categoryCode: { type: 'string', example: 'CAFE_DESSERT' },
           categoryLabel: { type: 'string', example: '카페/디저트' },
+          reason: {
+            type: 'string',
+            nullable: true,
+            example: '친구와 시간을 보내고 싶어서',
+          },
           occurredAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
         },
       },
@@ -356,6 +370,54 @@ export const openApiDocument = {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: '소비 기록 생성에 성공했습니다.' },
           data: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+        },
+      },
+      ConsumptionRecordResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+        },
+      },
+      ConsumptionRecordDetailResult: {
+        allOf: [
+          { $ref: '#/components/schemas/ConsumptionRecordResult' },
+          {
+            type: 'object',
+            properties: {
+              recentCategoryConsumptionCount: {
+                type: 'integer',
+                minimum: 0,
+                example: 3,
+                description: '최근 28일간 동일 카테고리의 실제 소비 횟수',
+              },
+              recentCategoryConsumptions: {
+                type: 'array',
+                description: '최근 28일간 동일 카테고리의 실제 소비 내역',
+                items: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+              },
+            },
+          },
+        ],
+      },
+      ConsumptionRecordDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: { $ref: '#/components/schemas/ConsumptionRecordDetailResult' },
+        },
+      },
+      ConsumptionRecordListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+          },
         },
       },
     },
@@ -368,11 +430,152 @@ export const openApiDocument = {
           },
         },
       },
+      ConsumptionRecordValidationBadRequest: {
+        description: 'Invalid path or query parameter',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+            example: {
+              success: false,
+              code: 'COMMON4001',
+              message: 'Invalid request',
+              errors: {
+                formErrors: [],
+                fieldErrors: {},
+              },
+            },
+          },
+        },
+      },
+      ConsumptionRecordBadRequest: {
+        description: 'Invalid consumption record request',
+        content: {
+          'application/json': {
+            schema: {
+              anyOf: [
+                { $ref: '#/components/schemas/ValidationErrorResponse' },
+                { $ref: '#/components/schemas/ErrorResponse' },
+              ],
+            },
+            examples: {
+              invalidRequest: {
+                summary: 'DTO 검증 실패',
+                value: {
+                  success: false,
+                  code: 'COMMON4001',
+                  message: 'Invalid request',
+                  errors: { formErrors: [], fieldErrors: { body: ['Invalid input'] } },
+                },
+              },
+              invalidOccurredAt: {
+                summary: 'occurredAt 형식 오류',
+                value: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4001',
+                  message: 'occurredAt은 유효한 ISO 8601 날짜/시간 문자열이어야 합니다.',
+                  errors: {
+                    formErrors: [],
+                    fieldErrors: { body: ['occurredAt must be a non-empty ISO datetime string'] },
+                  },
+                },
+              },
+              invalidCategoryCode: {
+                summary: '허용되지 않은 카테고리 코드',
+                value: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4002',
+                  message: '허용되지 않은 카테고리 코드입니다.',
+                  errors: {
+                    formErrors: [],
+                    fieldErrors: { body: ['Invalid category code'] },
+                  },
+                },
+              },
+              duplicateQuestionAnswer: {
+                summary: '질문 답변 중복 등록',
+                value: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4003',
+                  message: '동일한 질문에 대한 답변을 중복해서 등록할 수 없습니다.',
+                  errors: {
+                    formErrors: [],
+                    fieldErrors: {
+                      body: ['Duplicate questionId in interventionAnswers is not allowed.'],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      ConsumptionRecordNotFound: {
+        description: 'Consumption record not found or inaccessible',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+            example: {
+              success: false,
+              code: 'CONSUMPTION_RECORD4041',
+              message: '요청한 소비 기록을 찾을 수 없습니다.',
+            },
+          },
+        },
+      },
+      ConsumptionRecordOrQuestionNotFound: {
+        description: 'Consumption record or intervention question not found',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+            examples: {
+              recordNotFound: {
+                summary: '소비 기록 없음 또는 접근 불가',
+                value: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4041',
+                  message: '요청한 소비 기록을 찾을 수 없습니다.',
+                },
+              },
+              questionNotFound: {
+                summary: '질문 없음 또는 비활성',
+                value: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4042',
+                  message: '요청한 질문을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+      ConsumptionRecordInternalServerError: {
+        description: 'Unexpected consumption record processing error',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+            example: {
+              success: false,
+              code: 'CONSUMPTION_RECORD5001',
+              message: 'Internal server error',
+            },
+          },
+        },
+      },
       Unauthorized: {
         description: 'Authentication required',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ErrorResponse' },
+            schema: { $ref: '#/components/schemas/UnauthorizedResponse' },
+            examples: {
+              missingToken: {
+                summary: 'Access token missing',
+                value: { success: false, message: 'Authentication required' },
+              },
+              invalidToken: {
+                summary: 'Access token invalid or expired',
+                value: { success: false, message: 'Invalid or expired token' },
+              },
+            },
           },
         },
       },
@@ -765,7 +968,25 @@ export const openApiDocument = {
       get: securedOperation('Home', '오늘의 소비 질문 조회'),
     },
     '/api/v1/consumption-records': {
-      get: securedOperation('ConsumptionRecords', '소비 기록 목록 조회'),
+      get: {
+        ...withZodDto(
+          securedOperation('ConsumptionRecords', '소비 기록 목록 조회'),
+          listConsumptionRecordsDto,
+        ),
+        responses: {
+          200: {
+            description: 'Consumption record list',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ConsumptionRecordListResponse' },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ConsumptionRecordValidationBadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          500: { $ref: '#/components/responses/ConsumptionRecordInternalServerError' },
+        },
+      },
       post: {
         ...withZodDto(
           securedOperation('ConsumptionRecords', '소비 기록 입력'),
@@ -780,53 +1001,8 @@ export const openApiDocument = {
               },
             },
           },
-          400: {
-            description: 'Bad Request',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
-                examples: {
-                  invalidOccurredAt: {
-                    summary: 'occurredAt 형식 오류',
-                    value: {
-                      success: false,
-                      code: 'CONSUMPTION_RECORD4001',
-                      message: 'occurredAt은 유효한 ISO 8601 날짜/시간 문자열이어야 합니다.',
-                    },
-                  },
-                  invalidCategoryCode: {
-                    summary: '허용되지 않은 카테고리 코드',
-                    value: {
-                      success: false,
-                      code: 'CONSUMPTION_RECORD4002',
-                      message: '허용되지 않은 카테고리 코드입니다.',
-                    },
-                  },
-                  duplicateQuestionAnswer: {
-                    summary: '질문 답변 중복 등록',
-                    value: {
-                      success: false,
-                      code: 'CONSUMPTION_RECORD4003',
-                      message: '동일한 질문에 대한 답변을 중복해서 등록할 수 없습니다.',
-                    },
-                  },
-                },
-              },
-            },
-          },
-          401: {
-            description: 'Unauthorized',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
-                example: {
-                  success: false,
-                  code: 'AUTH4011',
-                  message: '아이디 또는 비밀번호가 올바르지 않습니다.',
-                },
-              },
-            },
-          },
+          400: { $ref: '#/components/responses/ConsumptionRecordBadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
           404: {
             description: 'Not Found',
             content: {
@@ -857,19 +1033,70 @@ export const openApiDocument = {
       },
     },
     '/api/v1/consumption-records/{consumptionRecordId}': {
-      get: withZodDto(
-        securedOperation('ConsumptionRecords', '소비 기록 상세'),
-        consumptionRecordIdDto,
-      ),
-      patch: securedJsonOperation(
-        'ConsumptionRecords',
-        '소비 기록 수정',
-        updateConsumptionRecordDto,
-      ),
-      delete: withZodDto(
-        securedOperation('ConsumptionRecords', '소비 기록 삭제'),
-        consumptionRecordIdDto,
-      ),
+      get: {
+        ...withZodDto(
+          securedOperation('ConsumptionRecords', '소비 기록 상세'),
+          consumptionRecordIdDto,
+        ),
+        responses: {
+          200: {
+            description: 'Consumption record detail',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ConsumptionRecordDetailResponse' },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ConsumptionRecordValidationBadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: { $ref: '#/components/responses/ConsumptionRecordNotFound' },
+          500: { $ref: '#/components/responses/ConsumptionRecordInternalServerError' },
+        },
+      },
+      put: {
+        ...securedJsonOperation('ConsumptionRecords', '소비 기록 수정', updateConsumptionRecordDto),
+        responses: {
+          200: {
+            description: 'Consumption record updated',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ConsumptionRecordResponse' },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ConsumptionRecordBadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: { $ref: '#/components/responses/ConsumptionRecordOrQuestionNotFound' },
+          500: { $ref: '#/components/responses/ConsumptionRecordInternalServerError' },
+        },
+      },
+      delete: {
+        ...withZodDto(
+          securedOperation('ConsumptionRecords', '소비 기록 삭제'),
+          consumptionRecordIdDto,
+        ),
+        responses: {
+          200: {
+            description: 'Consumption record deleted',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: 'OK' },
+                    data: { nullable: true, example: null },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ConsumptionRecordValidationBadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: { $ref: '#/components/responses/ConsumptionRecordNotFound' },
+          500: { $ref: '#/components/responses/ConsumptionRecordInternalServerError' },
+        },
+      },
     },
     '/api/v1/intervention-questions': {
       get: securedOperation('Interventions', '개입 질문 목록 조회'),
