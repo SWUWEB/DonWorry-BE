@@ -6,6 +6,12 @@ export const consumptionRecordIdDto = z.object({
   params: z.object({ consumptionRecordId: z.coerce.bigint().positive() }),
 });
 
+export const listConsumptionRecordsDto = z.object({
+  query: z.object({
+    type: z.enum(['ALL', 'CONSUMED', 'SKIPPED']).default('ALL'),
+  }),
+});
+
 const isValidIsoDatetime = (value) => {
   const match =
     /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?(Z|([+-])([0-9]{2}):([0-9]{2}))$/.exec(
@@ -102,8 +108,8 @@ export const createConsumptionRecordDto = z.object({
   }),
 });
 
-export const validateConsumptionRecordDto = (req, res, next) => {
-  const result = createConsumptionRecordDto.safeParse({
+export const validateConsumptionRecord = (dto) => (req, res, next) => {
+  const result = dto.safeParse({
     body: req.body,
     query: req.query,
     params: req.params,
@@ -141,6 +147,22 @@ export const validateConsumptionRecordDto = (req, res, next) => {
     errors: result.error.flatten(),
   });
 };
+
+const updateConsumptionRecordBodyDto = createConsumptionRecordDto.shape.body
+  .partial()
+  .extend({
+    productUrl: createConsumptionRecordDto.shape.body.shape.productUrl.optional().nullable(),
+    reason: createConsumptionRecordDto.shape.body.shape.reason.optional().nullable(),
+    riskScore: createConsumptionRecordDto.shape.body.shape.riskScore.optional().nullable(),
+    workHoursNeeded: createConsumptionRecordDto.shape.body.shape.workHoursNeeded
+      .optional()
+      .nullable(),
+    category_code: createConsumptionRecordDto.shape.body.shape.category_code.optional().nullable(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: '수정할 필드가 최소 1개 이상 필요합니다.',
+  });
+
 export const updateConsumptionRecordDto = consumptionRecordIdDto.extend({
-  body: createConsumptionRecordDto.shape.body.partial(),
+  body: updateConsumptionRecordBodyDto,
 });
