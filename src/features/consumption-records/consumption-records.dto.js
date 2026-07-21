@@ -157,9 +157,7 @@ const updateConsumptionRecordBodyDto = createConsumptionRecordDto.shape.body
     workHoursNeeded: createConsumptionRecordDto.shape.body.shape.workHoursNeeded
       .optional()
       .nullable(),
-    category_code: createConsumptionRecordDto.shape.body.shape.category_code
-      .optional()
-      .nullable(),
+    category_code: createConsumptionRecordDto.shape.body.shape.category_code.optional().nullable(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: '수정할 필드가 최소 1개 이상 필요합니다.',
