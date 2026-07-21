@@ -367,7 +367,7 @@ export const openApiDocument = {
         type: 'object',
         properties: {
           success: { type: 'boolean', example: true },
-          message: { type: 'string', example: '절약 목적 해제 성공' },
+          message: { type: 'string', example: '절약 목적 삭제 성공' },
           data: {
             type: 'object',
             properties: {
@@ -1017,7 +1017,7 @@ export const openApiDocument = {
         ...securedOperation('Users', '절약 목적 삭제/해제'),
         responses: {
           200: {
-            description: '절약 목적 해제 성공',
+            description: '절약 목적 삭제 성공',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/DeleteSavingGoalResponse' },

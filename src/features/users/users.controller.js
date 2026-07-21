@@ -23,5 +23,5 @@ export const updateSavingGoalController = asyncHandler(async (req, res) => {
 
 export const deleteSavingGoalController = asyncHandler(async (req, res) => {
   const result = await deleteSavingGoal(BigInt(req.user.userId));
-  return ok(res, result, '절약 목적 해제 성공');
+  return ok(res, result, '절약 목적 삭제 성공');
 });

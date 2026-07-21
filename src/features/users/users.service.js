@@ -106,7 +106,11 @@ export const deleteSavingGoal = async (userId) => {
   }
   const updatedUser = await prisma.user.update({
     where: { id: userId },
-    data: { savingGoalIsActive: false },
+    data: {
+      savingGoalText: null,
+      targetSavingAmount: null,
+      savingGoalIsActive: false,
+    },
     select: {
       id: true,
       savingGoalIsActive: true,

@@ -295,3 +295,55 @@ test('GET /api-docs.json documents validation error response shape', async () =>
     { $ref: '#/components/schemas/ErrorResponse' },
   ]);
 });
+
+test('DELETE /api/v1/users/me/saving-goal resets goal fields', async () => {
+  const app = createApp();
+
+  await prisma.user.deleteMany({
+    where: {
+      OR: [{ email: 'saving-goal-delete@example.com' }, { loginId: 'sgdel001' }],
+    },
+  });
+
+  const user = await prisma.user.create({
+    data: {
+      email: 'saving-goal-delete@example.com',
+      loginId: 'sgdel001',
+      nickname: 'saving-goal-delete-user',
+      passwordHash: 'test-password-hash',
+      emailVerifiedAt: new Date(),
+      savingGoalText: '목돈 마련',
+      targetSavingAmount: 500000n,
+      savingGoalIsActive: true,
+    },
+    select: { id: true },
+  });
+
+  try {
+    const accessToken = jwt.sign(
+      { purpose: 'access', userId: user.id.toString() },
+      process.env.JWT_ACCESS_SECRET,
+    );
+
+    const response = await request(app)
+      .delete('/api/v1/users/me/saving-goal')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.success, true);
+    assert.equal(response.body.data.savingGoalIsActive, false);
+
+    const persistedUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { savingGoalText: true, targetSavingAmount: true, savingGoalIsActive: true },
+    });
+
+    assert.equal(persistedUser.savingGoalText, null);
+    assert.equal(persistedUser.targetSavingAmount, null);
+    assert.equal(persistedUser.savingGoalIsActive, false);
+  } finally {
+    await prisma.user.deleteMany({
+      where: { id: user.id },
+    });
+  }
+});
