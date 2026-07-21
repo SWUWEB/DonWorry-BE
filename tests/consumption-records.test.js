@@ -614,6 +614,9 @@ test('PUT /api/v1/consumption-records/:id updates a record owned by the user', a
   assert.equal(response.body.data.price, 9900);
   assert.equal(response.body.data.categoryCode, CATEGORY_CODES[2]);
   assert.equal(response.body.data.categoryLabel, CATEGORY_MAP[CATEGORY_CODES[2]]);
+  assert.equal(response.body.data.interventionAnswers.length, 1);
+  assert.equal(response.body.data.interventionAnswers[0].questionId, question.id.toString());
+  assert.equal(response.body.data.interventionAnswers[0].answerValue, false);
 
   const updatedRecord = await prisma.consumptionRecord.findUnique({
     where: { id: record.id },

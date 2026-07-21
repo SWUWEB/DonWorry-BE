@@ -377,7 +377,12 @@ export const updateConsumptionRecord = async ({ userId, consumptionRecordId, dat
       }
     }
 
-    return updatedRecord;
+    if (!updatedRecord?.id) return updatedRecord;
+
+    return tx.consumptionRecord.findUnique({
+      where: { id: BigInt(consumptionRecordId) },
+      include: consumptionRecordInclude,
+    });
   });
 };
 
