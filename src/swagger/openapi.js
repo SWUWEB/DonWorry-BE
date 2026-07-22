@@ -305,7 +305,7 @@ export const openApiDocument = {
               savingGoalText: {
                 type: 'string',
                 nullable: true,
-                example: '충동구매 줄이기',
+                example: '목돈 마련',
               },
               interestTagsJson: {
                 type: 'array',
@@ -335,7 +335,7 @@ export const openApiDocument = {
               savingGoalText: {
                 type: 'string',
                 nullable: true,
-                example: '충동구매 줄이기',
+                example: '여행',
               },
               interestTagsJson: {
                 type: 'array',
@@ -343,6 +343,36 @@ export const openApiDocument = {
                 nullable: true,
                 example: ['패션', '뷰티'],
               },
+            },
+          },
+        },
+      },
+      UpdateSavingGoalResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '절약 목적 수정 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: '1' },
+              savingGoalText: { type: 'string', example: '목돈 마련' },
+              targetSavingAmount: { type: 'string', example: '1000000' },
+              savingGoalIsActive: { type: 'boolean', example: true },
+            },
+          },
+        },
+      },
+      DeleteSavingGoalResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '절약 목적 삭제 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: '1' },
+              savingGoalIsActive: { type: 'boolean', example: false },
             },
           },
         },
@@ -948,8 +978,68 @@ export const openApiDocument = {
       patch: securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),
     },
     '/api/v1/users/me/saving-goal': {
-      put: securedJsonOperation('Users', '절약 목표 설정/수정', savingGoalDto),
-      delete: securedOperation('Users', '절약 목표 삭제/해제'),
+      put: {
+        ...securedJsonOperation('Users', '절약 목적 설정/수정', savingGoalDto),
+        responses: {
+          200: {
+            description: '절약 목적 수정 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/UpdateSavingGoalResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+      delete: {
+        ...securedOperation('Users', '절약 목적 삭제/해제'),
+        responses: {
+          200: {
+            description: '절약 목적 삭제 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DeleteSavingGoalResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/users/me/notification-settings': {
       patch: securedJsonOperation('Users', '알림 설정 수정', notificationSettingsDto),

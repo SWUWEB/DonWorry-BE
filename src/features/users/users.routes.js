@@ -5,6 +5,8 @@ import {
   createNotImplementedController,
   getMeController,
   updateMeController,
+  updateSavingGoalController,
+  deleteSavingGoalController,
 } from './users.controller.js';
 import {
   changePasswordDto,
@@ -21,6 +23,6 @@ usersRouter.get('/me', getMeController);
 usersRouter.patch('/me', validate(updateMeDto), updateMeController);
 usersRouter.delete('/me', todo);
 usersRouter.patch('/me/password', validate(changePasswordDto), todo);
-usersRouter.put('/me/saving-goal', validate(savingGoalDto), todo);
-usersRouter.delete('/me/saving-goal', todo);
+usersRouter.put('/me/saving-goal', validate(savingGoalDto), updateSavingGoalController);
+usersRouter.delete('/me/saving-goal', deleteSavingGoalController);
 usersRouter.patch('/me/notification-settings', validate(notificationSettingsDto), todo);
