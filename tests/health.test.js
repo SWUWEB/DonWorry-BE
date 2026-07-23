@@ -256,6 +256,7 @@ test('GET /api-docs.json documents email verification rate limit responses', asy
     'RESEND_COOLDOWN',
     'SEND_LIMIT',
     'CONFIRM_LOCK',
+    'KAKAO_LINK_PASSWORD_LOCK',
   ]);
   assert.equal(rateLimitSchema.properties.retryAfterSeconds.type, 'integer');
   assert.equal(rateLimitSchema.properties.retryAt.format, 'date-time');
@@ -346,4 +347,28 @@ test('DELETE /api/v1/users/me/saving-goal resets goal fields', async () => {
       where: { id: user.id },
     });
   }
+});
+
+test('GET /api-docs.json documents Kakao login and account linking APIs', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+  const login = response.body.paths['/api/v1/auth/kakao/login'].post;
+  const passwordLink = response.body.paths['/api/v1/auth/kakao/link'].post;
+  const emailLink = response.body.paths['/api/v1/auth/kakao/link/email-verifications/confirm'].post;
+
+  assert.deepEqual(login.security, []);
+  assert.deepEqual(login.requestBody.content['application/json'].schema.required, [
+    'authorizationCode',
+  ]);
+  assert.ok(login.responses[409]);
+  assert.ok(login.responses[502]);
+  assert.deepEqual(passwordLink.requestBody.content['application/json'].schema.required.sort(), [
+    'linkingToken',
+    'password',
+  ]);
+  assert.deepEqual(emailLink.requestBody.content['application/json'].schema.required.sort(), [
+    'code',
+    'linkingToken',
+  ]);
 });
