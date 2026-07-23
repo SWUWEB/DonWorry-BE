@@ -100,27 +100,28 @@ export const getWishlistItemById = async (userId, validatedParams) => {
 };
 
 export const updateWishlistItem = async (userId, validatedParams, updateData) => {
-  if (!updateData || Object.keys(updateData).length === 0) {
+  const dataToUpdate = {};
+
+  if (updateData?.categoryCode !== undefined) dataToUpdate.categoryCode = updateData.categoryCode;
+  if (updateData?.productName !== undefined) dataToUpdate.productName = updateData.productName;
+  if (updateData?.price !== undefined) dataToUpdate.price = updateData.price;
+  if (updateData?.productUrl !== undefined) dataToUpdate.productUrl = updateData.productUrl;
+  if (updateData?.productImageUrl !== undefined)
+    dataToUpdate.productImageUrl = updateData.productImageUrl;
+  if (updateData?.reason !== undefined) dataToUpdate.reason = updateData.reason;
+
+  if (updateData?.waitType) {
+    dataToUpdate.waitUntil = calculateWaitUntil(updateData.waitType);
+    dataToUpdate.waitType = WAIT_TYPE_MAP[updateData.waitType];
+  }
+
+  if (Object.keys(dataToUpdate).length === 0) {
     throw new HttpError(400, '수정할 값이 없습니다.', {
       errorCode: ERROR_CODES.COMMON4001,
     });
   }
 
   await getValidatedItem(userId, validatedParams);
-
-  const dataToUpdate = {
-    categoryCode: updateData.categoryCode,
-    productName: updateData.productName,
-    price: updateData.price,
-    productUrl: updateData.productUrl,
-    productImageUrl: updateData.productImageUrl,
-    reason: updateData.reason,
-  };
-
-  if (updateData.waitType) {
-    dataToUpdate.waitUntil = calculateWaitUntil(updateData.waitType);
-    dataToUpdate.waitType = WAIT_TYPE_MAP[updateData.waitType];
-  }
 
   return await prisma.wishlistItem.update({
     where: { id: BigInt(validatedParams.wishlistId) },
