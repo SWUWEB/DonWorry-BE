@@ -355,6 +355,7 @@ test('GET /api-docs.json documents Kakao login and account linking APIs', async 
   assert.equal(response.status, 200);
   const login = response.body.paths['/api/v1/auth/kakao/login'].post;
   const passwordLink = response.body.paths['/api/v1/auth/kakao/link'].post;
+  const emailLinkRequest = response.body.paths['/api/v1/auth/kakao/link/email-verifications'].post;
   const emailLink = response.body.paths['/api/v1/auth/kakao/link/email-verifications/confirm'].post;
 
   assert.deepEqual(login.security, []);
@@ -374,8 +375,20 @@ test('GET /api-docs.json documents Kakao login and account linking APIs', async 
     'linkingToken',
     'password',
   ]);
+  assert.deepEqual(passwordLink.responses[401].content['application/json'].schema.oneOf, [
+    { $ref: '#/components/schemas/KakaoLinkTokenErrorResponse' },
+    { $ref: '#/components/schemas/KakaoLinkVerificationErrorResponse' },
+  ]);
+  assert.equal(
+    emailLinkRequest.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/KakaoLinkTokenErrorResponse',
+  );
   assert.deepEqual(emailLink.requestBody.content['application/json'].schema.required.sort(), [
     'code',
     'linkingToken',
   ]);
+  assert.equal(
+    emailLink.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/KakaoLinkTokenErrorResponse',
+  );
 });

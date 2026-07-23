@@ -185,6 +185,17 @@ test('Kakao password linking locks after repeated failures', async () => {
   assert.equal(locked.body.rateLimitType, 'KAKAO_LINK_PASSWORD_LOCK');
 });
 
+test('Kakao account linking rejects an invalid linking token', async () => {
+  const response = await request(app).post('/api/v1/auth/kakao/link').send({
+    linkingToken: 'invalid-linking-token',
+    password: 'Password123!',
+  });
+
+  assert.equal(response.status, 401);
+  assert.equal(response.body.code, 'AUTH4014');
+  assert.equal(response.body.message, '계정 연결 정보가 만료되었거나 올바르지 않습니다.');
+});
+
 test('LOCAL member can link Kakao using a one-time email code', async () => {
   const local = await createLocalUser('kakao-email-link@example.com', 'kakaoemail1');
   mockKakao({ id: '555555555', email: local.email });

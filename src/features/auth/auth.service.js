@@ -710,7 +710,7 @@ const createKakaoLinkSession = async (user, kakaoUser) => {
 
 const throwInvalidKakaoLinkToken = () => {
   throw new HttpError(401, '계정 연결 정보가 만료되었거나 올바르지 않습니다.', {
-    errorCode: ERROR_CODES.AUTH4012,
+    errorCode: ERROR_CODES.AUTH4014,
   });
 };
 
