@@ -31,16 +31,19 @@ const calculateWaitUntil = (waitType) => {
 };
 
 export const createWishlistItem = async (userId, itemData) => {
-  const { productName, productUrl, price, productImageUrl, waitType } = itemData;
+  const { categoryCode, productName, productUrl, price, productImageUrl, reason, waitType } =
+    itemData;
   const waitUntil = calculateWaitUntil(waitType);
 
   return await prisma.wishlistItem.create({
     data: {
       userId,
+      categoryCode,
       productName,
       productUrl,
       price,
       productImageUrl,
+      reason,
       waitType: WAIT_TYPE_MAP[waitType] || 'ONE_HOUR',
       waitUntil,
       status: 'WAITING',
@@ -106,10 +109,12 @@ export const updateWishlistItem = async (userId, validatedParams, updateData) =>
   await getValidatedItem(userId, validatedParams);
 
   const dataToUpdate = {
+    categoryCode: updateData.categoryCode,
     productName: updateData.productName,
     price: updateData.price,
     productUrl: updateData.productUrl,
     productImageUrl: updateData.productImageUrl,
+    reason: updateData.reason,
   };
 
   if (updateData.waitType) {
