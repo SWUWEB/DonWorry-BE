@@ -256,6 +256,7 @@ test('GET /api-docs.json documents email verification rate limit responses', asy
     'RESEND_COOLDOWN',
     'SEND_LIMIT',
     'CONFIRM_LOCK',
+    'KAKAO_LINK_PASSWORD_LOCK',
   ]);
   assert.equal(rateLimitSchema.properties.retryAfterSeconds.type, 'integer');
   assert.equal(rateLimitSchema.properties.retryAt.format, 'date-time');
@@ -346,4 +347,56 @@ test('DELETE /api/v1/users/me/saving-goal resets goal fields', async () => {
       where: { id: user.id },
     });
   }
+});
+
+test('GET /api-docs.json documents Kakao login and account linking APIs', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+  const login = response.body.paths['/api/v1/auth/kakao/login'].post;
+  const passwordLink = response.body.paths['/api/v1/auth/kakao/link'].post;
+  const emailLinkRequest = response.body.paths['/api/v1/auth/kakao/link/email-verifications'].post;
+  const emailLink = response.body.paths['/api/v1/auth/kakao/link/email-verifications/confirm'].post;
+
+  assert.deepEqual(login.security, []);
+  assert.deepEqual(login.requestBody.content['application/json'].schema.required, [
+    'authorizationCode',
+  ]);
+  assert.deepEqual(login.responses[409].content['application/json'].schema.oneOf, [
+    { $ref: '#/components/schemas/KakaoLinkRequiredResponse' },
+    { $ref: '#/components/schemas/KakaoAccountConflictResponse' },
+  ]);
+  assert.deepEqual(
+    response.body.components.schemas.KakaoLinkRequiredResponse.properties.data.required,
+    ['linkingToken', 'verificationMethods', 'expiresInSeconds'],
+  );
+  assert.ok(login.responses[502]);
+  assert.deepEqual(passwordLink.requestBody.content['application/json'].schema.required.sort(), [
+    'linkingToken',
+    'password',
+  ]);
+  assert.deepEqual(passwordLink.responses[401].content['application/json'].schema.oneOf, [
+    { $ref: '#/components/schemas/KakaoLinkTokenErrorResponse' },
+    { $ref: '#/components/schemas/KakaoLinkVerificationErrorResponse' },
+  ]);
+  assert.equal(
+    emailLinkRequest.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/KakaoLinkTokenErrorResponse',
+  );
+  assert.equal(
+    emailLinkRequest.responses[200].content['application/json'].schema.$ref,
+    '#/components/schemas/KakaoLinkEmailVerificationResponse',
+  );
+  assert.deepEqual(
+    response.body.components.schemas.KakaoLinkEmailVerificationResponse.properties.data.required,
+    ['email', 'codeTtlSeconds', 'resendCooldownSeconds'],
+  );
+  assert.deepEqual(emailLink.requestBody.content['application/json'].schema.required.sort(), [
+    'code',
+    'linkingToken',
+  ]);
+  assert.equal(
+    emailLink.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/KakaoLinkTokenErrorResponse',
+  );
 });

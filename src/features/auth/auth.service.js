@@ -7,6 +7,7 @@ import { ERROR_CODES } from '../../config/error-codes.js';
 import { prisma } from '../../prisma/client.js';
 import { HttpError } from '../../utils/http-error.js';
 import { sendEmailVerificationCode } from './auth.mailer.js';
+import { getKakaoUser } from './kakao.client.js';
 
 const passwordSaltRounds = 12;
 const emailVerificationJwtTtl = '10m';
@@ -663,4 +664,324 @@ export const refreshAccessToken = async ({ refreshToken }) => {
     tokenType: 'Bearer',
     ...result,
   };
+};
+
+const kakaoLinkTokenTtlSeconds = env.KAKAO_LINK_TOKEN_TTL_SECONDS;
+const kakaoLinkPasswordMaxAttempts = env.KAKAO_LINK_PASSWORD_MAX_ATTEMPTS;
+const kakaoLinkPasswordLockSeconds = env.KAKAO_LINK_PASSWORD_LOCK_SECONDS;
+
+const issueLoginTokens = async (user, now = new Date(), tx = prisma) => {
+  await tx.user.update({ where: { id: user.id }, data: { lastLoginAt: now } });
+  return {
+    accessToken: createAccessToken(user),
+    refreshToken: await createRefreshToken(user.id, now, tx),
+    tokenType: 'Bearer',
+    user: serializeSignupUser(user),
+  };
+};
+
+const createKakaoLinkSession = async (user, kakaoUser) => {
+  const now = new Date();
+  const tokenFamilyId = randomUUID();
+  const linkingToken = jwt.sign(
+    {
+      purpose: 'kakaoLink',
+      userId: user.id.toString(),
+      tokenFamilyId,
+      ...kakaoUser,
+    },
+    env.JWT_ACCESS_SECRET,
+    { expiresIn: kakaoLinkTokenTtlSeconds },
+  );
+
+  await prisma.authToken.create({
+    data: {
+      userId: user.id,
+      tokenHash: hashRefreshToken(linkingToken),
+      tokenFamilyId,
+      emailSnapshot: user.email,
+      tokenType: 'KAKAO_LINK',
+      expiresAt: new Date(now.getTime() + kakaoLinkTokenTtlSeconds * 1000),
+    },
+  });
+
+  return linkingToken;
+};
+
+const throwInvalidKakaoLinkToken = () => {
+  throw new HttpError(401, '계정 연결 정보가 만료되었거나 올바르지 않습니다.', {
+    errorCode: ERROR_CODES.AUTH4014,
+  });
+};
+
+const getKakaoLinkSession = async (linkingToken) => {
+  let payload;
+  try {
+    payload = jwt.verify(linkingToken, env.JWT_ACCESS_SECRET);
+  } catch (_error) {
+    throwInvalidKakaoLinkToken();
+  }
+
+  if (payload.purpose !== 'kakaoLink' || !payload.userId || !payload.kakaoUserId) {
+    throwInvalidKakaoLinkToken();
+  }
+
+  const session = await prisma.authToken.findUnique({
+    where: { tokenHash: hashRefreshToken(linkingToken) },
+    include: { user: true },
+  });
+  const now = new Date();
+
+  if (
+    !session ||
+    session.tokenType !== 'KAKAO_LINK' ||
+    session.usedAt ||
+    session.expiresAt <= now ||
+    session.userId?.toString() !== payload.userId ||
+    session.tokenFamilyId !== payload.tokenFamilyId ||
+    !session.user
+  ) {
+    throwInvalidKakaoLinkToken();
+  }
+
+  return { session, payload, now };
+};
+
+const completeKakaoLink = async (session, payload, now) => {
+  const conflictingUser = await prisma.user.findUnique({
+    where: { kakaoUserId: payload.kakaoUserId },
+    select: { id: true },
+  });
+  if (conflictingUser && conflictingUser.id !== session.userId) {
+    throw new HttpError(409, '이미 다른 계정에 연결된 카카오 계정입니다.', {
+      errorCode: ERROR_CODES.AUTH4094,
+    });
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const consume = await tx.authToken.updateMany({
+      where: { id: session.id, usedAt: null, expiresAt: { gt: now } },
+      data: { usedAt: now },
+    });
+    if (consume.count !== 1) {
+      throwInvalidKakaoLinkToken();
+    }
+
+    const linked = await tx.user.updateMany({
+      where: {
+        id: session.userId,
+        OR: [{ kakaoUserId: null }, { kakaoUserId: payload.kakaoUserId }],
+      },
+      data: { kakaoUserId: payload.kakaoUserId },
+    });
+    if (linked.count !== 1) {
+      throw new HttpError(409, '이미 다른 계정에 연결된 카카오 계정입니다.', {
+        errorCode: ERROR_CODES.AUTH4094,
+      });
+    }
+
+    await tx.authToken.updateMany({
+      where: {
+        tokenFamilyId: session.tokenFamilyId,
+        tokenType: 'KAKAO_LINK_EMAIL',
+        usedAt: null,
+      },
+      data: { usedAt: now },
+    });
+
+    const user = await tx.user.findUnique({ where: { id: session.userId } });
+    return issueLoginTokens(user, now, tx);
+  });
+};
+
+export const kakaoLogin = async ({ authorizationCode }) => {
+  const kakaoUser = await getKakaoUser(authorizationCode);
+  const kakaoMember = await prisma.user.findUnique({
+    where: { kakaoUserId: kakaoUser.kakaoUserId },
+  });
+
+  if (kakaoMember) {
+    return prisma.$transaction((tx) => issueLoginTokens(kakaoMember, new Date(), tx));
+  }
+
+  const emailMember = await prisma.user.findUnique({ where: { email: kakaoUser.email } });
+  if (emailMember) {
+    if (emailMember.kakaoUserId && emailMember.kakaoUserId !== kakaoUser.kakaoUserId) {
+      throw new HttpError(409, '이미 다른 계정에 연결된 카카오 계정입니다.', {
+        errorCode: ERROR_CODES.AUTH4094,
+      });
+    }
+
+    const linkingToken = await createKakaoLinkSession(emailMember, kakaoUser);
+    throw new HttpError(409, '동일한 이메일로 가입된 계정의 본인 확인이 필요합니다.', {
+      errorCode: ERROR_CODES.AUTH4093,
+      data: {
+        linkingToken,
+        verificationMethods: ['PASSWORD', 'EMAIL'],
+        expiresInSeconds: kakaoLinkTokenTtlSeconds,
+      },
+    });
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const user = await tx.user.create({
+        data: {
+          email: kakaoUser.email,
+          kakaoUserId: kakaoUser.kakaoUserId,
+          loginProvider: 'KAKAO',
+          emailVerifiedAt: now,
+          nickname: kakaoUser.nickname,
+          profileImageUrl: kakaoUser.profileImageUrl,
+        },
+      });
+      return issueLoginTokens(user, now, tx);
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new HttpError(409, '이미 다른 계정에 연결된 카카오 계정입니다.', {
+        errorCode: ERROR_CODES.AUTH4094,
+      });
+    }
+    throw error;
+  }
+};
+
+export const kakaoLinkByPassword = async ({ linkingToken, password }) => {
+  const { session, payload, now } = await getKakaoLinkSession(linkingToken);
+
+  if (session.blockedUntil && session.blockedUntil > now) {
+    throw new HttpError(429, '비밀번호 확인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
+      errorCode: ERROR_CODES.AUTH4291,
+      ...createRateLimitMetadata(session.blockedUntil, now, 'KAKAO_LINK_PASSWORD_LOCK'),
+    });
+  }
+
+  const matched = await bcrypt.compare(password, session.user.passwordHash ?? dummyPasswordHash);
+  if (!session.user.passwordHash || !matched) {
+    const nextAttempts =
+      session.blockedUntil && session.blockedUntil <= now ? 1 : session.failedAttemptCount + 1;
+    const blockedUntil =
+      nextAttempts >= kakaoLinkPasswordMaxAttempts
+        ? new Date(now.getTime() + kakaoLinkPasswordLockSeconds * 1000)
+        : null;
+    await prisma.authToken.update({
+      where: { id: session.id },
+      data: { failedAttemptCount: nextAttempts, blockedUntil },
+    });
+
+    if (blockedUntil) {
+      throw new HttpError(429, '비밀번호 확인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
+        errorCode: ERROR_CODES.AUTH4291,
+        ...createRateLimitMetadata(blockedUntil, now, 'KAKAO_LINK_PASSWORD_LOCK'),
+      });
+    }
+
+    throw new HttpError(401, '계정 연결을 위한 본인 확인에 실패했습니다.', {
+      errorCode: ERROR_CODES.AUTH4013,
+    });
+  }
+
+  return completeKakaoLink(session, payload, now);
+};
+
+export const requestKakaoLinkEmailVerification = async ({ linkingToken }) => {
+  const { session, now } = await getKakaoLinkSession(linkingToken);
+  const recent = await prisma.authToken.findFirst({
+    where: {
+      tokenFamilyId: session.tokenFamilyId,
+      tokenType: 'KAKAO_LINK_EMAIL',
+      createdAt: { gt: new Date(now.getTime() - emailVerificationResendCooldownSeconds * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (recent) {
+    const retryAt = new Date(
+      recent.createdAt.getTime() + emailVerificationResendCooldownSeconds * 1000,
+    );
+    throwEmailVerificationRateLimitedError(
+      retryAt,
+      now,
+      emailVerificationRateLimitTypes.RESEND_COOLDOWN,
+    );
+  }
+
+  const code = createEmailVerificationCode();
+  const expiresAt = new Date(now.getTime() + emailVerificationCodeTtlSeconds * 1000);
+  const authToken = await prisma.authToken.create({
+    data: {
+      userId: session.userId,
+      tokenFamilyId: session.tokenFamilyId,
+      emailSnapshot: session.user.email,
+      tokenType: 'KAKAO_LINK_EMAIL',
+      tokenHash: await bcrypt.hash(code, passwordSaltRounds),
+      expiresAt,
+    },
+  });
+
+  try {
+    await sendEmailVerificationCode({
+      email: session.user.email,
+      code,
+      codeTtlSeconds: emailVerificationCodeTtlSeconds,
+    });
+  } catch (error) {
+    await prisma.authToken.delete({ where: { id: authToken.id } });
+    throw error;
+  }
+
+  await prisma.authToken.updateMany({
+    where: {
+      id: { not: authToken.id },
+      tokenFamilyId: session.tokenFamilyId,
+      tokenType: 'KAKAO_LINK_EMAIL',
+      usedAt: null,
+    },
+    data: { usedAt: now },
+  });
+
+  return {
+    email: session.user.email,
+    codeTtlSeconds: emailVerificationCodeTtlSeconds,
+    resendCooldownSeconds: emailVerificationResendCooldownSeconds,
+    ...(env.NODE_ENV !== 'production' ? { debugCode: code } : {}),
+  };
+};
+
+export const kakaoLinkByEmail = async ({ linkingToken, code }) => {
+  const { session, payload, now } = await getKakaoLinkSession(linkingToken);
+  const verification = await prisma.authToken.findFirst({
+    where: {
+      tokenFamilyId: session.tokenFamilyId,
+      tokenType: 'KAKAO_LINK_EMAIL',
+      usedAt: null,
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  });
+
+  if (!verification || verification.expiresAt <= now) {
+    throw new HttpError(400, '이메일 인증 코드가 만료되었거나 올바르지 않습니다.', {
+      errorCode: ERROR_CODES.AUTH4001,
+    });
+  }
+  if (verification.blockedUntil && verification.blockedUntil > now) {
+    throwEmailVerificationConfirmRateLimitedError(verification.blockedUntil, now);
+  }
+
+  const matched = await bcrypt.compare(code, verification.tokenHash);
+  if (!matched) {
+    await recordEmailVerificationFailedAttempt(verification, now);
+    throwEmailVerificationConfirmError('이메일 인증 코드가 올바르지 않습니다.');
+  }
+
+  const consume = await prisma.authToken.updateMany({
+    where: { id: verification.id, usedAt: null },
+    data: { usedAt: now, failedAttemptCount: 0, blockedUntil: null },
+  });
+  if (consume.count !== 1) {
+    throwEmailVerificationConfirmError('이미 사용된 이메일 인증 코드입니다.');
+  }
+
+  return completeKakaoLink(session, payload, now);
 };
