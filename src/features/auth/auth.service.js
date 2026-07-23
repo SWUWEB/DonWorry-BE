@@ -972,6 +972,7 @@ export const kakaoLinkByEmail = async ({ linkingToken, code }) => {
   const matched = await bcrypt.compare(code, verification.tokenHash);
   if (!matched) {
     await recordEmailVerificationFailedAttempt(verification, now);
+    throwEmailVerificationConfirmError('이메일 인증 코드가 올바르지 않습니다.');
   }
 
   const consume = await prisma.authToken.updateMany({

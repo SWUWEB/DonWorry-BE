@@ -85,6 +85,46 @@ export const openApiDocument = {
           message: { type: 'string', example: 'Invalid request' },
         },
       },
+      KakaoLinkRequiredResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4093'] },
+          message: {
+            type: 'string',
+            example: '동일한 이메일로 가입된 계정의 본인 확인이 필요합니다.',
+          },
+          data: {
+            type: 'object',
+            required: ['linkingToken', 'verificationMethods', 'expiresInSeconds'],
+            properties: {
+              linkingToken: {
+                type: 'string',
+                description: '기존 LOCAL 계정의 본인 확인에 사용하는 일회용 토큰',
+              },
+              verificationMethods: {
+                type: 'array',
+                items: { type: 'string', enum: ['PASSWORD', 'EMAIL'] },
+                example: ['PASSWORD', 'EMAIL'],
+              },
+              expiresInSeconds: { type: 'integer', minimum: 1, example: 600 },
+            },
+          },
+        },
+      },
+      KakaoAccountConflictResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4094'] },
+          message: {
+            type: 'string',
+            example: '이미 다른 계정에 연결된 카카오 계정입니다.',
+          },
+        },
+      },
       UnauthorizedResponse: {
         type: 'object',
         required: ['success', 'message'],
@@ -920,7 +960,19 @@ export const openApiDocument = {
           },
           400: { description: 'Required Kakao account information is missing' },
           401: { description: 'Invalid or expired Kakao authorization code' },
-          409: { description: 'Local account verification is required or Kakao account conflict' },
+          409: {
+            description: 'Local account verification is required or Kakao account conflict',
+            content: {
+              'application/json': {
+                schema: {
+                  oneOf: [
+                    { $ref: '#/components/schemas/KakaoLinkRequiredResponse' },
+                    { $ref: '#/components/schemas/KakaoAccountConflictResponse' },
+                  ],
+                },
+              },
+            },
+          },
           502: { description: 'Kakao API communication failed' },
         },
       },

@@ -361,7 +361,14 @@ test('GET /api-docs.json documents Kakao login and account linking APIs', async 
   assert.deepEqual(login.requestBody.content['application/json'].schema.required, [
     'authorizationCode',
   ]);
-  assert.ok(login.responses[409]);
+  assert.deepEqual(login.responses[409].content['application/json'].schema.oneOf, [
+    { $ref: '#/components/schemas/KakaoLinkRequiredResponse' },
+    { $ref: '#/components/schemas/KakaoAccountConflictResponse' },
+  ]);
+  assert.deepEqual(
+    response.body.components.schemas.KakaoLinkRequiredResponse.properties.data.required,
+    ['linkingToken', 'verificationMethods', 'expiresInSeconds'],
+  );
   assert.ok(login.responses[502]);
   assert.deepEqual(passwordLink.requestBody.content['application/json'].schema.required.sort(), [
     'linkingToken',

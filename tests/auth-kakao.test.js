@@ -22,6 +22,7 @@ const emails = [
   'kakao-existing@example.com',
   'kakao-local@example.com',
   'kakao-email-link@example.com',
+  'kakao-invalid-code@example.com',
   'kakao-missing@example.com',
 ];
 
@@ -206,6 +207,29 @@ test('LOCAL member can link Kakao using a one-time email code', async () => {
 
   const linked = await prisma.user.findUnique({ where: { id: local.id } });
   assert.equal(linked.kakaoUserId, '555555555');
+});
+
+test('Kakao email linking rejects an invalid code without linking the account', async () => {
+  const local = await createLocalUser('kakao-invalid-code@example.com', 'kakaoinvalid');
+  mockKakao({ id: '666666666', email: local.email });
+  const loginResponse = await request(app)
+    .post('/api/v1/auth/kakao/login')
+    .send({ authorizationCode: 'valid-code' });
+  const linkingToken = loginResponse.body.data.linkingToken;
+
+  const requestResponse = await request(app)
+    .post('/api/v1/auth/kakao/link/email-verifications')
+    .send({ linkingToken });
+  const invalidCode = requestResponse.body.data.debugCode === '000000' ? '000001' : '000000';
+
+  const confirmResponse = await request(app)
+    .post('/api/v1/auth/kakao/link/email-verifications/confirm')
+    .send({ linkingToken, code: invalidCode });
+
+  assert.equal(confirmResponse.status, 400);
+  assert.equal(confirmResponse.body.code, 'AUTH4001');
+  const unlinked = await prisma.user.findUnique({ where: { id: local.id } });
+  assert.equal(unlinked.kakaoUserId, null);
 });
 
 test('Kakao login rejects missing or unverified required email', async () => {
