@@ -383,6 +383,14 @@ test('GET /api-docs.json documents Kakao login and account linking APIs', async 
     emailLinkRequest.responses[401].content['application/json'].schema.$ref,
     '#/components/schemas/KakaoLinkTokenErrorResponse',
   );
+  assert.equal(
+    emailLinkRequest.responses[200].content['application/json'].schema.$ref,
+    '#/components/schemas/KakaoLinkEmailVerificationResponse',
+  );
+  assert.deepEqual(
+    response.body.components.schemas.KakaoLinkEmailVerificationResponse.properties.data.required,
+    ['email', 'codeTtlSeconds', 'resendCooldownSeconds'],
+  );
   assert.deepEqual(emailLink.requestBody.content['application/json'].schema.required.sort(), [
     'code',
     'linkingToken',

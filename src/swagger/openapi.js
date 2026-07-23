@@ -149,6 +149,32 @@ export const openApiDocument = {
           },
         },
       },
+      KakaoLinkEmailVerificationResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: {
+            type: 'string',
+            example: '계정 연결 이메일 인증 요청이 완료되었습니다.',
+          },
+          data: {
+            type: 'object',
+            required: ['email', 'codeTtlSeconds', 'resendCooldownSeconds'],
+            properties: {
+              email: { type: 'string', format: 'email', example: 'user@example.com' },
+              codeTtlSeconds: { type: 'integer', minimum: 1, example: 600 },
+              resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
+              debugCode: {
+                type: 'string',
+                pattern: '^\\d{6}$',
+                example: '123456',
+                description: 'Non-production environments only.',
+              },
+            },
+          },
+        },
+      },
       UnauthorizedResponse: {
         type: 'object',
         required: ['success', 'message'],
@@ -1044,6 +1070,16 @@ export const openApiDocument = {
           kakaoLinkEmailRequestDto,
         ),
         responses: {
+          200: {
+            description: 'Kakao account linking email verification code sent',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/KakaoLinkEmailVerificationResponse',
+                },
+              },
+            },
+          },
           401: {
             description: 'Invalid linking token',
             content: {
