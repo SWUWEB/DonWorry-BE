@@ -1232,6 +1232,7 @@ export const openApiDocument = {
                         properties: {
                           id: { type: 'string', example: '1' },
                           userId: { type: 'string', example: '1' },
+                          categoryCode: { type: 'string', example: 'ELECTRONICS' },
                           productName: { type: 'string', example: '맥북 프로' },
                           productUrl: { type: 'string', example: 'https://apple.com/kr/macbook' },
                           price: { type: 'string', example: '2500000' },
@@ -1239,6 +1240,7 @@ export const openApiDocument = {
                             type: 'string',
                             example: 'https://images.com/macbook.png',
                           },
+                          reason: { type: 'string', example: '개발 작업용 스펙 업그레이드' },
                           waitType: { type: 'string', example: 'ONE_WEEK' },
                           waitUntil: {
                             type: 'string',
@@ -1273,6 +1275,7 @@ export const openApiDocument = {
                       properties: {
                         id: { type: 'string', example: '1' },
                         userId: { type: 'string', example: '1' },
+                        categoryCode: { type: 'string', example: 'ELECTRONICS' },
                         productName: { type: 'string', example: '맥북 프로' },
                         productUrl: { type: 'string', example: 'https://apple.com/kr/macbook' },
                         price: { type: 'string', example: '2500000' },
@@ -1280,6 +1283,7 @@ export const openApiDocument = {
                           type: 'string',
                           example: 'https://images.com/macbook.png',
                         },
+                        reason: { type: 'string', example: '개발 작업용 스펙 업그레이드' },
                         waitType: { type: 'string', example: 'ONE_WEEK' },
                         waitUntil: {
                           type: 'string',
@@ -1315,6 +1319,7 @@ export const openApiDocument = {
                       properties: {
                         id: { type: 'string', example: '1' },
                         userId: { type: 'string', example: '1' },
+                        categoryCode: { type: 'string', example: 'ELECTRONICS' },
                         productName: { type: 'string', example: '맥북 프로' },
                         productUrl: { type: 'string', example: 'https://apple.com/kr/macbook' },
                         price: { type: 'string', example: '2500000' },
@@ -1322,6 +1327,7 @@ export const openApiDocument = {
                           type: 'string',
                           example: 'https://images.com/macbook.png',
                         },
+                        reason: { type: 'string', example: '개발 작업용 스펙 업그레이드' },
                         waitType: { type: 'string', example: 'ONE_WEEK' },
                         waitUntil: {
                           type: 'string',
@@ -1385,10 +1391,12 @@ export const openApiDocument = {
                       properties: {
                         id: { type: 'string', example: '1' },
                         userId: { type: 'string', example: '1' },
+                        categoryCode: { type: 'string', example: 'ELECTRONICS' },
                         productName: { type: 'string', example: '아이패드 프로' },
                         productUrl: { type: 'string', example: 'https://apple.com/kr/ipad' },
                         price: { type: 'string', example: '1500000' },
                         productImageUrl: { type: 'string', example: 'https://images.com/ipad.png' },
+                        reason: { type: 'string', example: '필기 및 드로잉용' },
                         waitType: { type: 'string', example: 'ONE_DAY' },
                         waitUntil: {
                           type: 'string',
