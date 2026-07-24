@@ -62,6 +62,15 @@ enum DecisionReasonType {
   OTHER
 }
 
+enum WithdrawalReasonType {
+  LOW_FREQUENCY
+  MISSING_FEATURE
+  INCONVENIENT
+  PRIVACY_CONCERN
+  SWITCHING_SERVICE
+  OTHER
+}
+
 model User {
   id                      BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
   email                   String        @unique @db.VarChar(255)
@@ -250,4 +259,13 @@ model WishlistDecision {
   @@unique([wishlistItemId, decisionRound])
   @@index([wishlistItemId])
   @@map("wishlist_decisions")
+}
+
+model WithdrawalAudit {
+  id            BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  userEmailHash String               @map("user_email_hash") @db.Char(64)
+  reasonType    WithdrawalReasonType @map("reason_type")
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  @@map("withdrawal_audit")
 }

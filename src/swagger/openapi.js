@@ -28,6 +28,7 @@ import {
   notificationSettingsDto,
   savingGoalDto,
   updateMeDto,
+  deleteUserDto,
 } from '../features/users/users.dto.js';
 import {
   createWishlistItemDto,
@@ -972,7 +973,43 @@ export const openApiDocument = {
           },
         },
       },
-      delete: securedOperation('Users', '회원 탈퇴'),
+      delete: {
+        ...securedJsonOperation('Users', '회원 탈퇴', deleteUserDto),
+        responses: {
+          200: {
+            description: '회원 탈퇴 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: '회원 탈퇴 성공' },
+                    data: {
+                      nullable: true,
+                      example: null,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '비밀번호가 올바르지 않습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4001',
+                  message: '비밀번호가 올바르지 않습니다.',
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/users/me/password': {
       patch: securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),

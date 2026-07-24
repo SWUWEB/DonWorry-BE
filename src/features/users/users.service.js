@@ -1,6 +1,8 @@
 import { prisma } from '../../prisma/client.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
+import { createHash } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 
 export const getMe = async (userId) => {
   const user = await prisma.user.findUnique({
@@ -120,4 +122,42 @@ export const deleteSavingGoal = async (userId) => {
     ...updatedUser,
     id: updatedUser.id.toString(),
   };
+};
+
+export const deleteUser = async (userId, password, reasonType) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, passwordHash: true },
+  });
+  if (!user || !user.passwordHash) {
+    throw new HttpError(400, '비밀번호가 올바르지 않습니다.', {
+      errorCode: ERROR_CODES.USER4001,
+    });
+  }
+
+  const isPasswordMatched = await bcrypt.compare(password, user.passwordHash);
+  if (!isPasswordMatched) {
+    throw new HttpError(400, '비밀번호가 올바르지 않습니다.', {
+      errorCode: ERROR_CODES.USER4001,
+    });
+  }
+  await prisma.$transaction(async (tx) => {
+    if (reasonType) {
+      await tx.withdrawalAudit.create({
+        data: {
+          userEmailHash: createHash('sha256').update(user.email).digest('hex'),
+          reasonType,
+        },
+      });
+    }
+
+    await tx.authToken.deleteMany({
+      where: { userId },
+    });
+
+    await tx.user.delete({
+      where: { id: userId },
+    });
+  });
+  return null;
 };
