@@ -599,6 +599,40 @@ export const login = async ({ loginId, password }) => {
   };
 };
 
+export const logout = async ({ refreshToken }, userId) => {
+  const now = new Date();
+  const authToken = await prisma.authToken.findUnique({
+    where: { tokenHash: hashRefreshToken(refreshToken) },
+    select: {
+      userId: true,
+      tokenFamilyId: true,
+      tokenType: true,
+      expiresAt: true,
+    },
+  });
+
+  if (
+    !authToken ||
+    authToken.tokenType !== 'REFRESH_TOKEN' ||
+    !authToken.userId ||
+    authToken.userId !== userId ||
+    !authToken.tokenFamilyId ||
+    authToken.expiresAt <= now
+  ) {
+    throwInvalidRefreshTokenError();
+  }
+
+  await prisma.authToken.updateMany({
+    where: {
+      userId,
+      tokenFamilyId: authToken.tokenFamilyId,
+      tokenType: 'REFRESH_TOKEN',
+      usedAt: null,
+    },
+    data: { usedAt: now },
+  });
+};
+
 export const refreshAccessToken = async ({ refreshToken }) => {
   const now = new Date();
   const tokenHash = hashRefreshToken(refreshToken);
