@@ -48,6 +48,14 @@ export const loginDto = z.object({
   body: z.object({ loginId, password }).strict(),
 });
 
+export const logoutDto = z.object({
+  body: z
+    .object({
+      refreshToken: z.string().trim().min(1, 'refreshToken은 필수입니다.'),
+    })
+    .strict(),
+});
+
 export const kakaoLoginDto = z.object({
   body: z
     .object({ authorizationCode: z.string().trim().min(1, '인가 코드는 필수입니다.') })
