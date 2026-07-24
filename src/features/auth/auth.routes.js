@@ -6,8 +6,12 @@ import {
   checkLoginIdController,
   confirmEmailVerificationController,
   createNotImplementedController,
+  confirmKakaoLinkEmailController,
+  kakaoLinkPasswordController,
+  kakaoLoginController,
   loginController,
   refreshTokenController,
+  requestKakaoLinkEmailController,
   requestEmailVerificationController,
   signupController,
 } from './auth.controller.js';
@@ -16,6 +20,10 @@ import {
   checkLoginIdDto,
   emailVerificationConfirmDto,
   emailVerificationRequestDto,
+  kakaoLinkEmailConfirmDto,
+  kakaoLinkEmailRequestDto,
+  kakaoLinkPasswordDto,
+  kakaoLoginDto,
   loginDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
@@ -45,4 +53,15 @@ authRouter.post(
 );
 authRouter.post('/password-reset/request', validate(passwordResetRequestDto), todo);
 authRouter.patch('/password-reset/confirm', validate(passwordResetConfirmDto), todo);
-authRouter.post('/kakao/login', todo);
+authRouter.post('/kakao/login', validate(kakaoLoginDto), kakaoLoginController);
+authRouter.post('/kakao/link', validate(kakaoLinkPasswordDto), kakaoLinkPasswordController);
+authRouter.post(
+  '/kakao/link/email-verifications',
+  validate(kakaoLinkEmailRequestDto),
+  requestKakaoLinkEmailController,
+);
+authRouter.post(
+  '/kakao/link/email-verifications/confirm',
+  validate(kakaoLinkEmailConfirmDto),
+  confirmKakaoLinkEmailController,
+);
