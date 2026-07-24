@@ -10,6 +10,7 @@ import {
   kakaoLinkPasswordController,
   kakaoLoginController,
   loginController,
+  logoutController,
   refreshTokenController,
   requestKakaoLinkEmailController,
   requestEmailVerificationController,
@@ -25,6 +26,7 @@ import {
   kakaoLinkPasswordDto,
   kakaoLoginDto,
   loginDto,
+  logoutDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
   refreshTokenDto,
@@ -37,7 +39,7 @@ const todo = createNotImplementedController('auth');
 
 authRouter.post('/signup', validate(signupDto), signupController);
 authRouter.post('/login', validate(loginDto), loginController);
-authRouter.post('/logout', requireAuth, todo);
+authRouter.post('/logout', requireAuth, validate(logoutDto), logoutController);
 authRouter.post('/refresh', validate(refreshTokenDto), refreshTokenController);
 authRouter.get('/check-email', validate(checkEmailDto), checkEmailController);
 authRouter.get('/check-login-id', validate(checkLoginIdDto), checkLoginIdController);

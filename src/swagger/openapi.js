@@ -8,6 +8,7 @@ import {
   kakaoLinkPasswordDto,
   kakaoLoginDto,
   loginDto,
+  logoutDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
   refreshTokenDto,
@@ -786,7 +787,33 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/logout': {
-      post: securedOperation('Auth', '로그아웃'),
+      post: {
+        ...securedJsonOperation('Auth', '로그아웃', logoutDto),
+        description:
+          '현재 refresh token family의 미사용 refresh token만 폐기합니다. 다른 기기 또는 다른 token family의 세션은 유지됩니다. Access token은 서버에서 즉시 폐기되지 않으므로 로그아웃 성공 후 클라이언트가 access token과 refresh token을 모두 삭제해야 합니다.',
+        responses: {
+          204: {
+            description: '현재 로그인 세션 종료 완료. 응답 본문은 없습니다.',
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: {
+            description:
+              'Access token 인증 실패 또는 유효하지 않거나 다른 사용자가 소유한 refresh token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/refresh': {
       post: {

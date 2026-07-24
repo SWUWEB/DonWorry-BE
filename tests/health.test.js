@@ -224,6 +224,30 @@ test('GET /api-docs.json documents refresh token API', async () => {
   );
 });
 
+test('GET /api-docs.json documents logout authentication, request, and responses', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const operation = response.body.paths['/api/v1/auth/logout'].post;
+  const requestSchema = operation.requestBody.content['application/json'].schema;
+
+  assert.deepEqual(operation.security, [{ bearerAuth: [] }]);
+  assert.deepEqual(requestSchema.required, ['refreshToken']);
+  assert.equal(requestSchema.properties.refreshToken.type, 'string');
+  assert.equal(operation.responses[204].content, undefined);
+  assert.equal(
+    operation.responses[400].content['application/json'].schema.$ref,
+    '#/components/schemas/ValidationErrorResponse',
+  );
+  assert.equal(
+    operation.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/ErrorResponse',
+  );
+  assert.match(operation.description, /클라이언트가 access token과 refresh token을 모두 삭제/);
+  assert.match(operation.description, /다른 token family의 세션은 유지/);
+});
+
 test('GET /api-docs.json documents email verification timer fields', async () => {
   const response = await request(createApp()).get('/api-docs.json');
 
