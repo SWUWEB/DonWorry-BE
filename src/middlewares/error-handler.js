@@ -28,6 +28,7 @@ export const errorHandler = (err, _req, res, _next) => {
     success: false,
     code: err.errorCode,
     message: statusCode === 500 ? 'Internal server error' : err.message,
+    data: err.data,
     retryAfterSeconds: err.retryAfterSeconds,
     retryAt: err.retryAt,
     rateLimitType: err.rateLimitType,

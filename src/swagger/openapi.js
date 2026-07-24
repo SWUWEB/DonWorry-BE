@@ -3,6 +3,10 @@ import {
   checkLoginIdDto,
   emailVerificationConfirmDto,
   emailVerificationRequestDto,
+  kakaoLinkEmailConfirmDto,
+  kakaoLinkEmailRequestDto,
+  kakaoLinkPasswordDto,
+  kakaoLoginDto,
   loginDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
@@ -82,6 +86,96 @@ export const openApiDocument = {
           message: { type: 'string', example: 'Invalid request' },
         },
       },
+      KakaoLinkRequiredResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4093'] },
+          message: {
+            type: 'string',
+            example: '동일한 이메일로 가입된 계정의 본인 확인이 필요합니다.',
+          },
+          data: {
+            type: 'object',
+            required: ['linkingToken', 'verificationMethods', 'expiresInSeconds'],
+            properties: {
+              linkingToken: {
+                type: 'string',
+                description: '기존 LOCAL 계정의 본인 확인에 사용하는 일회용 토큰',
+              },
+              verificationMethods: {
+                type: 'array',
+                items: { type: 'string', enum: ['PASSWORD', 'EMAIL'] },
+                example: ['PASSWORD', 'EMAIL'],
+              },
+              expiresInSeconds: { type: 'integer', minimum: 1, example: 600 },
+            },
+          },
+        },
+      },
+      KakaoAccountConflictResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4094'] },
+          message: {
+            type: 'string',
+            example: '이미 다른 계정에 연결된 카카오 계정입니다.',
+          },
+        },
+      },
+      KakaoLinkTokenErrorResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4014'] },
+          message: {
+            type: 'string',
+            example: '계정 연결 정보가 만료되었거나 올바르지 않습니다.',
+          },
+        },
+      },
+      KakaoLinkVerificationErrorResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4013'] },
+          message: {
+            type: 'string',
+            example: '계정 연결을 위한 본인 확인에 실패했습니다.',
+          },
+        },
+      },
+      KakaoLinkEmailVerificationResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: {
+            type: 'string',
+            example: '계정 연결 이메일 인증 요청이 완료되었습니다.',
+          },
+          data: {
+            type: 'object',
+            required: ['email', 'codeTtlSeconds', 'resendCooldownSeconds'],
+            properties: {
+              email: { type: 'string', format: 'email', example: 'user@example.com' },
+              codeTtlSeconds: { type: 'integer', minimum: 1, example: 600 },
+              resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
+              debugCode: {
+                type: 'string',
+                pattern: '^\\d{6}$',
+                example: '123456',
+                description: 'Non-production environments only.',
+              },
+            },
+          },
+        },
+      },
       UnauthorizedResponse: {
         type: 'object',
         required: ['success', 'message'],
@@ -114,7 +208,7 @@ export const openApiDocument = {
           },
           rateLimitType: {
             type: 'string',
-            enum: ['RESEND_COOLDOWN', 'SEND_LIMIT', 'CONFIRM_LOCK'],
+            enum: ['RESEND_COOLDOWN', 'SEND_LIMIT', 'CONFIRM_LOCK', 'KAKAO_LINK_PASSWORD_LOCK'],
             example: 'RESEND_COOLDOWN',
             description: '적용된 이메일 인증 제한 종류',
           },
@@ -906,7 +1000,140 @@ export const openApiDocument = {
       patch: publicJsonOperation('Auth', '비밀번호 재설정 완료', passwordResetConfirmDto),
     },
     '/api/v1/auth/kakao/login': {
-      post: publicOperation('Auth', '카카오 로그인'),
+      post: {
+        ...publicJsonOperation('Auth', '카카오 로그인', kakaoLoginDto),
+        responses: {
+          200: {
+            description: 'Kakao login completed',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } },
+            },
+          },
+          400: { description: 'Required Kakao account information is missing' },
+          401: { description: 'Invalid or expired Kakao authorization code' },
+          409: {
+            description: 'Local account verification is required or Kakao account conflict',
+            content: {
+              'application/json': {
+                schema: {
+                  oneOf: [
+                    { $ref: '#/components/schemas/KakaoLinkRequiredResponse' },
+                    { $ref: '#/components/schemas/KakaoAccountConflictResponse' },
+                  ],
+                },
+              },
+            },
+          },
+          502: { description: 'Kakao API communication failed' },
+        },
+      },
+    },
+    '/api/v1/auth/kakao/link': {
+      post: {
+        ...publicJsonOperation('Auth', 'LOCAL 비밀번호로 카카오 계정 연결', kakaoLinkPasswordDto),
+        responses: {
+          200: {
+            description: 'Kakao account linked',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } },
+            },
+          },
+          401: {
+            description: 'Invalid linking token or account verification failed',
+            content: {
+              'application/json': {
+                schema: {
+                  oneOf: [
+                    { $ref: '#/components/schemas/KakaoLinkTokenErrorResponse' },
+                    { $ref: '#/components/schemas/KakaoLinkVerificationErrorResponse' },
+                  ],
+                },
+              },
+            },
+          },
+          409: { description: 'Kakao account conflict' },
+          429: {
+            description: 'Too many attempts',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/auth/kakao/link/email-verifications': {
+      post: {
+        ...publicJsonOperation(
+          'Auth',
+          '카카오 계정 연결 이메일 인증 요청',
+          kakaoLinkEmailRequestDto,
+        ),
+        responses: {
+          200: {
+            description: 'Kakao account linking email verification code sent',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/KakaoLinkEmailVerificationResponse',
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Invalid linking token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/KakaoLinkTokenErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: 'Email verification request rate limited',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/auth/kakao/link/email-verifications/confirm': {
+      post: {
+        ...publicJsonOperation(
+          'Auth',
+          '이메일 인증으로 카카오 계정 연결',
+          kakaoLinkEmailConfirmDto,
+        ),
+        responses: {
+          200: {
+            description: 'Kakao account linked',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } },
+            },
+          },
+          400: { description: 'Invalid email verification code' },
+          401: {
+            description: 'Invalid linking token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/KakaoLinkTokenErrorResponse' },
+              },
+            },
+          },
+          409: { description: 'Kakao account conflict' },
+          429: {
+            description: 'Too many attempts',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/users/me': {
       get: {

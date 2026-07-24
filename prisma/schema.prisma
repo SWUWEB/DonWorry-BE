@@ -16,6 +16,8 @@ enum TokenType {
   EMAIL_VERIFY
   PASSWORD_RESET
   REFRESH_TOKEN
+  KAKAO_LINK
+  KAKAO_LINK_EMAIL
 }
 
 enum ReportType {
@@ -121,7 +123,7 @@ model AuthToken {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
-  @@index([tokenFamilyId, tokenType, usedAt])
+  @@index([tokenFamilyId, tokenType, usedAt], map: "auth_tokens_token_family_type_used_idx")
   @@map("auth_tokens")
 }
 

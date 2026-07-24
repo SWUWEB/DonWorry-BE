@@ -4,8 +4,12 @@ import {
   checkEmail,
   checkLoginId,
   confirmEmailVerification,
+  kakaoLinkByEmail,
+  kakaoLinkByPassword,
+  kakaoLogin,
   login,
   refreshAccessToken,
+  requestKakaoLinkEmailVerification,
   requestEmailVerification,
   signup,
 } from './auth.service.js';
@@ -24,6 +28,26 @@ export const loginController = asyncHandler(async (req, res) => {
   const result = await login(req.validated.body);
 
   return ok(res, result, '로그인이 완료되었습니다.');
+});
+
+export const kakaoLoginController = asyncHandler(async (req, res) => {
+  const result = await kakaoLogin(req.validated.body);
+  return ok(res, result, '카카오 로그인이 완료되었습니다.');
+});
+
+export const kakaoLinkPasswordController = asyncHandler(async (req, res) => {
+  const result = await kakaoLinkByPassword(req.validated.body);
+  return ok(res, result, '카카오 계정 연결이 완료되었습니다.');
+});
+
+export const requestKakaoLinkEmailController = asyncHandler(async (req, res) => {
+  const result = await requestKakaoLinkEmailVerification(req.validated.body);
+  return ok(res, result, '계정 연결 이메일 인증 요청이 완료되었습니다.');
+});
+
+export const confirmKakaoLinkEmailController = asyncHandler(async (req, res) => {
+  const result = await kakaoLinkByEmail(req.validated.body);
+  return ok(res, result, '카카오 계정 연결이 완료되었습니다.');
 });
 
 export const refreshTokenController = asyncHandler(async (req, res) => {
