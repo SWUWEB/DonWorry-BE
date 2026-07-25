@@ -33,6 +33,7 @@ import {
   notificationSettingsDto,
   savingGoalDto,
   updateMeDto,
+  deleteUserDto,
 } from '../features/users/users.dto.js';
 import {
   createWishlistItemDto,
@@ -1226,7 +1227,65 @@ export const openApiDocument = {
           },
         },
       },
-      delete: securedOperation('Users', '회원 탈퇴'),
+      delete: {
+        ...securedJsonOperation('Users', '회원 탈퇴', deleteUserDto),
+        responses: {
+          200: {
+            description: '회원 탈퇴 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: '회원 탈퇴 성공' },
+                    data: {
+                      nullable: true,
+                      example: null,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '비밀번호 불일치 또는 요청 값 검증 실패',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+                examples: {
+                  invalidPassword: {
+                    summary: '비밀번호 불일치',
+                    value: {
+                      success: false,
+                      code: 'USER4001',
+                      message: '비밀번호가 올바르지 않습니다.',
+                    },
+                  },
+                  validationFailed: {
+                    summary: '요청 값 검증 실패',
+                    value: {
+                      success: false,
+                      code: 'COMMON4001',
+                      message: 'Invalid request',
+                      errors: {
+                        formErrors: [],
+                        fieldErrors: { body: ['비밀번호를 입력해주세요.'] },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/users/me/password': {
       patch: securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),

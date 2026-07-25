@@ -39,3 +39,19 @@ export const notificationSettingsDto = z.object({
     notifyPushEnabled: z.boolean().optional(),
   }),
 });
+
+export const deleteUserDto = z.object({
+  body: z.object({
+    password: z.string().min(1, '비밀번호를 입력해주세요.'),
+    reasonType: z
+      .enum([
+        'LOW_FREQUENCY',
+        'MISSING_FEATURE',
+        'INCONVENIENT',
+        'PRIVACY_CONCERN',
+        'SWITCHING_SERVICE',
+        'OTHER',
+      ])
+      .optional(),
+  }),
+});
