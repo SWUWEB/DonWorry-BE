@@ -1249,14 +1249,36 @@ export const openApiDocument = {
             },
           },
           400: {
-            description: '비밀번호가 올바르지 않습니다.',
+            description: '비밀번호 불일치 또는 요청 값 검증 실패',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
-                example: {
-                  success: false,
-                  code: 'USER4001',
-                  message: '비밀번호가 올바르지 않습니다.',
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+                examples: {
+                  invalidPassword: {
+                    summary: '비밀번호 불일치',
+                    value: {
+                      success: false,
+                      code: 'USER4001',
+                      message: '비밀번호가 올바르지 않습니다.',
+                    },
+                  },
+                  validationFailed: {
+                    summary: '요청 값 검증 실패',
+                    value: {
+                      success: false,
+                      code: 'COMMON4001',
+                      message: 'Invalid request',
+                      errors: {
+                        formErrors: [],
+                        fieldErrors: { password: ['Required'] },
+                      },
+                    },
+                  },
                 },
               },
             },
