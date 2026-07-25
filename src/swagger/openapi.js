@@ -1275,7 +1275,7 @@ export const openApiDocument = {
                       message: 'Invalid request',
                       errors: {
                         formErrors: [],
-                        fieldErrors: { password: ['비밀번호를 입력해주세요.'] },
+                        fieldErrors: { body: ['비밀번호를 입력해주세요.'] },
                       },
                     },
                   },
