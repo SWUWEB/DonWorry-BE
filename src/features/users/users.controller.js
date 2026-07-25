@@ -33,10 +33,6 @@ export const deleteSavingGoalController = asyncHandler(async (req, res) => {
 });
 
 export const deleteUserController = asyncHandler(async (req, res) => {
-  const result = await deleteUser(
-    BigInt(req.user.userId),
-    req.validated.body.password,
-    req.validated.body.reasonType,
-  );
-  return ok(res, result, '회원 탈퇴 성공');
+  await deleteUser(req.user.userId, req.validated.body.password, req.validated.body.reasonType);
+  return ok(res, null, '회원 탈퇴 성공');
 });
