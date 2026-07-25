@@ -1,4 +1,4 @@
-import { lookup as dnsLookup } from 'node:dns/promises';
+﻿import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
 import * as cheerio from 'cheerio';
@@ -358,9 +358,73 @@ const readLimitedResponseBody = async (response) => {
   }
 
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
+  const contentType = response.headers?.get?.('content-type');
+  const contentTypeMatch = /charset\s*=\s*([^;\s]+)/i.exec(contentType || '');
+  const normalizeEncoding = (value) => value?.trim().toLowerCase().replace(/_/g, '-');
+  const getMetaCharset = (text) =>
+    /<meta[^>]*charset\s*=\s*['"]?([^'">\s]+)/i.exec(text)?.[1]?.trim().toLowerCase() ||
+    /<meta[^>]*http-equiv\s*=\s*['"]?content-type['"][^>]*content\s*=\s*['"][^'">]*charset\s*=\s*([^;'"'\s>]+)/i
+      .exec(text)?.[1]
+      ?.trim()
+      .toLowerCase();
+
+  let decoder;
+  const headerCharsetMatch = contentTypeMatch?.[1]?.replace(/['"]/g, '').trim();
+  if (headerCharsetMatch) {
+    try {
+      decoder = new TextDecoder(normalizeEncoding(headerCharsetMatch));
+    } catch {
+      decoder = undefined;
+    }
+  }
+
   let receivedBytes = 0;
   let result = '';
+  const chunks = [];
+
+  if (!decoder) {
+    const provisionalDecoder = new TextDecoder();
+    let detectedMetaCharset;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw createProductUrlError(
+          502,
+          ERROR_CODES.PRODUCT_URL5022,
+          '상품 페이지의 응답 크기가 너무 큽니다.',
+        );
+      }
+
+      chunks.push(new Uint8Array(value));
+      result += provisionalDecoder.decode(value, { stream: true });
+
+      if (!detectedMetaCharset) {
+        detectedMetaCharset = getMetaCharset(result);
+      }
+    }
+
+    const decodedSuffix = provisionalDecoder.decode();
+    if (!detectedMetaCharset) {
+      return result + decodedSuffix;
+    }
+
+    try {
+      decoder = new TextDecoder(normalizeEncoding(detectedMetaCharset));
+    } catch {
+      return result + decodedSuffix;
+    }
+
+    result = '';
+    for (const chunk of chunks) {
+      result += decoder.decode(chunk, { stream: true });
+    }
+
+    return result + decoder.decode();
+  }
 
   for (;;) {
     const { done, value } = await reader.read();
@@ -380,7 +444,6 @@ const readLimitedResponseBody = async (response) => {
 
   return result + decoder.decode();
 };
-
 const fetchProductPage = async (productUrl) => {
   let target = await validatePublicUrl(productUrl);
 
