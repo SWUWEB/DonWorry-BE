@@ -26,6 +26,11 @@ const emailVerificationCode = z
   .string()
   .trim()
   .regex(/^\d{6}$/, '인증 코드는 6자리 숫자여야 합니다.');
+const refreshTokenBodySchema = z
+  .object({
+    refreshToken: z.string().trim().min(1, 'refreshToken은 필수입니다.'),
+  })
+  .strict();
 
 export const signupDto = z.object({
   body: z
@@ -46,6 +51,10 @@ export const signupDto = z.object({
 
 export const loginDto = z.object({
   body: z.object({ loginId, password }).strict(),
+});
+
+export const logoutDto = z.object({
+  body: refreshTokenBodySchema,
 });
 
 export const kakaoLoginDto = z.object({
@@ -77,11 +86,7 @@ export const kakaoLinkEmailConfirmDto = z.object({
 });
 
 export const refreshTokenDto = z.object({
-  body: z
-    .object({
-      refreshToken: z.string().trim().min(1, 'refreshToken은 필수입니다.'),
-    })
-    .strict(),
+  body: refreshTokenBodySchema,
 });
 
 export const checkEmailDto = z.object({
