@@ -1,5 +1,7 @@
-import { notImplemented } from '../../utils/api-response.js';
+import { ok } from '../../utils/api-response.js';
+import { parseProductUrl } from './product-url.service.js';
 
-export const createNotImplementedController = (featureName) => (_req, res) => {
-  return notImplemented(res, featureName);
+export const parseProductUrlController = async (req, res) => {
+  const result = await parseProductUrl(req.validated.body);
+  return ok(res, result, 'url 파싱에 성공했습니다.');
 };

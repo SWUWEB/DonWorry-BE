@@ -1508,7 +1508,115 @@ export const openApiDocument = {
       post: securedJsonOperation('Interventions', '소비 위험도 계산', calculateRiskScoreDto),
     },
     '/api/v1/product-url/parse': {
-      post: securedJsonOperation('ProductUrl', '상품 URL 파싱', parseProductUrlDto),
+      post: {
+        ...securedJsonOperation('ProductUrl', '상품 URL 파싱', parseProductUrlDto),
+        responses: {
+          200: {
+            description: '상품 URL 파싱 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['success', 'message', 'data'],
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: 'url 파싱에 성공했습니다.' },
+                    data: {
+                      type: 'object',
+                      required: ['productName', 'price', 'occurredAt'],
+                      properties: {
+                        productName: { type: 'string', example: '투썸플레이스 신봉점' },
+                        price: { type: 'number', example: 6100 },
+                        occurredAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-05-17T12:00:00.000Z',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '잘못된 URL 또는 접근할 수 없는 내부 주소',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+                examples: {
+                  invalidRequest: {
+                    summary: 'URL 형식 오류',
+                    value: {
+                      success: false,
+                      code: 'COMMON4001',
+                      message: 'Invalid request',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          422: {
+            description: '상품 정보 파싱 실패',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'PRODUCT_URL4221',
+                  message: '상품 정보를 파싱하지 못했습니다.',
+                },
+              },
+            },
+          },
+          502: {
+            description: '외부 상품 페이지 요청 실패',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  upstreamFailure: {
+                    summary: '외부 상품 페이지 접근 실패',
+                    value: {
+                      success: false,
+                      code: 'PRODUCT_URL5021',
+                      message: '외부 상품 페이지에 접근할 수 없습니다.',
+                    },
+                  },
+                  responseTooLarge: {
+                    summary: '외부 상품 페이지 응답 크기 초과',
+                    value: {
+                      success: false,
+                      code: 'PRODUCT_URL5022',
+                      message: '상품 페이지의 응답 크기가 너무 큽니다.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          504: {
+            description: '외부 상품 페이지 응답 시간 초과',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'PRODUCT_URL5041',
+                  message: '외부 상품 페이지 응답 시간이 초과되었습니다.',
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/reports/consumption/summary': {
       get: securedOperation('Reports', '간단 소비 분석 리포트 조회'),
