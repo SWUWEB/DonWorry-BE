@@ -264,10 +264,10 @@ model WishlistDecision {
 }
 
 model WithdrawalAudit {
-  id            BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
-  userEmailHash String               @map("user_email_hash") @db.Char(64)
-  reasonType    WithdrawalReasonType @map("reason_type")
-  createdAt     DateTime             @default(now()) @map("created_at")
+  id            BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
+  userEmailHash String                @map("user_email_hash") @db.Char(64)
+  reasonType    WithdrawalReasonType? @map("reason_type")
+  createdAt     DateTime              @default(now()) @map("created_at")
 
   @@map("withdrawal_audit")
 }

@@ -142,16 +142,14 @@ export const deleteUser = async (userId, password, reasonType) => {
     });
   }
   await prisma.$transaction(async (tx) => {
-    if (reasonType) {
-      await tx.withdrawalAudit.create({
-        data: {
-          userEmailHash: createHmac('sha256', process.env.JWT_ACCESS_SECRET)
-            .update(user.email)
-            .digest('hex'),
-          reasonType,
-        },
-      });
-    }
+    await tx.withdrawalAudit.create({
+      data: {
+        userEmailHash: createHmac('sha256', process.env.JWT_ACCESS_SECRET)
+          .update(user.email)
+          .digest('hex'),
+        reasonType: reasonType ?? null,
+      },
+    });
     await tx.authToken.deleteMany({
       where: { userId },
     });
