@@ -26,7 +26,7 @@ export const updateWishlistItemDto = wishlistItemIdDto.extend({
     categoryCode: z
       .string()
       .optional()
-      .refine((val) => CATEGORY_CODE_SET.has(val), {
+      .refine((val) => val === undefined || CATEGORY_CODE_SET.has(val), {
         message: '유효한 카테고리 코드가 아닙니다.',
       }),
     productName: z.string().min(1).max(255).optional(),
