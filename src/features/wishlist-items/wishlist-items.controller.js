@@ -68,8 +68,7 @@ export const getItemById = async (req, res, next) => {
 export const updateItem = async (req, res, next) => {
   try {
     const validatedParams = req.validated.params;
-    // 💡 req.validated.body가 없거나 빈 경우 req.body 또는 빈 객체를 서비스로 전달
-    const updateData = req.validated?.body ?? req.body ?? {};
+    const updateData = req.validated.body;
     const loggedInUserId = BigInt(req.user.userId);
 
     const updatedItem = await wishlistItemsService.updateWishlistItem(
