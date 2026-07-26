@@ -1,5 +1,5 @@
 import { asyncHandler } from '../../utils/async-handler.js';
-import { created, ok, notImplemented } from '../../utils/api-response.js';
+import { created, noContent, ok, notImplemented } from '../../utils/api-response.js';
 import {
   checkEmail,
   checkLoginId,
@@ -8,6 +8,7 @@ import {
   kakaoLinkByPassword,
   kakaoLogin,
   login,
+  logout,
   refreshAccessToken,
   requestKakaoLinkEmailVerification,
   requestEmailVerification,
@@ -28,6 +29,12 @@ export const loginController = asyncHandler(async (req, res) => {
   const result = await login(req.validated.body);
 
   return ok(res, result, '로그인이 완료되었습니다.');
+});
+
+export const logoutController = asyncHandler(async (req, res) => {
+  await logout(req.validated.body, BigInt(req.user.userId));
+
+  return noContent(res);
 });
 
 export const kakaoLoginController = asyncHandler(async (req, res) => {
