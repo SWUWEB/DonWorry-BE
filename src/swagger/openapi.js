@@ -3,7 +3,12 @@ import {
   checkLoginIdDto,
   emailVerificationConfirmDto,
   emailVerificationRequestDto,
+  kakaoLinkEmailConfirmDto,
+  kakaoLinkEmailRequestDto,
+  kakaoLinkPasswordDto,
+  kakaoLoginDto,
   loginDto,
+  logoutDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
   refreshTokenDto,
@@ -28,6 +33,7 @@ import {
   notificationSettingsDto,
   savingGoalDto,
   updateMeDto,
+  deleteUserDto,
 } from '../features/users/users.dto.js';
 import {
   createWishlistItemDto,
@@ -81,6 +87,96 @@ export const openApiDocument = {
           message: { type: 'string', example: 'Invalid request' },
         },
       },
+      KakaoLinkRequiredResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4093'] },
+          message: {
+            type: 'string',
+            example: '동일한 이메일로 가입된 계정의 본인 확인이 필요합니다.',
+          },
+          data: {
+            type: 'object',
+            required: ['linkingToken', 'verificationMethods', 'expiresInSeconds'],
+            properties: {
+              linkingToken: {
+                type: 'string',
+                description: '기존 LOCAL 계정의 본인 확인에 사용하는 일회용 토큰',
+              },
+              verificationMethods: {
+                type: 'array',
+                items: { type: 'string', enum: ['PASSWORD', 'EMAIL'] },
+                example: ['PASSWORD', 'EMAIL'],
+              },
+              expiresInSeconds: { type: 'integer', minimum: 1, example: 600 },
+            },
+          },
+        },
+      },
+      KakaoAccountConflictResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4094'] },
+          message: {
+            type: 'string',
+            example: '이미 다른 계정에 연결된 카카오 계정입니다.',
+          },
+        },
+      },
+      KakaoLinkTokenErrorResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4014'] },
+          message: {
+            type: 'string',
+            example: '계정 연결 정보가 만료되었거나 올바르지 않습니다.',
+          },
+        },
+      },
+      KakaoLinkVerificationErrorResponse: {
+        type: 'object',
+        required: ['success', 'code', 'message'],
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          code: { type: 'string', enum: ['AUTH4013'] },
+          message: {
+            type: 'string',
+            example: '계정 연결을 위한 본인 확인에 실패했습니다.',
+          },
+        },
+      },
+      KakaoLinkEmailVerificationResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: {
+            type: 'string',
+            example: '계정 연결 이메일 인증 요청이 완료되었습니다.',
+          },
+          data: {
+            type: 'object',
+            required: ['email', 'codeTtlSeconds', 'resendCooldownSeconds'],
+            properties: {
+              email: { type: 'string', format: 'email', example: 'user@example.com' },
+              codeTtlSeconds: { type: 'integer', minimum: 1, example: 600 },
+              resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
+              debugCode: {
+                type: 'string',
+                pattern: '^\\d{6}$',
+                example: '123456',
+                description: 'Non-production environments only.',
+              },
+            },
+          },
+        },
+      },
       UnauthorizedResponse: {
         type: 'object',
         required: ['success', 'message'],
@@ -113,7 +209,7 @@ export const openApiDocument = {
           },
           rateLimitType: {
             type: 'string',
-            enum: ['RESEND_COOLDOWN', 'SEND_LIMIT', 'CONFIRM_LOCK'],
+            enum: ['RESEND_COOLDOWN', 'SEND_LIMIT', 'CONFIRM_LOCK', 'KAKAO_LINK_PASSWORD_LOCK'],
             example: 'RESEND_COOLDOWN',
             description: '적용된 이메일 인증 제한 종류',
           },
@@ -692,7 +788,33 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/logout': {
-      post: securedOperation('Auth', '로그아웃'),
+      post: {
+        ...securedJsonOperation('Auth', '로그아웃', logoutDto),
+        description:
+          '현재 refresh token family의 미사용 refresh token만 폐기합니다. 다른 기기 또는 다른 token family의 세션은 유지됩니다. Access token은 서버에서 즉시 폐기되지 않으므로 로그아웃 성공 후 클라이언트가 access token과 refresh token을 모두 삭제해야 합니다.',
+        responses: {
+          204: {
+            description: '현재 로그인 세션 종료 완료. 응답 본문은 없습니다.',
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: {
+            description:
+              'Access token 인증 실패 또는 유효하지 않거나 다른 사용자가 소유한 refresh token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/refresh': {
       post: {
@@ -905,7 +1027,140 @@ export const openApiDocument = {
       patch: publicJsonOperation('Auth', '비밀번호 재설정 완료', passwordResetConfirmDto),
     },
     '/api/v1/auth/kakao/login': {
-      post: publicOperation('Auth', '카카오 로그인'),
+      post: {
+        ...publicJsonOperation('Auth', '카카오 로그인', kakaoLoginDto),
+        responses: {
+          200: {
+            description: 'Kakao login completed',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } },
+            },
+          },
+          400: { description: 'Required Kakao account information is missing' },
+          401: { description: 'Invalid or expired Kakao authorization code' },
+          409: {
+            description: 'Local account verification is required or Kakao account conflict',
+            content: {
+              'application/json': {
+                schema: {
+                  oneOf: [
+                    { $ref: '#/components/schemas/KakaoLinkRequiredResponse' },
+                    { $ref: '#/components/schemas/KakaoAccountConflictResponse' },
+                  ],
+                },
+              },
+            },
+          },
+          502: { description: 'Kakao API communication failed' },
+        },
+      },
+    },
+    '/api/v1/auth/kakao/link': {
+      post: {
+        ...publicJsonOperation('Auth', 'LOCAL 비밀번호로 카카오 계정 연결', kakaoLinkPasswordDto),
+        responses: {
+          200: {
+            description: 'Kakao account linked',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } },
+            },
+          },
+          401: {
+            description: 'Invalid linking token or account verification failed',
+            content: {
+              'application/json': {
+                schema: {
+                  oneOf: [
+                    { $ref: '#/components/schemas/KakaoLinkTokenErrorResponse' },
+                    { $ref: '#/components/schemas/KakaoLinkVerificationErrorResponse' },
+                  ],
+                },
+              },
+            },
+          },
+          409: { description: 'Kakao account conflict' },
+          429: {
+            description: 'Too many attempts',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/auth/kakao/link/email-verifications': {
+      post: {
+        ...publicJsonOperation(
+          'Auth',
+          '카카오 계정 연결 이메일 인증 요청',
+          kakaoLinkEmailRequestDto,
+        ),
+        responses: {
+          200: {
+            description: 'Kakao account linking email verification code sent',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/KakaoLinkEmailVerificationResponse',
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Invalid linking token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/KakaoLinkTokenErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: 'Email verification request rate limited',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/auth/kakao/link/email-verifications/confirm': {
+      post: {
+        ...publicJsonOperation(
+          'Auth',
+          '이메일 인증으로 카카오 계정 연결',
+          kakaoLinkEmailConfirmDto,
+        ),
+        responses: {
+          200: {
+            description: 'Kakao account linked',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } },
+            },
+          },
+          400: { description: 'Invalid email verification code' },
+          401: {
+            description: 'Invalid linking token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/KakaoLinkTokenErrorResponse' },
+              },
+            },
+          },
+          409: { description: 'Kakao account conflict' },
+          429: {
+            description: 'Too many attempts',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/users/me': {
       get: {
@@ -972,7 +1227,65 @@ export const openApiDocument = {
           },
         },
       },
-      delete: securedOperation('Users', '회원 탈퇴'),
+      delete: {
+        ...securedJsonOperation('Users', '회원 탈퇴', deleteUserDto),
+        responses: {
+          200: {
+            description: '회원 탈퇴 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: '회원 탈퇴 성공' },
+                    data: {
+                      nullable: true,
+                      example: null,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '비밀번호 불일치 또는 요청 값 검증 실패',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+                examples: {
+                  invalidPassword: {
+                    summary: '비밀번호 불일치',
+                    value: {
+                      success: false,
+                      code: 'USER4001',
+                      message: '비밀번호가 올바르지 않습니다.',
+                    },
+                  },
+                  validationFailed: {
+                    summary: '요청 값 검증 실패',
+                    value: {
+                      success: false,
+                      code: 'COMMON4001',
+                      message: 'Invalid request',
+                      errors: {
+                        formErrors: [],
+                        fieldErrors: { body: ['비밀번호를 입력해주세요.'] },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/users/me/password': {
       patch: securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),
@@ -1195,7 +1508,115 @@ export const openApiDocument = {
       post: securedJsonOperation('Interventions', '소비 위험도 계산', calculateRiskScoreDto),
     },
     '/api/v1/product-url/parse': {
-      post: securedJsonOperation('ProductUrl', '상품 URL 파싱', parseProductUrlDto),
+      post: {
+        ...securedJsonOperation('ProductUrl', '상품 URL 파싱', parseProductUrlDto),
+        responses: {
+          200: {
+            description: '상품 URL 파싱 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['success', 'message', 'data'],
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: 'url 파싱에 성공했습니다.' },
+                    data: {
+                      type: 'object',
+                      required: ['productName', 'price', 'occurredAt'],
+                      properties: {
+                        productName: { type: 'string', example: '투썸플레이스 신봉점' },
+                        price: { type: 'number', example: 6100 },
+                        occurredAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-05-17T12:00:00.000Z',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '잘못된 URL 또는 접근할 수 없는 내부 주소',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+                examples: {
+                  invalidRequest: {
+                    summary: 'URL 형식 오류',
+                    value: {
+                      success: false,
+                      code: 'COMMON4001',
+                      message: 'Invalid request',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          422: {
+            description: '상품 정보 파싱 실패',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'PRODUCT_URL4221',
+                  message: '상품 정보를 파싱하지 못했습니다.',
+                },
+              },
+            },
+          },
+          502: {
+            description: '외부 상품 페이지 요청 실패',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  upstreamFailure: {
+                    summary: '외부 상품 페이지 접근 실패',
+                    value: {
+                      success: false,
+                      code: 'PRODUCT_URL5021',
+                      message: '외부 상품 페이지에 접근할 수 없습니다.',
+                    },
+                  },
+                  responseTooLarge: {
+                    summary: '외부 상품 페이지 응답 크기 초과',
+                    value: {
+                      success: false,
+                      code: 'PRODUCT_URL5022',
+                      message: '상품 페이지의 응답 크기가 너무 큽니다.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          504: {
+            description: '외부 상품 페이지 응답 시간 초과',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'PRODUCT_URL5041',
+                  message: '외부 상품 페이지 응답 시간이 초과되었습니다.',
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/reports/consumption/summary': {
       get: securedOperation('Reports', '간단 소비 분석 리포트 조회'),

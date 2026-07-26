@@ -16,6 +16,8 @@ enum TokenType {
   EMAIL_VERIFY
   PASSWORD_RESET
   REFRESH_TOKEN
+  KAKAO_LINK
+  KAKAO_LINK_EMAIL
 }
 
 enum ReportType {
@@ -59,6 +61,15 @@ enum DecisionReasonType {
   RECENT_SIMILAR_PURCHASE
   PRICE_BURDEN
   NEED_MORE_TIME
+  OTHER
+}
+
+enum WithdrawalReasonType {
+  LOW_FREQUENCY
+  MISSING_FEATURE
+  INCONVENIENT
+  PRIVACY_CONCERN
+  SWITCHING_SERVICE
   OTHER
 }
 
@@ -112,7 +123,7 @@ model AuthToken {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
-  @@index([tokenFamilyId, tokenType, usedAt])
+  @@index([tokenFamilyId, tokenType, usedAt], map: "auth_tokens_token_family_type_used_idx")
   @@map("auth_tokens")
 }
 
@@ -252,4 +263,13 @@ model WishlistDecision {
   @@unique([wishlistItemId, decisionRound])
   @@index([wishlistItemId])
   @@map("wishlist_decisions")
+}
+
+model WithdrawalAudit {
+  id            BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
+  userEmailHash String                @map("user_email_hash") @db.Char(64)
+  reasonType    WithdrawalReasonType? @map("reason_type")
+  createdAt     DateTime              @default(now()) @map("created_at")
+
+  @@map("withdrawal_audit")
 }
