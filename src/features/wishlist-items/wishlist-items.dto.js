@@ -1,7 +1,5 @@
 import { z } from 'zod';
 import { CATEGORY_CODE_SET } from '../../config/categories.js';
-import { HttpError } from '../../utils/http-error.js';
-import { ERROR_CODES } from '../../config/error-codes.js';
 
 const waitType = z.enum(['1H', '1D', '3D', '1W']);
 
@@ -24,26 +22,18 @@ export const createWishlistItemDto = z.object({
 });
 
 export const updateWishlistItemDto = wishlistItemIdDto.extend({
-  body: z
-    .object({
-      categoryCode: z
-        .string()
-        .refine((val) => CATEGORY_CODE_SET.has(val), {
-          message: '유효한 카테고리 코드가 아닙니다.',
-        })
-        .optional(),
-      productName: z.string().min(1).max(255).optional(),
-      productUrl: z.string().url().optional(),
-      price: z.coerce.bigint().positive().optional(),
-      productImageUrl: z.string().url().max(500).optional(),
-      reason: z.string().max(255).optional(),
-      waitType: waitType.optional(),
-    })
-    .superRefine((data) => {
-      if (Object.keys(data).length === 0) {
-        throw new HttpError(400, '수정할 값이 없습니다.', {
-          errorCode: ERROR_CODES.COMMON4001,
-        });
-      }
-    }),
+  body: z.object({
+    categoryCode: z
+      .string()
+      .optional()
+      .refine((val) => CATEGORY_CODE_SET.has(val), {
+        message: '유효한 카테고리 코드가 아닙니다.',
+      }),
+    productName: z.string().min(1).max(255).optional(),
+    productUrl: z.string().url().optional(),
+    price: z.coerce.bigint().positive().optional(),
+    productImageUrl: z.string().url().max(500).optional(),
+    reason: z.string().max(255).optional(),
+    waitType: waitType.optional(),
+  }),
 });

@@ -62,37 +62,32 @@ export const getWishlistItems = async (userId) => {
 };
 
 const getValidatedItem = async (userId, validatedParams) => {
+  let wishlistId;
   try {
-    const item = await prisma.wishlistItem.findUnique({
-      where: { id: BigInt(validatedParams.wishlistId) },
+    wishlistId = BigInt(validatedParams.wishlistId);
+  } catch (_err) {
+    throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.WISH4041,
     });
-
-    if (!item) {
-      throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
-        errorCode: ERROR_CODES.WISH4041,
-      });
-    }
-
-    if (item.userId !== userId) {
-      throw new HttpError(403, '접근 권한이 없습니다.', {
-        errorCode: ERROR_CODES.WISH4031,
-      });
-    }
-    return item;
-  } catch (err) {
-    if (err instanceof HttpError) throw err;
-
-    if (
-      err.code === 'P2025' ||
-      err.message?.includes('not found') ||
-      err.message?.includes('BigInt')
-    ) {
-      throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
-        errorCode: ERROR_CODES.WISH4041,
-      });
-    }
-    throw err;
   }
+
+  const item = await prisma.wishlistItem.findUnique({
+    where: { id: wishlistId },
+  });
+
+  if (!item) {
+    throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.WISH4041,
+    });
+  }
+
+  if (item.userId !== userId) {
+    throw new HttpError(403, '접근 권한이 없습니다.', {
+      errorCode: ERROR_CODES.WISH4031,
+    });
+  }
+
+  return item;
 };
 
 export const getWishlistItemById = async (userId, validatedParams) => {
@@ -100,6 +95,10 @@ export const getWishlistItemById = async (userId, validatedParams) => {
 };
 
 export const updateWishlistItem = async (userId, validatedParams, updateData) => {
+  // 1. DB 존재 여부(404) 및 작성자 권한(403)을 먼저 검증
+  await getValidatedItem(userId, validatedParams);
+
+  // 2. 업데이트할 데이터 구성
   const dataToUpdate = {};
 
   if (updateData?.categoryCode !== undefined) dataToUpdate.categoryCode = updateData.categoryCode;
@@ -115,13 +114,12 @@ export const updateWishlistItem = async (userId, validatedParams, updateData) =>
     dataToUpdate.waitType = WAIT_TYPE_MAP[updateData.waitType];
   }
 
+  // 3. 수정할 값이 비어있는지 확인 (400 Bad Request)
   if (Object.keys(dataToUpdate).length === 0) {
     throw new HttpError(400, '수정할 값이 없습니다.', {
-      errorCode: ERROR_CODES.COMMON4001,
+      errorCode: ERROR_CODES.WISH4001,
     });
   }
-
-  await getValidatedItem(userId, validatedParams);
 
   return await prisma.wishlistItem.update({
     where: { id: BigInt(validatedParams.wishlistId) },

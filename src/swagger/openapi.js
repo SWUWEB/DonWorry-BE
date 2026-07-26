@@ -1857,7 +1857,7 @@ export const openApiDocument = {
                 },
                 example: {
                   success: false,
-                  code: 'COMMON4001',
+                  code: 'WISH4001',
                   message: '수정할 값이 없습니다.',
                 },
               },
