@@ -1661,7 +1661,11 @@ export const openApiDocument = {
                             type: 'string',
                             example: 'https://images.com/macbook.png',
                           },
-                          reason: { type: 'string', example: '개발 작업용 스펙 업그레이드' },
+                          reason: {
+                            type: 'string',
+                            nullable: true,
+                            example: '개발 작업용 스펙 업그레이드',
+                          },
                           waitType: { type: 'string', example: 'ONE_WEEK' },
                           waitUntil: {
                             type: 'string',
@@ -1704,7 +1708,11 @@ export const openApiDocument = {
                           type: 'string',
                           example: 'https://images.com/macbook.png',
                         },
-                        reason: { type: 'string', example: '개발 작업용 스펙 업그레이드' },
+                        reason: {
+                          type: 'string',
+                          nullable: true,
+                          example: '개발 작업용 스펙 업그레이드',
+                        },
                         waitType: { type: 'string', example: 'ONE_WEEK' },
                         waitUntil: {
                           type: 'string',
@@ -1748,7 +1756,11 @@ export const openApiDocument = {
                           type: 'string',
                           example: 'https://images.com/macbook.png',
                         },
-                        reason: { type: 'string', example: '개발 작업용 스펙 업그레이드' },
+                        reason: {
+                          type: 'string',
+                          nullable: true,
+                          example: '개발 작업용 스펙 업그레이드',
+                        },
                         waitType: { type: 'string', example: 'ONE_WEEK' },
                         waitUntil: {
                           type: 'string',
@@ -1817,7 +1829,11 @@ export const openApiDocument = {
                         productUrl: { type: 'string', example: 'https://apple.com/kr/ipad' },
                         price: { type: 'string', example: '1500000' },
                         productImageUrl: { type: 'string', example: 'https://images.com/ipad.png' },
-                        reason: { type: 'string', example: '필기 및 드로잉용' },
+                        reason: {
+                          type: 'string',
+                          nullable: true,
+                          example: '필기 및 드로잉용',
+                        },
                         waitType: { type: 'string', example: 'ONE_DAY' },
                         waitUntil: {
                           type: 'string',
