@@ -480,7 +480,7 @@ export const openApiDocument = {
           message: { type: 'string', example: '온보딩 정보 조회 성공' },
           data: {
             type: 'object',
-            roperties: {
+            properties: {
               interestTags: {
                 type: 'array',
                 items: { type: 'string' },
