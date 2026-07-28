@@ -473,6 +473,44 @@ export const openApiDocument = {
           },
         },
       },
+      GetOnboardingResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '온보딩 정보 조회 성공' },
+          data: {
+            type: 'object',
+            roperties: {
+              interestTags: {
+                type: 'array',
+                items: { type: 'string' },
+                example: ['식비', '쇼핑'],
+              },
+              savingGoalText: { type: 'string', example: '여행' },
+              targetSavingAmount: { type: 'string', example: '500000' },
+            },
+          },
+        },
+      },
+      UpdateOnboardingResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '온보딩 정보 저장 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              interestTags: {
+                type: 'array',
+                items: { type: 'string' },
+                example: ['식비', '쇼핑'],
+              },
+              savingGoalText: { type: 'string', example: '여행' },
+              targetSavingAmount: { type: 'string', example: '500000' },
+            },
+          },
+        },
+      },
       ConsumptionRecordResult: {
         type: 'object',
         properties: {
@@ -1358,8 +1396,68 @@ export const openApiDocument = {
       patch: securedJsonOperation('Users', '알림 설정 수정', notificationSettingsDto),
     },
     '/api/v1/onboarding': {
-      get: securedOperation('Onboarding', '온보딩 정보 조회'),
-      put: securedJsonOperation('Onboarding', '온보딩 정보 저장/수정', upsertOnboardingDto),
+      get: {
+        ...securedOperation('Onboarding', '온보딩 정보 조회'),
+        responses: {
+          200: {
+            description: '온보딩 정보 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GetOnboardingResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+      put: {
+        ...securedJsonOperation('Onboarding', '온보딩 정보 저장/수정', upsertOnboardingDto),
+        responses: {
+          200: {
+            description: '온보딩 정보 저장 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/UpdateOnboardingResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/home/summary': {
       get: securedOperation('Home', '홈 요약 조회'),
