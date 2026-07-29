@@ -483,11 +483,12 @@ export const openApiDocument = {
             properties: {
               interestTags: {
                 type: 'array',
+                nullable: true,
                 items: { type: 'string' },
                 example: ['식비', '쇼핑'],
               },
-              savingGoalText: { type: 'string', example: '여행' },
-              targetSavingAmount: { type: 'string', example: '500000' },
+              savingGoalText: { type: 'string', nullable: true, example: '여행' },
+              targetSavingAmount: { type: 'string', nullable: true, example: '500000' },
             },
           },
         },
