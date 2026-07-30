@@ -1,12 +1,21 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middlewares/auth.js';
 import { validate } from '../../middlewares/validate.js';
-import { createNotImplementedController } from './interventions.controller.js';
-import { calculateRiskScoreDto } from './interventions.dto.js';
+import {
+  calculateRiskController,
+  listInterventionQuestionsController,
+} from './interventions.controller.js';
+import { calculateRiskScoreDto, listInterventionQuestionsDto } from './interventions.dto.js';
 
 export const interventionsRouter = Router();
-const todo = createNotImplementedController('interventions');
+export const interventionQuestionsRouter = Router();
 
 interventionsRouter.use(requireAuth);
-interventionsRouter.get('/', todo);
-interventionsRouter.post('/risk-score', validate(calculateRiskScoreDto), todo);
+interventionsRouter.post('/risk-score', validate(calculateRiskScoreDto), calculateRiskController);
+
+interventionQuestionsRouter.use(requireAuth);
+interventionQuestionsRouter.get(
+  '/',
+  validate(listInterventionQuestionsDto),
+  listInterventionQuestionsController,
+);
