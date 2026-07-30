@@ -18,7 +18,7 @@ const emails = ['interventions-test@example.com', 'interventions-other@example.c
 
 const ensureQuestions = async () => {
   const texts = [
-    '혹시 이거,이미 가지고 있진 않나요?',
+    '혹시 이거, 이미 가지고 있진 않나요?',
     '이거, 지금 꼭 필요한 걸까요?',
     '비슷한 거, 최근에 산 적 있지 않나요?',
   ];

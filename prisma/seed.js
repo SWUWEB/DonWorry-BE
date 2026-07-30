@@ -2,7 +2,7 @@ import { prisma } from '../src/prisma/client.js';
 
 const questions = [
   {
-    questionText: '혹시 이거,이미 가지고 있진 않나요?',
+    questionText: '혹시 이거, 이미 가지고 있진 않나요?',
     sortOrder: 1,
     riskWeight: 2,
   },
