@@ -166,3 +166,39 @@ export const deleteUser = async (userId, password, reasonType) => {
     }
   });
 };
+
+export const updateNotificationSettings = async (userId, body) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+  if (!user) {
+    throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.USER4041,
+    });
+  }
+  const next = {
+    notifyGeneralEnabled: body.notifyGeneralEnabled ?? user.notifyGeneralEnabled,
+    notifyGoalEnabled: body.notifyGoalEnabled ?? user.notifyGoalEnabled,
+    notifyTemptationEnabled: body.notifyTemptationEnabled ?? user.notifyTemptationEnabled,
+  };
+
+  if (body.notifyPushEnabled !== undefined) {
+    next.notifyGeneralEnabled = body.notifyPushEnabled;
+    next.notifyGoalEnabled = body.notifyPushEnabled;
+    next.notifyTemptationEnabled = body.notifyPushEnabled;
+  }
+  next.notifyPushEnabled =
+    next.notifyGeneralEnabled && next.notifyGoalEnabled && next.notifyTemptationEnabled;
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: next,
+    select: {
+      notifyGeneralEnabled: true,
+      notifyGoalEnabled: true,
+      notifyTemptationEnabled: true,
+      notifyPushEnabled: true,
+    },
+  });
+  return updatedUser;
+};

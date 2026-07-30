@@ -32,12 +32,16 @@ export const savingGoalDto = z.object({
 });
 
 export const notificationSettingsDto = z.object({
-  body: z.object({
-    notifyGoalEnabled: z.boolean().optional(),
-    notifyTemptationEnabled: z.boolean().optional(),
-    notifyGeneralEnabled: z.boolean().optional(),
-    notifyPushEnabled: z.boolean().optional(),
-  }),
+  body: z
+    .object({
+      notifyGoalEnabled: z.boolean().optional(),
+      notifyTemptationEnabled: z.boolean().optional(),
+      notifyGeneralEnabled: z.boolean().optional(),
+      notifyPushEnabled: z.boolean().optional(),
+    })
+    .refine((body) => Object.keys(body).length > 0, {
+      message: '수정할 설정 값이 최소 1개 이상 필요합니다.',
+    }),
 });
 
 export const deleteUserDto = z.object({
