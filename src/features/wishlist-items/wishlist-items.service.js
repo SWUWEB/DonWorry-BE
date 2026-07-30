@@ -31,16 +31,19 @@ const calculateWaitUntil = (waitType) => {
 };
 
 export const createWishlistItem = async (userId, itemData) => {
-  const { productName, productUrl, price, productImageUrl, waitType } = itemData;
+  const { categoryCode, productName, productUrl, price, productImageUrl, reason, waitType } =
+    itemData;
   const waitUntil = calculateWaitUntil(waitType);
 
   return await prisma.wishlistItem.create({
     data: {
       userId,
+      categoryCode,
       productName,
       productUrl,
       price,
       productImageUrl,
+      reason,
       waitType: WAIT_TYPE_MAP[waitType] || 'ONE_HOUR',
       waitUntil,
       status: 'WAITING',
@@ -59,37 +62,32 @@ export const getWishlistItems = async (userId) => {
 };
 
 const getValidatedItem = async (userId, validatedParams) => {
+  let wishlistId;
   try {
-    const item = await prisma.wishlistItem.findUnique({
-      where: { id: BigInt(validatedParams.wishlistId) },
+    wishlistId = BigInt(validatedParams.wishlistId);
+  } catch (_err) {
+    throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.WISH4041,
     });
-
-    if (!item) {
-      throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
-        errorCode: ERROR_CODES.WISH4041,
-      });
-    }
-
-    if (item.userId !== userId) {
-      throw new HttpError(403, '접근 권한이 없습니다.', {
-        errorCode: ERROR_CODES.WISH4031,
-      });
-    }
-    return item;
-  } catch (err) {
-    if (err instanceof HttpError) throw err;
-
-    if (
-      err.code === 'P2025' ||
-      err.message?.includes('not found') ||
-      err.message?.includes('BigInt')
-    ) {
-      throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
-        errorCode: ERROR_CODES.WISH4041,
-      });
-    }
-    throw err;
   }
+
+  const item = await prisma.wishlistItem.findUnique({
+    where: { id: wishlistId },
+  });
+
+  if (!item) {
+    throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.WISH4041,
+    });
+  }
+
+  if (item.userId !== userId) {
+    throw new HttpError(403, '접근 권한이 없습니다.', {
+      errorCode: ERROR_CODES.WISH4031,
+    });
+  }
+
+  return item;
 };
 
 export const getWishlistItemById = async (userId, validatedParams) => {
@@ -97,24 +95,30 @@ export const getWishlistItemById = async (userId, validatedParams) => {
 };
 
 export const updateWishlistItem = async (userId, validatedParams, updateData) => {
-  if (!updateData || Object.keys(updateData).length === 0) {
-    throw new HttpError(400, '수정할 값이 없습니다.', {
-      errorCode: ERROR_CODES.COMMON4001,
-    });
-  }
-
+  // 1. DB 존재 여부(404) 및 작성자 권한(403)을 먼저 검증
   await getValidatedItem(userId, validatedParams);
 
-  const dataToUpdate = {
-    productName: updateData.productName,
-    price: updateData.price,
-    productUrl: updateData.productUrl,
-    productImageUrl: updateData.productImageUrl,
-  };
+  // 2. 업데이트할 데이터 구성
+  const dataToUpdate = {};
 
-  if (updateData.waitType) {
+  if (updateData?.categoryCode !== undefined) dataToUpdate.categoryCode = updateData.categoryCode;
+  if (updateData?.productName !== undefined) dataToUpdate.productName = updateData.productName;
+  if (updateData?.price !== undefined) dataToUpdate.price = updateData.price;
+  if (updateData?.productUrl !== undefined) dataToUpdate.productUrl = updateData.productUrl;
+  if (updateData?.productImageUrl !== undefined)
+    dataToUpdate.productImageUrl = updateData.productImageUrl;
+  if (updateData?.reason !== undefined) dataToUpdate.reason = updateData.reason;
+
+  if (updateData?.waitType) {
     dataToUpdate.waitUntil = calculateWaitUntil(updateData.waitType);
     dataToUpdate.waitType = WAIT_TYPE_MAP[updateData.waitType];
+  }
+
+  // 3. 수정할 값이 비어있는지 확인 (400 Bad Request)
+  if (Object.keys(dataToUpdate).length === 0) {
+    throw new HttpError(400, '수정할 값이 없습니다.', {
+      errorCode: ERROR_CODES.WISH4001,
+    });
   }
 
   return await prisma.wishlistItem.update({

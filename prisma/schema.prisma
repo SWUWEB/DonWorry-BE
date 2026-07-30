@@ -223,10 +223,12 @@ model ConsumptionRecord {
 model WishlistItem {
   id              BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
   userId          BigInt         @map("user_id") @db.UnsignedBigInt
+  categoryCode    String         @map("category_code") @db.VarChar(50)
   productName     String         @map("product_name") @db.VarChar(255)
   productUrl      String?        @map("product_url") @db.Text
   price           BigInt?        @db.UnsignedBigInt
   productImageUrl String?        @map("product_image_url") @db.VarChar(500)
+  reason          String?        @map("reason") @db.VarChar(255)
   waitType        WaitType       @default(ONE_HOUR) @map("wait_type")
   waitUntil       DateTime?      @map("wait_until")
   status          WishlistStatus @default(WAITING)
