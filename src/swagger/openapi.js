@@ -20,7 +20,10 @@ import {
   listConsumptionRecordsDto,
   updateConsumptionRecordDto,
 } from '../features/consumption-records/consumption-records.dto.js';
-import { calculateRiskScoreDto } from '../features/interventions/interventions.dto.js';
+import {
+  calculateRiskScoreDto,
+  listInterventionQuestionsDto,
+} from '../features/interventions/interventions.dto.js';
 import { notificationIdDto } from '../features/notifications/notifications.dto.js';
 import { upsertOnboardingDto } from '../features/onboarding/onboarding.dto.js';
 import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
@@ -582,6 +585,85 @@ export const openApiDocument = {
           data: {
             type: 'array',
             items: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+          },
+        },
+      },
+      InterventionQuestionsResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '개입 질문 목록 조회에 성공했습니다.' },
+          data: {
+            type: 'object',
+            required: ['questions', 'recentCategoryConsumption'],
+            properties: {
+              questions: {
+                type: 'array',
+                minItems: 3,
+                maxItems: 3,
+                items: {
+                  type: 'object',
+                  required: ['questionId', 'questionText', 'description', 'sortOrder', 'options'],
+                  properties: {
+                    questionId: { type: 'string', example: '1' },
+                    questionText: { type: 'string' },
+                    description: { type: 'string' },
+                    sortOrder: { type: 'integer', minimum: 1, maximum: 3 },
+                    options: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        required: ['answerValue', 'label'],
+                        properties: {
+                          answerValue: { type: 'boolean' },
+                          label: { type: 'string' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              recentCategoryConsumption: {
+                type: 'object',
+                required: ['categoryCode', 'totalCount', 'records'],
+                properties: {
+                  categoryCode: { type: 'string', example: 'CAFE_DESSERT' },
+                  totalCount: { type: 'integer', minimum: 0 },
+                  records: {
+                    type: 'array',
+                    maxItems: 3,
+                    items: {
+                      type: 'object',
+                      required: ['consumptionRecordId', 'productName', 'price', 'occurredAt'],
+                      properties: {
+                        consumptionRecordId: { type: 'string', example: '15' },
+                        productName: { type: 'string', example: '투썸플레이스 신봉점' },
+                        price: { type: 'number', example: 6100 },
+                        occurredAt: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      RiskAnalysisResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '소비 위험도 계산에 성공했습니다.' },
+          data: {
+            type: 'object',
+            required: ['riskScore', 'riskLevel', 'riskMessage'],
+            properties: {
+              riskScore: { type: 'integer', minimum: 0, maximum: 5 },
+              riskLevel: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+              riskMessage: { type: 'string' },
+            },
           },
         },
       },
@@ -1601,10 +1683,82 @@ export const openApiDocument = {
       },
     },
     '/api/v1/intervention-questions': {
-      get: securedOperation('Interventions', '개입 질문 목록 조회'),
+      get: {
+        ...withZodDto(
+          securedOperation('Interventions', '개입 질문 목록 및 최근 동일 카테고리 소비 조회'),
+          listInterventionQuestionsDto,
+        ),
+        responses: {
+          200: {
+            description: '개입 질문 목록 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/InterventionQuestionsResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Query 검증 실패 또는 허용되지 않은 category_code',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '활성 Q1~Q3를 찾을 수 없음 (INTERVENTION4041)',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+            },
+          },
+          500: {
+            description: '질문 또는 최근 소비 기록 조회 실패 (INTERVENTION5001)',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+            },
+          },
+        },
+      },
     },
     '/api/v1/interventions/risk-score': {
-      post: securedJsonOperation('Interventions', '소비 위험도 계산', calculateRiskScoreDto),
+      post: {
+        ...securedJsonOperation(
+          'Interventions',
+          '개입 질문 답변 기반 소비 위험도 계산',
+          calculateRiskScoreDto,
+        ),
+        description:
+          'Q1~Q3 답변을 모두 전달해야 하며 중복 questionId, 누락 질문, 존재하지 않거나 비활성인 질문을 검증합니다. 소비 기록은 생성하거나 수정하지 않습니다.',
+        responses: {
+          200: {
+            description: '소비 위험도 계산 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RiskAnalysisResponse' },
+              },
+            },
+          },
+          400: {
+            description:
+              'DTO 검증 실패(COMMON4001), 중복 질문(CONSUMPTION_RECORD4003), 필수 질문 누락(RISK4001)',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '질문이 존재하지 않거나 비활성 상태(CONSUMPTION_RECORD4042)',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+            },
+          },
+          500: {
+            description: '위험도 계산 실패(RISK5001)',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+            },
+          },
+        },
+      },
     },
     '/api/v1/product-url/parse': {
       post: {
