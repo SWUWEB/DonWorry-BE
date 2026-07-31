@@ -172,6 +172,12 @@ export const updateNotificationSettings = async (userId, body) => {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
+      select: {
+        notifyGeneralEnabled: true,
+        notifyGoalEnabled: true,
+        notifyTemptationEnabled: true,
+        notifyPushEnabled: true,
+      },
     });
     if (!user) {
       throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
