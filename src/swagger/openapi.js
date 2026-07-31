@@ -2200,8 +2200,74 @@ export const openApiDocument = {
       },
     },
     '/api/v1/temptations/{temptationId}/decisions': {
-      get: withZodDto(securedOperation('Temptations', '재판단 기록 조회'), temptationIdDto),
-      post: securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+      post: {
+        ...securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+        responses: {
+          401: { $ref: '#/components/responses/Unauthorized' },
+          201: {
+            description: '재판단 기록 추가 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', example: '6' },
+                        wishlistItemId: { type: 'string', example: '2' },
+                        decisionType: { type: 'string', example: 'DELAY' },
+                        selectedWaitType: { type: 'string', example: 'ONE_DAY' },
+                        selectedWaitUntil: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-08-01T14:37:35.850Z',
+                        },
+                        decidedAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-31T14:37:35.857Z',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '유효하지 않은 요청 데이터',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4002',
+                  message: '고민 시간 연장 시 추가 대기 시간 선택은 필수입니다.',
+                },
+              },
+            },
+          },
+          404: {
+            description: '존재하지 않는 항목',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4041',
+                  message: '해당 위시리스트 항목을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
   },
 };
