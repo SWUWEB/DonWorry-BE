@@ -168,8 +168,9 @@ export const deleteUser = async (userId, password, reasonType) => {
 };
 
 export const updateNotificationSettings = async (userId, body) => {
-  return await prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const user = await prisma.user.findUnique({
       where: { id: userId },
     });
     if (!user) {
@@ -191,16 +192,21 @@ export const updateNotificationSettings = async (userId, body) => {
     next.notifyPushEnabled =
       next.notifyGeneralEnabled && next.notifyGoalEnabled && next.notifyTemptationEnabled;
 
-    const updatedUser = await tx.user.update({
-      where: { id: userId },
-      data: next,
-      select: {
-        notifyGeneralEnabled: true,
-        notifyGoalEnabled: true,
-        notifyTemptationEnabled: true,
-        notifyPushEnabled: true,
+    const result = await prisma.user.updateMany({
+      where: {
+        id: userId,
+        notifyGeneralEnabled: user.notifyGeneralEnabled,
+        notifyGoalEnabled: user.notifyGoalEnabled,
+        notifyTemptationEnabled: user.notifyTemptationEnabled,
+        notifyPushEnabled: user.notifyPushEnabled,
       },
+      data: next,
     });
-    return updatedUser;
+    if (result.count === 1) {
+      return next;
+    }
+  }
+  throw new HttpError(409, '동시 요청 충돌이 발생했습니다.', {
+    errorCode: ERROR_CODES.USER4091,
   });
 };
