@@ -41,7 +41,20 @@ export const notificationSettingsDto = z.object({
     })
     .refine((body) => Object.keys(body).length > 0, {
       message: '수정할 설정 값이 최소 1개 이상 필요합니다.',
-    }),
+    })
+    .refine(
+      (body) => {
+        const hasPush = body.notifyPushEnabled !== undefined;
+        const hasDetail =
+          body.notifyGoalEnabled !== undefined ||
+          body.notifyTemptationEnabled !== undefined ||
+          body.notifyGeneralEnabled !== undefined;
+        return !(hasPush && hasDetail);
+      },
+      {
+        message: '전체 알림과 세부 알림은 동일한 요청에서 함께 변경할 수 없습니다.',
+      },
+    ),
 });
 
 export const deleteUserDto = z.object({

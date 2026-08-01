@@ -1529,6 +1529,7 @@ export const openApiDocument = {
     '/api/v1/users/me/notification-settings': {
       patch: {
         ...securedJsonOperation('Users', '알림 설정 수정', notificationSettingsDto),
+        description: '전체 알림과 세부 알림은 동일한 요청에서 함께 변경할 수 없습니다.',
         responses: {
           200: {
             description: '알림 설정 수정 성공',
