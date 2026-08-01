@@ -8,6 +8,7 @@ import {
   updateSavingGoalController,
   deleteSavingGoalController,
   deleteUserController,
+  updateNotificationSettingsController,
 } from './users.controller.js';
 import {
   changePasswordDto,
@@ -27,4 +28,8 @@ usersRouter.delete('/me', validate(deleteUserDto), deleteUserController);
 usersRouter.patch('/me/password', validate(changePasswordDto), todo);
 usersRouter.put('/me/saving-goal', validate(savingGoalDto), updateSavingGoalController);
 usersRouter.delete('/me/saving-goal', deleteSavingGoalController);
-usersRouter.patch('/me/notification-settings', validate(notificationSettingsDto), todo);
+usersRouter.patch(
+  '/me/notification-settings',
+  validate(notificationSettingsDto),
+  updateNotificationSettingsController,
+);

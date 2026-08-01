@@ -515,6 +515,22 @@ export const openApiDocument = {
           },
         },
       },
+      UpdateNotificationSettingsResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 설정 수정 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              notifyGeneralEnabled: { type: 'boolean', example: true },
+              notifyGoalEnabled: { type: 'boolean', example: true },
+              notifyTemptationEnabled: { type: 'boolean', example: true },
+              notifyPushEnabled: { type: 'boolean', example: true },
+            },
+          },
+        },
+      },
       ConsumptionRecordResult: {
         type: 'object',
         properties: {
@@ -1511,7 +1527,55 @@ export const openApiDocument = {
       },
     },
     '/api/v1/users/me/notification-settings': {
-      patch: securedJsonOperation('Users', '알림 설정 수정', notificationSettingsDto),
+      patch: {
+        ...securedJsonOperation('Users', '알림 설정 수정', notificationSettingsDto),
+        description: '전체 알림과 세부 알림은 동일한 요청에서 함께 변경할 수 없습니다.',
+        responses: {
+          200: {
+            description: '알림 설정 수정 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/UpdateNotificationSettingsResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          409: {
+            description: '동시 요청 충돌 발생',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4091',
+                  message: '동시 요청 충돌이 발생했습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/onboarding': {
       get: {
