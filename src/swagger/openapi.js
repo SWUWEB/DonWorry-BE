@@ -1525,6 +1525,19 @@ export const openApiDocument = {
               },
             },
           },
+          409: {
+            description: '동시 요청 충돌 발생',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4091',
+                  message: '동시 요청 충돌이 발생했습니다.',
+                },
+              },
+            },
+          },
         },
       },
     },
