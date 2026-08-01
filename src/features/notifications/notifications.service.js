@@ -40,10 +40,20 @@ export const listNotifications = async (userId, query) => {
 
 export const markNotificationRead = async (userId, notificationId) => {
   const result = await prisma.notification.updateMany({
-    where: { id: notificationId, userId },
+    where: { id: notificationId, userId, isRead: false },
     data: { isRead: true, readAt: new Date() },
   });
-  if (result.count === 0) {
+  if (result.count > 0) return;
+
+  const notification = await prisma.notification.findFirst({
+    where: { id: notificationId, userId },
+    select: { id: true },
+  });
+  if (!notification) {
+    throw new HttpError(404, '요청한 알림을 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.NOTIFICATION4041,
+    });
+  }
     throw new HttpError(404, '요청한 알림을 찾을 수 없습니다.', {
       errorCode: ERROR_CODES.NOTIFICATION4041,
     });
