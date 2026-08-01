@@ -43,7 +43,7 @@ import {
   updateWishlistItemDto,
   wishlistItemIdDto,
 } from '../features/wishlist-items/wishlist-items.dto.js';
-import { withZodDto } from './zod-openapi.js';
+import { withZodDto, zodToOpenApiSchema } from './zod-openapi.js';
 
 export const openApiDocument = {
   openapi: '3.0.3',
@@ -585,6 +585,41 @@ export const openApiDocument = {
           data: {
             type: 'array',
             items: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+          },
+        },
+      },
+      ConsumptionRatioResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '최근 소비 비율 조회에 성공했습니다.' },
+          data: {
+            type: 'object',
+            required: [
+              'period',
+              'totalAmount',
+              'skippedAmount',
+              'consumedAmount',
+              'skippedRatio',
+              'consumedRatio',
+            ],
+            properties: {
+              period: {
+                type: 'object',
+                required: ['startDate', 'endDate', 'days'],
+                properties: {
+                  startDate: { type: 'string', format: 'date', example: '2026-03-21' },
+                  endDate: { type: 'string', format: 'date', example: '2026-04-17' },
+                  days: { type: 'integer', enum: [28] },
+                },
+              },
+              totalAmount: { type: 'number', minimum: 0, example: 148500 },
+              skippedAmount: { type: 'number', minimum: 0, example: 96500 },
+              consumedAmount: { type: 'number', minimum: 0, example: 52000 },
+              skippedRatio: { type: 'integer', minimum: 0, maximum: 100, example: 65 },
+              consumedRatio: { type: 'integer', minimum: 0, maximum: 100, example: 35 },
+            },
           },
         },
       },
@@ -1576,6 +1611,31 @@ export const openApiDocument = {
           securedOperation('ConsumptionRecords', '소비 기록 입력'),
           createConsumptionRecordDto,
         ),
+        requestBody: {
+          required: true,
+          description: 'occurredAt을 생략하면 서버의 현재 시각을 소비 발생 시각으로 저장합니다.',
+          content: {
+            'application/json': {
+              schema: zodToOpenApiSchema(createConsumptionRecordDto.shape.body),
+              example: {
+                type: 'CONSUMED',
+                productName: '아이스 아메리카노',
+                price: 4500,
+                productUrl: 'https://example.com/products/americano',
+                reason: '친구와 시간을 보내고 싶어서',
+                riskScore: 30,
+                workHoursNeeded: 0.5,
+                category_code: 'CAFE_DESSERT',
+                interventionAnswers: [
+                  {
+                    questionId: 1,
+                    answerValue: true,
+                  },
+                ],
+              },
+            },
+          },
+        },
         responses: {
           201: {
             description: 'Consumption record created',
@@ -1678,6 +1738,25 @@ export const openApiDocument = {
           400: { $ref: '#/components/responses/ConsumptionRecordValidationBadRequest' },
           401: { $ref: '#/components/responses/Unauthorized' },
           404: { $ref: '#/components/responses/ConsumptionRecordNotFound' },
+          500: { $ref: '#/components/responses/ConsumptionRecordInternalServerError' },
+        },
+      },
+    },
+    '/api/v1/consumption-records/ratio': {
+      get: {
+        ...securedOperation('ConsumptionRecords', '최근 28일 소비 비율 조회'),
+        description:
+          '로그인 사용자의 KST 기준 오늘 포함 최근 28일 SKIPPED/CONSUMED 금액 합계와 비율을 조회합니다.',
+        responses: {
+          200: {
+            description: '최근 소비 비율 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ConsumptionRatioResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
           500: { $ref: '#/components/responses/ConsumptionRecordInternalServerError' },
         },
       },

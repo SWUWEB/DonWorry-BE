@@ -13,6 +13,8 @@ process.env.CORS_ORIGIN = 'http://localhost:5173';
 const { createApp } = await import('../src/app.js');
 const { prisma } = await import('../src/prisma/client.js');
 const { CATEGORY_CODES, CATEGORY_MAP } = await import('../src/config/categories.js');
+const { getConsumptionRatio } =
+  await import('../src/features/consumption-records/consumption-records.service.js');
 
 const app = createApp();
 
@@ -456,6 +458,231 @@ test('GET /api/v1/consumption-records rejects an unsupported type filter', async
   assert.equal(response.body.success, false);
   assert.equal(response.body.code, 'COMMON4001');
   assert.ok(response.body.errors);
+});
+
+test('GET /api/v1/consumption-records/ratio sums recent SKIPPED amounts', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  await createTestRecord(user, { type: 'SKIPPED', price: 12000, occurredAt: daysAgo(1) });
+  await createTestRecord(user, { type: 'SKIPPED', price: 8500, occurredAt: daysAgo(2) });
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.skippedAmount, 20500);
+  assert.equal(response.body.data.totalAmount, 20500);
+});
+
+test('GET /api/v1/consumption-records/ratio sums recent CONSUMED amounts', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  await createTestRecord(user, { type: 'CONSUMED', price: 15000, occurredAt: daysAgo(1) });
+  await createTestRecord(user, { type: 'CONSUMED', price: 7000, occurredAt: daysAgo(2) });
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.consumedAmount, 22000);
+  assert.equal(response.body.data.totalAmount, 22000);
+});
+
+test('GET /api/v1/consumption-records/ratio calculates amount-based ratios', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  await createTestRecord(user, { type: 'SKIPPED', price: 96500, occurredAt: daysAgo(1) });
+  await createTestRecord(user, { type: 'CONSUMED', price: 52000, occurredAt: daysAgo(2) });
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.message, '최근 소비 비율 조회에 성공했습니다.');
+  assert.equal(response.body.data.totalAmount, 148500);
+  assert.equal(response.body.data.skippedRatio, 65);
+  assert.equal(response.body.data.consumedRatio, 35);
+  assert.equal(response.body.data.period.days, 28);
+});
+
+test('GET /api/v1/consumption-records/ratio returns 100 percent when only SKIPPED exists', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  await createTestRecord(user, { type: 'SKIPPED', price: 10000, occurredAt: daysAgo(1) });
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.body.data.skippedRatio, 100);
+  assert.equal(response.body.data.consumedRatio, 0);
+});
+
+test('GET /api/v1/consumption-records/ratio returns 100 percent when only CONSUMED exists', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  await createTestRecord(user, { type: 'CONSUMED', price: 10000, occurredAt: daysAgo(1) });
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.body.data.skippedRatio, 0);
+  assert.equal(response.body.data.consumedRatio, 100);
+});
+
+test('GET /api/v1/consumption-records/ratio returns zero values when no recent records exist', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.deepEqual(
+    {
+      totalAmount: response.body.data.totalAmount,
+      skippedAmount: response.body.data.skippedAmount,
+      consumedAmount: response.body.data.consumedAmount,
+      skippedRatio: response.body.data.skippedRatio,
+      consumedRatio: response.body.data.consumedRatio,
+    },
+    {
+      totalAmount: 0,
+      skippedAmount: 0,
+      consumedAmount: 0,
+      skippedRatio: 0,
+      consumedRatio: 0,
+    },
+  );
+});
+
+test('GET /api/v1/consumption-records/ratio excludes another user records', async () => {
+  const user = await createTestUser();
+  const otherUser = await createTestUser({
+    email: otherTestEmail,
+    loginId: otherTestLoginId,
+    nickname: 'other-consumption-test-user',
+  });
+  const accessToken = createAccessToken(user);
+  await createTestRecord(user, { type: 'SKIPPED', price: 4000, occurredAt: daysAgo(1) });
+  await createTestRecord(otherUser, { type: 'CONSUMED', price: 9000, occurredAt: daysAgo(1) });
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.body.data.totalAmount, 4000);
+  assert.equal(response.body.data.consumedAmount, 0);
+});
+
+test('GET /api/v1/consumption-records/ratio excludes records outside the last 28 days', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  await createTestRecord(user, { type: 'SKIPPED', price: 4000, occurredAt: daysAgo(1) });
+  await createTestRecord(user, { type: 'CONSUMED', price: 9000, occurredAt: daysAgo(29) });
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.body.data.totalAmount, 4000);
+  assert.equal(response.body.data.consumedAmount, 0);
+});
+
+test('GET /api/v1/consumption-records/ratio excludes negative prices', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  await createTestRecord(user, { type: 'SKIPPED', price: 4000, occurredAt: daysAgo(1) });
+  await createTestRecord(user, { type: 'CONSUMED', price: -9000, occurredAt: daysAgo(1) });
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.body.data.totalAmount, 4000);
+  assert.equal(response.body.data.consumedAmount, 0);
+});
+
+test('getConsumptionRatio treats a null aggregate price as excluded', async () => {
+  const result = await getConsumptionRatio({
+    userId: 1n,
+    now: new Date('2026-04-17T06:00:00.000Z'),
+    prismaClient: {
+      consumptionRecord: {
+        groupBy: async () => [{ type: 'SKIPPED', _sum: { price: null } }],
+      },
+    },
+  });
+
+  assert.equal(result.totalAmount, 0);
+  assert.equal(result.skippedAmount, 0);
+  assert.equal(result.skippedRatio, 0);
+});
+
+test('GET /api/v1/consumption-records/ratio requires authentication', async () => {
+  const response = await request(app).get('/api/v1/consumption-records/ratio');
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(response.body, {
+    success: false,
+    message: 'Authentication required',
+  });
+});
+
+test('GET /api/v1/consumption-records/ratio maps unexpected errors to CONSUMPTION_RECORD5001', async () => {
+  const accessToken = jwt.sign(
+    {
+      purpose: 'access',
+      userId: 'invalid-user-id',
+    },
+    process.env.JWT_ACCESS_SECRET,
+    { expiresIn: '1h' },
+  );
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.status, 500);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'CONSUMPTION_RECORD5001');
+});
+
+test('GET /api/v1/consumption-records/ratio keeps rounded ratios totaling 100', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  await createTestRecord(user, { type: 'SKIPPED', price: 1, occurredAt: daysAgo(1) });
+  await createTestRecord(user, { type: 'CONSUMED', price: 2, occurredAt: daysAgo(1) });
+
+  const response = await request(app)
+    .get('/api/v1/consumption-records/ratio')
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.body.data.skippedRatio, 33);
+  assert.equal(response.body.data.consumedRatio, 67);
+  assert.equal(response.body.data.skippedRatio + response.body.data.consumedRatio, 100);
+});
+
+test('GET /api-docs.json documents the consumption ratio endpoint without body or query', async () => {
+  const response = await request(app).get('/api-docs.json');
+  const operation = response.body.paths['/api/v1/consumption-records/ratio'].get;
+
+  assert.equal(response.status, 200);
+  assert.equal(operation.requestBody, undefined);
+  assert.deepEqual(operation.parameters, undefined);
+  assert.equal(
+    operation.responses['200'].content['application/json'].schema.$ref,
+    '#/components/schemas/ConsumptionRatioResponse',
+  );
+  assert.equal(
+    operation.responses['500'].$ref,
+    '#/components/responses/ConsumptionRecordInternalServerError',
+  );
 });
 
 for (const method of ['get', 'put', 'delete']) {

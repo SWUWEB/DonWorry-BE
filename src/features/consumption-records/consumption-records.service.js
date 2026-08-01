@@ -285,6 +285,58 @@ const getConsumptionHistoryRange = (now) => {
   return { startAt, endAt: now };
 };
 
+const formatKstDate = (date) => {
+  const kstDate = new Date(date.getTime() + KST_OFFSET_MS);
+  const year = kstDate.getUTCFullYear();
+  const month = String(kstDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(kstDate.getUTCDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+export const getConsumptionRatio = async ({ userId, now = new Date(), prismaClient = prisma }) => {
+  const { startAt, endAt } = getConsumptionHistoryRange(now);
+  const groupedAmounts = await prismaClient.consumptionRecord.groupBy({
+    by: ['type'],
+    where: {
+      userId: BigInt(userId),
+      price: { gt: 0 },
+      occurredAt: {
+        gte: startAt,
+        lte: endAt,
+      },
+    },
+    _sum: { price: true },
+  });
+
+  const amounts = groupedAmounts.reduce(
+    (result, group) => {
+      const amount = group._sum.price === null ? 0 : Number(group._sum.price);
+      result[group.type] = amount;
+      return result;
+    },
+    { SKIPPED: 0, CONSUMED: 0 },
+  );
+  const skippedAmount = amounts.SKIPPED;
+  const consumedAmount = amounts.CONSUMED;
+  const totalAmount = skippedAmount + consumedAmount;
+  const skippedRatio = totalAmount === 0 ? 0 : Math.round((skippedAmount / totalAmount) * 100);
+  const consumedRatio = totalAmount === 0 ? 0 : 100 - skippedRatio;
+
+  return {
+    period: {
+      startDate: formatKstDate(startAt),
+      endDate: formatKstDate(endAt),
+      days: CONSUMPTION_HISTORY_DAYS,
+    },
+    totalAmount,
+    skippedAmount,
+    consumedAmount,
+    skippedRatio,
+    consumedRatio,
+  };
+};
+
 export const listConsumptionRecords = async ({ userId, type = 'ALL', now = new Date() }) => {
   const { startAt, endAt } = getConsumptionHistoryRange(now);
 

@@ -6,6 +6,7 @@ import {
   createConsumptionRecord,
   deleteConsumptionRecord,
   getConsumptionRecord,
+  getConsumptionRatio,
   listConsumptionRecords,
   updateConsumptionRecord,
 } from './consumption-records.service.js';
@@ -80,6 +81,14 @@ export const listConsumptionRecordsController = consumptionHandler(async (req, r
   });
 
   return ok(res, records.map(serializeConsumptionRecord));
+});
+
+export const getConsumptionRatioController = consumptionHandler(async (req, res) => {
+  const ratio = await getConsumptionRatio({
+    userId: getAuthenticatedUserId(req),
+  });
+
+  return ok(res, ratio, '최근 소비 비율 조회에 성공했습니다.');
 });
 
 export const getConsumptionRecordController = consumptionHandler(async (req, res) => {
