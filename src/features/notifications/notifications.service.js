@@ -54,10 +54,6 @@ export const markNotificationRead = async (userId, notificationId) => {
       errorCode: ERROR_CODES.NOTIFICATION4041,
     });
   }
-    throw new HttpError(404, '요청한 알림을 찾을 수 없습니다.', {
-      errorCode: ERROR_CODES.NOTIFICATION4041,
-    });
-  }
 };
 
 export const markAllNotificationsRead = async (userId) => {
