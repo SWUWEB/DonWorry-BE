@@ -5,6 +5,7 @@ import {
   createConsumptionRecordController,
   deleteConsumptionRecordController,
   getConsumptionRecordController,
+  getConsumptionRatioController,
   listConsumptionRecordsController,
   updateConsumptionRecordController,
 } from './consumption-records.controller.js';
@@ -24,6 +25,7 @@ consumptionRecordsRouter.get(
   validate(listConsumptionRecordsDto),
   listConsumptionRecordsController,
 );
+consumptionRecordsRouter.get('/ratio', getConsumptionRatioController);
 consumptionRecordsRouter.post(
   '/',
   validateConsumptionRecord(createConsumptionRecordDto),
