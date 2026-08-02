@@ -584,12 +584,12 @@ export const openApiDocument = {
             description: 'YYYY-MM',
           },
           monthlyIncome: {
-            type: 'number',
+            type: 'string',
             nullable: true,
             example: '1000000',
             description: '월 수입',
           },
-          monthlyBudget: { type: 'number', example: '500000', description: '월 예산' },
+          monthlyBudget: { type: 'string', example: '500000', description: '월 예산' },
         },
       },
       GetMonthlyBudgetResponse: {
