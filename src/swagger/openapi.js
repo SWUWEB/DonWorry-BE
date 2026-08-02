@@ -24,7 +24,10 @@ import {
   calculateRiskScoreDto,
   listInterventionQuestionsDto,
 } from '../features/interventions/interventions.dto.js';
-import { notificationIdDto } from '../features/notifications/notifications.dto.js';
+import {
+  notificationIdDto,
+  listNotificationsDto,
+} from '../features/notifications/notifications.dto.js';
 import { upsertOnboardingDto } from '../features/onboarding/onboarding.dto.js';
 import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
 import {
@@ -43,7 +46,7 @@ import {
   updateWishlistItemDto,
   wishlistItemIdDto,
 } from '../features/wishlist-items/wishlist-items.dto.js';
-import { withZodDto } from './zod-openapi.js';
+import { withZodDto, zodToOpenApiSchema } from './zod-openapi.js';
 
 export const openApiDocument = {
   openapi: '3.0.3',
@@ -515,6 +518,61 @@ export const openApiDocument = {
           },
         },
       },
+      UpdateNotificationSettingsResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 설정 수정 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              notifyGeneralEnabled: { type: 'boolean', example: true },
+              notifyGoalEnabled: { type: 'boolean', example: true },
+              notifyTemptationEnabled: { type: 'boolean', example: true },
+              notifyPushEnabled: { type: 'boolean', example: true },
+            },
+          },
+        },
+      },
+      NotificationResult: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: '1' },
+          notificationType: {
+            type: 'string',
+            enum: ['TEMPTATION', 'GOAL', 'GENERAL'],
+            example: 'TEMPTATION',
+          },
+          isRead: { type: 'boolean', example: false },
+          readAt: { type: 'string', format: 'date-time', nullable: true, example: null },
+          wishlistItemId: { type: 'string', nullable: true, example: '3' },
+          createdAt: { type: 'string', format: 'date-time', example: '2026-07-30T09:00:00.000Z' },
+        },
+      },
+      ListNotificationsResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 목록 조회 성공' },
+          data: { type: 'array', items: { $ref: '#/components/schemas/NotificationResult' } },
+        },
+      },
+      MarkNotificationReadResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 읽음 처리 성공' },
+          data: { nullable: true, example: null },
+        },
+      },
+      MarkAllNotificationsReadResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 전체 읽음 처리 성공' },
+          data: { nullable: true, example: null },
+        },
+      },
       ConsumptionRecordResult: {
         type: 'object',
         properties: {
@@ -585,6 +643,41 @@ export const openApiDocument = {
           data: {
             type: 'array',
             items: { $ref: '#/components/schemas/ConsumptionRecordResult' },
+          },
+        },
+      },
+      ConsumptionRatioResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '최근 소비 비율 조회에 성공했습니다.' },
+          data: {
+            type: 'object',
+            required: [
+              'period',
+              'totalAmount',
+              'skippedAmount',
+              'consumedAmount',
+              'skippedRatio',
+              'consumedRatio',
+            ],
+            properties: {
+              period: {
+                type: 'object',
+                required: ['startDate', 'endDate', 'days'],
+                properties: {
+                  startDate: { type: 'string', format: 'date', example: '2026-03-21' },
+                  endDate: { type: 'string', format: 'date', example: '2026-04-17' },
+                  days: { type: 'integer', enum: [28] },
+                },
+              },
+              totalAmount: { type: 'number', minimum: 0, example: 148500 },
+              skippedAmount: { type: 'number', minimum: 0, example: 96500 },
+              consumedAmount: { type: 'number', minimum: 0, example: 52000 },
+              skippedRatio: { type: 'integer', minimum: 0, maximum: 100, example: 65 },
+              consumedRatio: { type: 'integer', minimum: 0, maximum: 100, example: 35 },
+            },
           },
         },
       },
@@ -1476,7 +1569,55 @@ export const openApiDocument = {
       },
     },
     '/api/v1/users/me/notification-settings': {
-      patch: securedJsonOperation('Users', '알림 설정 수정', notificationSettingsDto),
+      patch: {
+        ...securedJsonOperation('Users', '알림 설정 수정', notificationSettingsDto),
+        description: '전체 알림과 세부 알림은 동일한 요청에서 함께 변경할 수 없습니다.',
+        responses: {
+          200: {
+            description: '알림 설정 수정 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/UpdateNotificationSettingsResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          409: {
+            description: '동시 요청 충돌 발생',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4091',
+                  message: '동시 요청 충돌이 발생했습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/onboarding': {
       get: {
@@ -1576,6 +1717,31 @@ export const openApiDocument = {
           securedOperation('ConsumptionRecords', '소비 기록 입력'),
           createConsumptionRecordDto,
         ),
+        requestBody: {
+          required: true,
+          description: 'occurredAt을 생략하면 서버의 현재 시각을 소비 발생 시각으로 저장합니다.',
+          content: {
+            'application/json': {
+              schema: zodToOpenApiSchema(createConsumptionRecordDto.shape.body),
+              example: {
+                type: 'CONSUMED',
+                productName: '아이스 아메리카노',
+                price: 4500,
+                productUrl: 'https://example.com/products/americano',
+                reason: '친구와 시간을 보내고 싶어서',
+                riskScore: 30,
+                workHoursNeeded: 0.5,
+                category_code: 'CAFE_DESSERT',
+                interventionAnswers: [
+                  {
+                    questionId: 1,
+                    answerValue: true,
+                  },
+                ],
+              },
+            },
+          },
+        },
         responses: {
           201: {
             description: 'Consumption record created',
@@ -1678,6 +1844,25 @@ export const openApiDocument = {
           400: { $ref: '#/components/responses/ConsumptionRecordValidationBadRequest' },
           401: { $ref: '#/components/responses/Unauthorized' },
           404: { $ref: '#/components/responses/ConsumptionRecordNotFound' },
+          500: { $ref: '#/components/responses/ConsumptionRecordInternalServerError' },
+        },
+      },
+    },
+    '/api/v1/consumption-records/ratio': {
+      get: {
+        ...securedOperation('ConsumptionRecords', '최근 28일 소비 비율 조회'),
+        description:
+          '로그인 사용자의 KST 기준 오늘 포함 최근 28일 SKIPPED/CONSUMED 금액 합계와 비율을 조회합니다.',
+        responses: {
+          200: {
+            description: '최근 소비 비율 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ConsumptionRatioResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
           500: { $ref: '#/components/responses/ConsumptionRecordInternalServerError' },
         },
       },
@@ -1878,13 +2063,81 @@ export const openApiDocument = {
       get: securedOperation('Reports', '상세 소비 분석 리포트 조회'),
     },
     '/api/v1/notifications': {
-      get: securedOperation('Notifications', '알림 목록 조회'),
+      get: {
+        ...withZodDto(securedOperation('Notifications', '알림 목록 조회'), listNotificationsDto),
+        responses: {
+          200: {
+            description: '알림 목록 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ListNotificationsResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/notifications/read-all': {
-      patch: securedOperation('Notifications', '알림 전체 읽음 처리'),
+      patch: {
+        ...securedOperation('Notifications', '알림 전체 읽음 처리'),
+        responses: {
+          200: {
+            description: '알림 전체 읽음 처리 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/MarkAllNotificationsReadResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/notifications/{notificationId}/read': {
-      patch: withZodDto(securedOperation('Notifications', '알림 읽음 처리'), notificationIdDto),
+      patch: {
+        ...withZodDto(securedOperation('Notifications', '알림 읽음 처리'), notificationIdDto),
+        responses: {
+          200: {
+            description: '알림 읽음 처리 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/MarkNotificationReadResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '요청한 알림을 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'NOTIFICATION4041',
+                  message: '요청한 알림을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/wishlist-items': {
       get: {

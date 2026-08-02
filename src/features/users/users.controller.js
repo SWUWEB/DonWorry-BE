@@ -5,6 +5,7 @@ import {
   updateSavingGoal,
   deleteSavingGoal,
   deleteUser,
+  updateNotificationSettings,
 } from './users.service.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 
@@ -39,4 +40,9 @@ export const deleteUserController = asyncHandler(async (req, res) => {
     req.validated.body.reasonType,
   );
   return ok(res, null, '회원 탈퇴 성공');
+});
+
+export const updateNotificationSettingsController = asyncHandler(async (req, res) => {
+  const result = await updateNotificationSettings(BigInt(req.user.userId), req.validated.body);
+  return ok(res, result, '알림 설정 수정 성공');
 });

@@ -1,13 +1,20 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middlewares/auth.js';
 import { validate } from '../../middlewares/validate.js';
-import { createNotImplementedController } from './notifications.controller.js';
-import { notificationIdDto } from './notifications.dto.js';
+import {
+  listNotificationsController,
+  markNotificationReadController,
+  markAllNotificationsReadController,
+} from './notifications.controller.js';
+import { notificationIdDto, listNotificationsDto } from './notifications.dto.js';
 
 export const notificationsRouter = Router();
-const todo = createNotImplementedController('notifications');
 
 notificationsRouter.use(requireAuth);
-notificationsRouter.get('/', todo);
-notificationsRouter.patch('/read-all', todo);
-notificationsRouter.patch('/:notificationId/read', validate(notificationIdDto), todo);
+notificationsRouter.get('/', validate(listNotificationsDto), listNotificationsController);
+notificationsRouter.patch('/read-all', markAllNotificationsReadController);
+notificationsRouter.patch(
+  '/:notificationId/read',
+  validate(notificationIdDto),
+  markNotificationReadController,
+);
