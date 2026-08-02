@@ -602,6 +602,7 @@ export const openApiDocument = {
                     description: '소비 금액이 큰 상위 4개 카테고리 + 그 외(합산) 목록',
                     items: {
                       type: 'object',
+                      required: ['categoryCode', 'categoryLabel', 'amount', 'ratio'],
                       properties: {
                         categoryCode: { type: 'string', example: 'FOOD_SNACK' },
                         categoryLabel: { type: 'string', example: '음식' },
@@ -619,6 +620,7 @@ export const openApiDocument = {
                   totalAttemptCount: { type: 'integer', minimum: 0, example: 24 },
                   skipped: {
                     type: 'object',
+                    required: ['amount', 'count'],
                     properties: {
                       amount: { type: 'number', minimum: 0, example: 345000 },
                       count: { type: 'integer', minimum: 0, example: 18 },
@@ -626,6 +628,7 @@ export const openApiDocument = {
                   },
                   consumed: {
                     type: 'object',
+                    required: ['amount', 'count'],
                     properties: {
                       amount: { type: 'number', minimum: 0, example: 120000 },
                       count: { type: 'integer', minimum: 0, example: 6 },
@@ -679,6 +682,13 @@ export const openApiDocument = {
                 type: 'array',
                 items: {
                   type: 'object',
+                  required: [
+                    'categoryCode',
+                    'categoryLabel',
+                    'skippedAmount',
+                    'consumedAmount',
+                    'defenseRate',
+                  ],
                   properties: {
                     categoryCode: { type: 'string', example: 'FOOD_SNACK' },
                     categoryLabel: { type: 'string', example: '음식' },
