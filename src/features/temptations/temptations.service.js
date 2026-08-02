@@ -56,7 +56,6 @@ const getValidatedTemptationItem = async (userId, temptationIdParam) => {
     });
   }
 
-
   if (item.status !== 'WAITING') {
     throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
       errorCode: ERROR_CODES.WISH4091,

@@ -32,7 +32,6 @@ import { upsertOnboardingDto } from '../features/onboarding/onboarding.dto.js';
 import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
 import {
   createWishlistDecisionDto,
-  temptationIdDto,
 } from '../features/temptations/temptations.dto.js';
 import {
   changePasswordDto,
@@ -2506,7 +2505,7 @@ export const openApiDocument = {
           401: { $ref: '#/components/responses/Unauthorized' },
           403: {
             description: '접근 권한 없음 (타인의 항목)',
-           content: {
+            content: {
               'application/json': {
                 schema: {
                   $ref: '#/components/schemas/ErrorResponse',

@@ -9,7 +9,7 @@ export const temptationsRouter = Router();
 temptationsRouter.use(requireAuth);
 
 temptationsRouter.post(
-  '/:temptationId/decisions', 
-  validate(createWishlistDecisionDto), 
-  createWishlistDecisionController
+  '/:temptationId/decisions',
+  validate(createWishlistDecisionDto),
+  createWishlistDecisionController,
 );

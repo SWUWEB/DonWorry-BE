@@ -11,9 +11,7 @@ const serializeWishlistDecision = (decision) => {
     ...decision,
     id: decision.id.toString(),
     wishlistItemId: decision.wishlistItemId.toString(),
-    selectedWaitUntil: decision.selectedWaitUntil
-      ? decision.selectedWaitUntil.toISOString()
-      : null,
+    selectedWaitUntil: decision.selectedWaitUntil ? decision.selectedWaitUntil.toISOString() : null,
     decidedAt: decision.decidedAt ? decision.decidedAt.toISOString() : null,
   };
 };
@@ -27,7 +25,7 @@ export const createWishlistDecisionController = async (req, res, next) => {
     const newDecision = await temptationsService.createWishlistDecision(
       loggedInUserId,
       temptationId,
-      bodyData
+      bodyData,
     );
 
     return res.status(201).json({

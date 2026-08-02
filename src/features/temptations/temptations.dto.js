@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const temptationIdDto = z.object({
-  params: z.object({ 
-    temptationId: z.coerce.bigint().positive() 
+  params: z.object({
+    temptationId: z.coerce.bigint().positive(),
   }),
 });
 
