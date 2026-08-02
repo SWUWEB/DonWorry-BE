@@ -56,10 +56,16 @@ const getValidatedTemptationItem = async (userId, temptationIdParam) => {
     });
   }
 
+
+  if (item.status !== 'WAITING') {
+    throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
+      errorCode: ERROR_CODES.WISH4091,
+    });
+  }
+
   return item;
 };
 
-// DecisionType에 따른 WishlistStatus 매핑
 const STATUS_MAP = {
   BUY: 'DECIDED',
   SKIP: 'DECIDED',
@@ -85,7 +91,6 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
   }
 
   return await prisma.$transaction(async (tx) => {
-    // [작업 A] 재판단 이력 생성
     const decision = await tx.wishlistDecision.create({
       data: {
         wishlistItemId: temptation.id,
@@ -96,7 +101,6 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
       },
     });
 
-    // 💡 [수정] decisionType에 따라 status를 WAITING 또는 DECIDED로 설정
     const nextStatus = STATUS_MAP[decisionType];
 
     const updateData = { status: nextStatus };
@@ -105,19 +109,17 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
       updateData.waitUntil = selectedWaitUntil;
     }
 
-    // [작업 B] 위시리스트 항목 상태 갱신
     await tx.wishlistItem.update({
       where: { id: temptation.id },
       data: updateData,
     });
 
-    // [작업 C] '안 살래요(SKIP)' 선택 시 참은 소비 자동 생성
     if (decisionType === 'SKIP') {
       await tx.consumptionRecord.create({
         data: {
           userId,
           productName: temptation.productName,
-          price: temptation.price.toString(),
+          price: temptation.price?.toString() ?? null,
           categoryCode: temptation.categoryCode ?? null,
           productUrl: temptation.productUrl ?? null,
           reason: temptation.reason ?? null,

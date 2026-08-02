@@ -2456,7 +2456,6 @@ export const openApiDocument = {
       post: {
         ...securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
         responses: {
-          401: { $ref: '#/components/responses/Unauthorized' },
           201: {
             description: '재판단 기록 추가 성공',
             content: {
@@ -2504,6 +2503,22 @@ export const openApiDocument = {
               },
             },
           },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: {
+            description: '접근 권한 없음 (타인의 항목)',
+           content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4031',
+                  message: '접근 권한이 없습니다.',
+                },
+              },
+            },
+          },
           404: {
             description: '존재하지 않는 항목',
             content: {
@@ -2515,6 +2530,21 @@ export const openApiDocument = {
                   success: false,
                   code: 'WISH4041',
                   message: '해당 위시리스트 항목을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          409: {
+            description: '이미 처리가 완료되었거나 대기 상태가 아닌 항목',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4091',
+                  message: '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.',
                 },
               },
             },

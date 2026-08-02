@@ -22,3 +22,6 @@ ALTER TABLE `wishlist_decisions` DROP COLUMN `decision_round`,
     DROP COLUMN `reason_need`,
     DROP COLUMN `reason_recent_buy`,
     DROP COLUMN `reason_type`;
+
+-- AddForeignKey (삭제된 FK 제약 조건 및 Cascade 재생성)
+ALTER TABLE `wishlist_decisions` ADD CONSTRAINT `wishlist_decisions_wishlist_item_id_fkey` FOREIGN KEY (`wishlist_item_id`) REFERENCES `wishlist_items`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
