@@ -24,7 +24,10 @@ import {
   calculateRiskScoreDto,
   listInterventionQuestionsDto,
 } from '../features/interventions/interventions.dto.js';
-import { notificationIdDto } from '../features/notifications/notifications.dto.js';
+import {
+  notificationIdDto,
+  listNotificationsDto,
+} from '../features/notifications/notifications.dto.js';
 import { upsertOnboardingDto } from '../features/onboarding/onboarding.dto.js';
 import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
 import {
@@ -529,6 +532,45 @@ export const openApiDocument = {
               notifyPushEnabled: { type: 'boolean', example: true },
             },
           },
+        },
+      },
+      NotificationResult: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: '1' },
+          notificationType: {
+            type: 'string',
+            enum: ['TEMPTATION', 'GOAL', 'GENERAL'],
+            example: 'TEMPTATION',
+          },
+          isRead: { type: 'boolean', example: false },
+          readAt: { type: 'string', format: 'date-time', nullable: true, example: null },
+          wishlistItemId: { type: 'string', nullable: true, example: '3' },
+          createdAt: { type: 'string', format: 'date-time', example: '2026-07-30T09:00:00.000Z' },
+        },
+      },
+      ListNotificationsResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 목록 조회 성공' },
+          data: { type: 'array', items: { $ref: '#/components/schemas/NotificationResult' } },
+        },
+      },
+      MarkNotificationReadResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 읽음 처리 성공' },
+          data: { nullable: true, example: null },
+        },
+      },
+      MarkAllNotificationsReadResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 전체 읽음 처리 성공' },
+          data: { nullable: true, example: null },
         },
       },
       ConsumptionRecordResult: {
@@ -2021,13 +2063,81 @@ export const openApiDocument = {
       get: securedOperation('Reports', '상세 소비 분석 리포트 조회'),
     },
     '/api/v1/notifications': {
-      get: securedOperation('Notifications', '알림 목록 조회'),
+      get: {
+        ...withZodDto(securedOperation('Notifications', '알림 목록 조회'), listNotificationsDto),
+        responses: {
+          200: {
+            description: '알림 목록 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ListNotificationsResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/notifications/read-all': {
-      patch: securedOperation('Notifications', '알림 전체 읽음 처리'),
+      patch: {
+        ...securedOperation('Notifications', '알림 전체 읽음 처리'),
+        responses: {
+          200: {
+            description: '알림 전체 읽음 처리 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/MarkAllNotificationsReadResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/notifications/{notificationId}/read': {
-      patch: withZodDto(securedOperation('Notifications', '알림 읽음 처리'), notificationIdDto),
+      patch: {
+        ...withZodDto(securedOperation('Notifications', '알림 읽음 처리'), notificationIdDto),
+        responses: {
+          200: {
+            description: '알림 읽음 처리 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/MarkNotificationReadResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '요청한 알림을 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'NOTIFICATION4041',
+                  message: '요청한 알림을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/wishlist-items': {
       get: {
