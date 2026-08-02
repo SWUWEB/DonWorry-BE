@@ -30,9 +30,7 @@ import {
 } from '../features/notifications/notifications.dto.js';
 import { upsertOnboardingDto } from '../features/onboarding/onboarding.dto.js';
 import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
-import {
-  createWishlistDecisionDto,
-} from '../features/temptations/temptations.dto.js';
+import { createWishlistDecisionDto } from '../features/temptations/temptations.dto.js';
 import {
   changePasswordDto,
   notificationSettingsDto,
