@@ -40,6 +40,8 @@ import {
   savingGoalDto,
   updateMeDto,
   deleteUserDto,
+  getBudgetDto,
+  setBudgetDto,
 } from '../features/users/users.dto.js';
 import {
   createWishlistItemDto,
@@ -571,6 +573,42 @@ export const openApiDocument = {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: '알림 전체 읽음 처리 성공' },
           data: { nullable: true, example: null },
+        },
+      },
+      MonthlyBudgetResult: {
+        type: 'object',
+        properties: {
+          yearMonth: {
+            type: 'string',
+            example: '2026-08',
+            description: 'YYYY-MM',
+          },
+          monthlyIncome: {
+            type: 'number',
+            nullable: true,
+            example: '1000000',
+            description: '월 수입',
+          },
+          monthlyBudget: { type: 'number', example: '500000', description: '월 예산' },
+        },
+      },
+      GetMonthlyBudgetResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '월별 수입/예산 조회 성공' },
+          data: {
+            nullable: true,
+            $ref: '#/components/schemas/MonthlyBudgetResult',
+          },
+        },
+      },
+      UpsertMonthlyBudgetResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '월별 수입/예산이 설정되었습니다.' },
+          data: { $ref: '#/components/schemas/MonthlyBudgetResult' },
         },
       },
       ConsumptionRecordResult: {
@@ -1612,6 +1650,78 @@ export const openApiDocument = {
                   success: false,
                   code: 'USER4091',
                   message: '동시 요청 충돌이 발생했습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/users/me/budget': {
+      get: {
+        ...withZodDto(securedOperation('Users', '월별 수입/예산 조회'), getBudgetDto),
+        responses: {
+          200: {
+            description: '월별 수입/예산 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GetMonthlyBudgetResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+      put: {
+        ...securedJsonOperation('Users', '월별 수입/예산 설정', setBudgetDto),
+        responses: {
+          200: {
+            description: '월별 수입/예산이 설정되었습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/UpsertMonthlyBudgetResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
                 },
               },
             },
