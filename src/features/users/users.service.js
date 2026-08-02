@@ -245,6 +245,10 @@ export const getBudget = async (userId, yearMonth) => {
 
 export const setBudget = async (userId, body) => {
   const { yearMonth, monthlyIncome, monthlyBudget } = body;
+  const updateData = { monthlyBudget };
+  if (monthlyIncome !== undefined) {
+    updateData.monthlyIncome = monthlyIncome;
+  }
   const budget = await prisma.monthlyBudget.upsert({
     where: {
       userId_yearMonth: {
@@ -252,10 +256,7 @@ export const setBudget = async (userId, body) => {
         yearMonth,
       },
     },
-    update: {
-      monthlyIncome: monthlyIncome ?? null,
-      monthlyBudget,
-    },
+    update: updateData,
     create: {
       userId,
       yearMonth,
