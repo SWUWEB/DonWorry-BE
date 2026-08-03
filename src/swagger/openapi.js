@@ -2492,10 +2492,23 @@ export const openApiDocument = {
                 schema: {
                   $ref: '#/components/schemas/ErrorResponse',
                 },
-                example: {
-                  success: false,
-                  code: 'WISH4002',
-                  message: '고민 시간 연장 시 추가 대기 시간 선택은 필수입니다.',
+                examples: {
+                  MISSING_WAIT_TYPE: {
+                    summary: '고민 연장 시 대기 시간 미선택 (WISH4002)',
+                    value: {
+                      success: false,
+                      code: 'WISH4002',
+                      message: '고민 시간 연장 시 추가 대기 시간 선택은 필수입니다.',
+                    },
+                  },
+                  NOT_YET_REDECISION_TIME: {
+                    summary: '아직 재판단 시간이 지나지 않음 (WISH4003)',
+                    value: {
+                      success: false,
+                      code: 'WISH4003',
+                      message: '아직 고민 시간이 끝나지 않아 추가 연장을 할 수 없습니다.',
+                    },
+                  },
                 },
               },
             },
