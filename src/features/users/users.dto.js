@@ -7,16 +7,26 @@ const name = z
   .max(20, '이름은 2~20자로 입력해주세요.');
 
 const phoneNumber = z
-  .string()
-  .trim()
-  .regex(/^01[016789]-?\d{3,4}-?\d{4}$/, '올바른 휴대폰 번호 형식이 아닙니다.')
+  .preprocess(
+    (val) => (val === null || val === '' ? null : val),
+    z
+      .string()
+      .trim()
+      .regex(/^01[016789]-?\d{3,4}-?\d{4}$/, '올바른 휴대폰 번호 형식이 아닙니다.')
+      .nullable(),
+  )
   .optional();
 
 const birthDate = z
-  .string()
-  .trim()
-  .date('올바른 생년월일을 선택해주세요.')
-  .refine((value) => new Date(value) <= new Date(), '올바른 생년월일을 선택해주세요.')
+  .preprocess(
+    (val) => (val === null || val === '' ? null : val),
+    z
+      .string()
+      .trim()
+      .date('올바른 생년월일을 선택해주세요.')
+      .refine((value) => new Date(value) <= new Date(), '올바른 생년월일을 선택해주세요.')
+      .nullable(),
+  )
   .optional();
 
 export const updateMeDto = z.object({
