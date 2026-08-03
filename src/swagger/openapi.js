@@ -46,6 +46,7 @@ import {
   updateWishlistItemDto,
   wishlistItemIdDto,
 } from '../features/wishlist-items/wishlist-items.dto.js';
+import { consumptionReportDetailDto } from '../features/reports/reports.dto.js';
 import { withZodDto, zodToOpenApiSchema } from './zod-openapi.js';
 
 export const openApiDocument = {
@@ -587,6 +588,134 @@ export const openApiDocument = {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: '알림 전체 읽음 처리 성공' },
           data: { nullable: true, example: null },
+        },
+      },
+      ConsumptionReportDetailResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '상세 소비 분석 리포트 조회에 성공했습니다.' },
+          data: {
+            type: 'object',
+            required: [
+              'reportMonth',
+              'totalConsumption',
+              'savingStatus',
+              'goalAchievement',
+              'insights',
+              'categoryDefenseSummary',
+            ],
+            properties: {
+              reportMonth: { type: 'string', example: '2026-05' },
+              totalConsumption: {
+                type: 'object',
+                required: ['totalAmount', 'categories'],
+                properties: {
+                  totalAmount: { type: 'number', minimum: 0, example: 750000 },
+                  categories: {
+                    type: 'array',
+                    description: '소비 금액이 큰 상위 4개 카테고리 + 그 외(합산) 목록',
+                    items: {
+                      type: 'object',
+                      required: ['categoryCode', 'categoryLabel', 'amount', 'ratio'],
+                      properties: {
+                        categoryCode: { type: 'string', example: 'FOOD_SNACK' },
+                        categoryLabel: { type: 'string', example: '음식' },
+                        amount: { type: 'number', minimum: 0, example: 200000 },
+                        ratio: { type: 'integer', minimum: 0, maximum: 100, example: 33 },
+                      },
+                    },
+                  },
+                },
+              },
+              savingStatus: {
+                type: 'object',
+                required: ['totalAttemptCount', 'skipped', 'consumed'],
+                properties: {
+                  totalAttemptCount: { type: 'integer', minimum: 0, example: 24 },
+                  skipped: {
+                    type: 'object',
+                    required: ['amount', 'count'],
+                    properties: {
+                      amount: { type: 'number', minimum: 0, example: 345000 },
+                      count: { type: 'integer', minimum: 0, example: 18 },
+                    },
+                  },
+                  consumed: {
+                    type: 'object',
+                    required: ['amount', 'count'],
+                    properties: {
+                      amount: { type: 'number', minimum: 0, example: 120000 },
+                      count: { type: 'integer', minimum: 0, example: 6 },
+                    },
+                  },
+                },
+              },
+              goalAchievement: {
+                type: 'object',
+                required: ['status', 'achievementRate', 'savedAmount'],
+                properties: {
+                  status: {
+                    type: 'string',
+                    enum: ['NOT_SET', 'IN_PROGRESS', 'ACHIEVED'],
+                    example: 'IN_PROGRESS',
+                  },
+                  achievementRate: { type: 'integer', minimum: 0, example: 69 },
+                  targetAmount: { type: 'number', nullable: true, minimum: 0, example: 500000 },
+                  savedAmount: { type: 'number', minimum: 0, example: 345000 },
+                  remainingAmount: { type: 'number', nullable: true, minimum: 0, example: 155000 },
+                },
+              },
+              insights: {
+                type: 'object',
+                required: ['hasEnoughData', 'insights'],
+                properties: {
+                  hasEnoughData: {
+                    type: 'boolean',
+                    description:
+                      '실제 소비 기록이 3건 이상인지 여부 (false일 경우 인사이트 미제공)',
+                    example: true,
+                  },
+                  insights: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        type: { type: 'string', enum: ['VULNERABLE_TIME', 'INFLOW_CHANNEL'] },
+                        weekdayLabel: { type: 'string', example: '금' },
+                        hour: { type: 'integer', nullable: true, example: 23 },
+                        amount: { type: 'number', nullable: true, example: 300000 },
+                        ratio: { type: 'integer', nullable: true, example: 40 },
+                        channel: { type: 'string', nullable: true, example: 'instagram.com' },
+                        count: { type: 'integer', nullable: true, example: 5 },
+                      },
+                    },
+                  },
+                },
+              },
+              categoryDefenseSummary: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  required: [
+                    'categoryCode',
+                    'categoryLabel',
+                    'skippedAmount',
+                    'consumedAmount',
+                    'defenseRate',
+                  ],
+                  properties: {
+                    categoryCode: { type: 'string', example: 'FOOD_SNACK' },
+                    categoryLabel: { type: 'string', example: '음식' },
+                    skippedAmount: { type: 'number', minimum: 0, example: 102000 },
+                    consumedAmount: { type: 'number', minimum: 0, example: 18000 },
+                    defenseRate: { type: 'integer', minimum: 0, maximum: 100, example: 85 },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       ConsumptionRecordResult: {
@@ -2076,7 +2205,55 @@ export const openApiDocument = {
       get: securedOperation('Reports', '간단 소비 분석 리포트 조회'),
     },
     '/api/v1/reports/consumption/detail': {
-      get: securedOperation('Reports', '상세 소비 분석 리포트 조회'),
+      get: {
+        ...withZodDto(
+          securedOperation('Reports', '상세 소비 분석 리포트 조회'),
+          consumptionReportDetailDto,
+        ),
+        description: '현재 및 과거 월 조회 가능 (미래 월 불가 / month 미입력 시 현재 연월)',
+        responses: {
+          200: {
+            description: '상세 소비 분석 리포트 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ConsumptionReportDetailResponse' },
+              },
+            },
+          },
+          400: {
+            description: '잘못된 요청',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+                example: {
+                  success: false,
+                  code: 'REPORT4001',
+                  message: '미래 월은 조회할 수 없습니다.',
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/notifications': {
       get: {
