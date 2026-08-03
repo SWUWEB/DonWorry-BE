@@ -30,41 +30,6 @@ const calculateWaitUntil = (waitType) => {
   return now;
 };
 
-const getValidatedTemptationItem = async (userId, temptationIdParam) => {
-  let temptationId;
-  try {
-    temptationId = BigInt(temptationIdParam);
-  } catch (_err) {
-    throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
-      errorCode: ERROR_CODES.WISH4041,
-    });
-  }
-
-  const item = await prisma.wishlistItem.findUnique({
-    where: { id: temptationId },
-  });
-
-  if (!item) {
-    throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
-      errorCode: ERROR_CODES.WISH4041,
-    });
-  }
-
-  if (item.userId !== userId) {
-    throw new HttpError(403, '접근 권한이 없습니다.', {
-      errorCode: ERROR_CODES.WISH4031,
-    });
-  }
-
-  if (item.status !== 'WAITING') {
-    throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
-      errorCode: ERROR_CODES.WISH4091,
-    });
-  }
-
-  return item;
-};
-
 const STATUS_MAP = {
   BUY: 'DECIDED',
   SKIP: 'DECIDED',
@@ -74,8 +39,17 @@ const STATUS_MAP = {
 export const createWishlistDecision = async (userId, temptationIdParam, bodyData) => {
   const { decisionType, selectedWaitType } = bodyData;
 
-  const temptation = await getValidatedTemptationItem(userId, temptationIdParam);
+  // 1. BigInt 변환 파싱 에러 사전 검증
+  let temptationId;
+  try {
+    temptationId = BigInt(temptationIdParam);
+  } catch (_err) {
+    throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.WISH4041,
+    });
+  }
 
+  // 2. DELAY 파라미터 사전 검증
   let selectedWaitUntil = null;
   let mappedWaitType = null;
 
@@ -89,7 +63,44 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
     mappedWaitType = WAIT_TYPE_MAP[selectedWaitType];
   }
 
+  // 3. 트랜잭션 내에서 원자적(Atomic) 조회 및 동시성 검증
   return await prisma.$transaction(async (tx) => {
+    // 트랜잭션 안에서 최신 데이터를 가져옴
+    const temptation = await tx.wishlistItem.findUnique({
+      where: { id: temptationId },
+    });
+
+    if (!temptation) {
+      throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
+        errorCode: ERROR_CODES.WISH4041,
+      });
+    }
+
+    if (temptation.userId !== userId) {
+      throw new HttpError(403, '접근 권한이 없습니다.', {
+        errorCode: ERROR_CODES.WISH4031,
+      });
+    }
+
+    // 상태 검증: WAITING 상태가 아니면 거부 (동시성 요청 차단)
+    if (temptation.status !== 'WAITING') {
+      throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
+        errorCode: ERROR_CODES.WISH4091,
+      });
+    }
+
+    // ⭐ [리뷰 반영] DELAY 시간 검증: 고민 연장 시간이 아직 안 지났는데 재판단/연장을 시도하는 경우 차단
+    if (
+      decisionType === 'DELAY' &&
+      temptation.waitUntil &&
+      new Date() < new Date(temptation.waitUntil)
+    ) {
+      throw new HttpError(400, '아직 재판단 시간이 되지 않았습니다.', {
+        errorCode: ERROR_CODES.WISH4003, // 프로젝트의 에러 코드에 맞게 맞추어 주세요
+      });
+    }
+
+    // 4. 결정 기록 생성
     const decision = await tx.wishlistDecision.create({
       data: {
         wishlistItemId: temptation.id,
@@ -100,9 +111,10 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
       },
     });
 
+    // 5. 위시리스트 항목 상태 업데이트
     const nextStatus = STATUS_MAP[decisionType];
-
     const updateData = { status: nextStatus };
+
     if (decisionType === 'DELAY') {
       updateData.waitType = mappedWaitType;
       updateData.waitUntil = selectedWaitUntil;
@@ -113,6 +125,7 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
       data: updateData,
     });
 
+    // 6. SKIP인 경우 소비 기록(참은 소비) 자동 생성
     if (decisionType === 'SKIP') {
       await tx.consumptionRecord.create({
         data: {
