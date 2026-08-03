@@ -2194,6 +2194,7 @@ export const openApiDocument = {
           securedOperation('Reports', '상세 소비 분석 리포트 조회'),
           consumptionReportDetailDto,
         ),
+        description: '현재 및 과거 월 조회 가능 (미래 월 불가 / month 미입력 시 현재 연월)',
         responses: {
           200: {
             description: '상세 소비 분석 리포트 조회 성공',
