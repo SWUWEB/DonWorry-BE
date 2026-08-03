@@ -598,7 +598,7 @@ export const openApiDocument = {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: '월별 수입/예산 조회 성공' },
           data: {
-            oneOf: [{ type: 'null' }, { $ref: '`#/components/schemas/MonthlyBudgetResult`' }],
+            oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/MonthlyBudgetResult' }],
           },
         },
       },
