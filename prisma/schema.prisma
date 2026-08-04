@@ -73,6 +73,11 @@ enum WithdrawalReasonType {
   OTHER
 }
 
+enum Gender {
+  FEMALE
+  MALE
+}
+
 model User {
   id                      BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
   email                   String        @unique @db.VarChar(255)
@@ -97,6 +102,8 @@ model User {
   lastLoginAt             DateTime?     @map("last_login_at")
   createdAt               DateTime      @default(now()) @map("created_at")
   updatedAt               DateTime      @updatedAt @map("updated_at")
+  birthDate               DateTime?     @map("birth_date") @db.Date
+  gender                  Gender?
 
   authTokens                 AuthToken[]
   consumptionAnalysisReports ConsumptionAnalysisReport[]

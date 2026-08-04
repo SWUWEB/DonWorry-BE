@@ -13,6 +13,9 @@ export const getMe = async (userId) => {
       profileImageUrl: true,
       savingGoalText: true,
       interestTagsJson: true,
+      phoneNumber: true,
+      birthDate: true,
+      gender: true,
     },
   });
 
@@ -24,6 +27,7 @@ export const getMe = async (userId) => {
   return {
     ...user,
     id: user.id.toString(),
+    birthDate: user.birthDate?.toISOString().slice(0, 10) ?? null,
   };
 };
 
@@ -42,14 +46,24 @@ export const updateMe = async (userId, body) => {
   if (body.nickname !== undefined) {
     data.nickname = body.nickname;
   }
-
   if (body.profileImageUrl !== undefined) {
     data.profileImageUrl = body.profileImageUrl;
   }
-
   if (body.interestTags !== undefined) {
     data.interestTagsJson = body.interestTags;
   }
+  if (body.phoneNumber !== undefined) {
+    data.phoneNumber = body.phoneNumber
+      ? body.phoneNumber.replace(/^(01[016789])-?(\d{3,4})-?(\d{4})$/, '$1-$2-$3')
+      : null;
+  }
+  if (body.birthDate !== undefined) {
+    data.birthDate = body.birthDate ? new Date(body.birthDate) : null;
+  }
+  if (body.gender !== undefined) {
+    data.gender = body.gender;
+  }
+
   const updatedUser = await prisma.user.update({
     where: { id: userId },
     data,
@@ -59,11 +73,15 @@ export const updateMe = async (userId, body) => {
       profileImageUrl: true,
       savingGoalText: true,
       interestTagsJson: true,
+      phoneNumber: true,
+      birthDate: true,
+      gender: true,
     },
   });
   return {
     ...updatedUser,
     id: updatedUser.id.toString(),
+    birthDate: updatedUser.birthDate?.toISOString().slice(0, 10) ?? null,
   };
 };
 
