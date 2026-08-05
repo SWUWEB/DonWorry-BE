@@ -63,6 +63,11 @@ enum WithdrawalReasonType {
   OTHER
 }
 
+enum Gender {
+  FEMALE
+  MALE
+}
+
 model User {
   id                      BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
   email                   String        @unique @db.VarChar(255)
@@ -87,12 +92,15 @@ model User {
   lastLoginAt             DateTime?     @map("last_login_at")
   createdAt               DateTime      @default(now()) @map("created_at")
   updatedAt               DateTime      @updatedAt @map("updated_at")
+  birthDate               DateTime?     @map("birth_date") @db.Date
+  gender                  Gender?
 
   authTokens                 AuthToken[]
   consumptionAnalysisReports ConsumptionAnalysisReport[]
   consumptionRecords         ConsumptionRecord[]
   notifications              Notification[]
   wishlistItems              WishlistItem[]
+  monthlyBudgets             MonthlyBudget[]
 
   @@map("users")
 }
@@ -255,4 +263,20 @@ model WithdrawalAudit {
   createdAt     DateTime              @default(now()) @map("created_at")
 
   @@map("withdrawal_audit")
+}
+
+model MonthlyBudget {
+  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userId        BigInt   @map("user_id") @db.UnsignedBigInt
+  yearMonth     String   @map("year_month") @db.Char(7)
+  monthlyIncome BigInt?  @map("monthly_income") @db.UnsignedBigInt
+  monthlyBudget BigInt   @map("monthly_budget") @db.UnsignedBigInt
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, yearMonth], map: "monthly_budgets_user_year_month_key")
+  @@index([userId])
+  @@map("monthly_budgets")
 }
