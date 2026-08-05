@@ -49,7 +49,7 @@ const buildGoalAchievement = (skippedAmount, targetAmount) => {
   }
   const target = Number(targetAmount);
   const rate = Math.min(100, calculateRatio(skippedAmount, target));
-  if (rate >= 100) {
+  if (skippedAmount >= target) {
     return {
       status: 'ACHIEVED',
       rate: 100,
@@ -132,8 +132,8 @@ const buildConsumptionChart = (records) => {
   };
 };
 
-const buildThisMonthSpending = (thisAmount, lastAmount, hasLastMonthRecords) => {
-  if (!hasLastMonthRecords) {
+const buildThisMonthSpending = (thisAmount, lastAmount) => {
+  if (lastAmount <= 0) {
     return {
       amount: thisAmount,
       comparisonRate: null,
@@ -169,7 +169,6 @@ export const getHomeSummary = async (userId, now = new Date()) => {
     prisma.consumptionRecord.aggregate({
       where: { userId, type: 'CONSUMED', occurredAt: { gte: prevStartAt, lt: prevEndAt } },
       _sum: { price: true },
-      _count: true,
     }),
     prisma.consumptionRecord.aggregate({
       where: { userId, type: 'SKIPPED', occurredAt: { gte: startAt, lt: endAt } },
@@ -181,11 +180,11 @@ export const getHomeSummary = async (userId, now = new Date()) => {
   const thisAmount = thisMonthRecords.reduce((sum, record) => sum + Number(record.price ?? 0), 0);
   const lastAmount = Number(lastMonthAgg._sum.price ?? 0);
   const skippedAmount = Number(skippedAgg._sum.price ?? 0);
-  const hasLastMonthRecords = lastMonthAgg._count > 0;
+
   return {
-    goalAchievement: buildGoalAchievement(skippedAmount, user?.targetSavingAmount ?? null),
+    goalAchievement: buildGoalAchievement(skippedAmount, user.targetSavingAmount),
     consumptionChart: buildConsumptionChart(thisMonthRecords),
-    thisMonthSpending: buildThisMonthSpending(thisAmount, lastAmount, hasLastMonthRecords),
+    thisMonthSpending: buildThisMonthSpending(thisAmount, lastAmount),
     remainingBudget: buildRemainingBudget(budget, thisAmount),
   };
 };
