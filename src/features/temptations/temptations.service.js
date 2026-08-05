@@ -78,12 +78,6 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
       });
     }
 
-    if (temptation.status !== 'WAITING') {
-      throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
-        errorCode: ERROR_CODES.WISH4091,
-      });
-    }
-
     if (
       decisionType === 'DELAY' &&
       temptation.waitUntil &&
@@ -91,6 +85,29 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
     ) {
       throw new HttpError(400, '아직 재판단 시간이 되지 않았습니다.', {
         errorCode: ERROR_CODES.WISH4003,
+      });
+    }
+
+    const nextStatus = STATUS_MAP[decisionType];
+    const updateData = { status: nextStatus };
+
+    if (decisionType === 'DELAY') {
+      updateData.waitType = mappedWaitType;
+      updateData.waitUntil = selectedWaitUntil;
+    }
+
+    const updateResult = await tx.wishlistItem.updateMany({
+      where: {
+        id: temptationId,
+        userId,
+        status: 'WAITING',
+      },
+      data: updateData,
+    });
+
+    if (updateResult.count === 0) {
+      throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
+        errorCode: ERROR_CODES.WISH4091,
       });
     }
 
@@ -102,19 +119,6 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
         selectedWaitUntil,
         decidedAt: new Date(),
       },
-    });
-
-    const nextStatus = STATUS_MAP[decisionType];
-    const updateData = { status: nextStatus };
-
-    if (decisionType === 'DELAY') {
-      updateData.waitType = mappedWaitType;
-      updateData.waitUntil = selectedWaitUntil;
-    }
-
-    await tx.wishlistItem.update({
-      where: { id: temptation.id },
-      data: updateData,
     });
 
     if (decisionType === 'SKIP') {
