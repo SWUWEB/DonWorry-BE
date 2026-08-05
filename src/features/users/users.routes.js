@@ -9,6 +9,8 @@ import {
   deleteSavingGoalController,
   deleteUserController,
   updateNotificationSettingsController,
+  getBudgetController,
+  setBudgetController,
 } from './users.controller.js';
 import {
   changePasswordDto,
@@ -16,6 +18,8 @@ import {
   savingGoalDto,
   updateMeDto,
   deleteUserDto,
+  getBudgetDto,
+  setBudgetDto,
 } from './users.dto.js';
 
 export const usersRouter = Router();
@@ -33,3 +37,5 @@ usersRouter.patch(
   validate(notificationSettingsDto),
   updateNotificationSettingsController,
 );
+usersRouter.get('/me/budget', validate(getBudgetDto), getBudgetController);
+usersRouter.put('/me/budget', validate(setBudgetDto), setBudgetController);

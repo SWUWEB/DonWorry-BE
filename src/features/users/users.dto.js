@@ -107,3 +107,21 @@ export const deleteUserDto = z.object({
       .optional(),
   }),
 });
+
+const YEAR_MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+export const getBudgetDto = z.object({
+  query: z.object({
+    yearMonth: z
+      .string()
+      .regex(YEAR_MONTH_REGEX, 'yearMonth는 YYYY-MM 형식이어야 합니다.')
+      .optional(),
+  }),
+});
+
+export const setBudgetDto = z.object({
+  body: z.object({
+    yearMonth: z.string().regex(YEAR_MONTH_REGEX, 'yearMonth는 YYYY-MM 형식이어야 합니다.'),
+    monthlyIncome: z.coerce.bigint().nonnegative('수입 금액은 0원 이상이어야 합니다.').optional(),
+    monthlyBudget: z.coerce.bigint().nonnegative('예산 금액은 0원 이상이어야 합니다.'),
+  }),
+});

@@ -6,6 +6,8 @@ import {
   deleteSavingGoal,
   deleteUser,
   updateNotificationSettings,
+  getBudget,
+  setBudget,
 } from './users.service.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 
@@ -45,4 +47,15 @@ export const deleteUserController = asyncHandler(async (req, res) => {
 export const updateNotificationSettingsController = asyncHandler(async (req, res) => {
   const result = await updateNotificationSettings(BigInt(req.user.userId), req.validated.body);
   return ok(res, result, '알림 설정 수정 성공');
+});
+
+export const getBudgetController = asyncHandler(async (req, res) => {
+  const { yearMonth } = req.validated.query;
+  const result = await getBudget(BigInt(req.user.userId), yearMonth);
+  return ok(res, result, '월별 수입/예산 조회 성공');
+});
+
+export const setBudgetController = asyncHandler(async (req, res) => {
+  const result = await setBudget(BigInt(req.user.userId), req.validated.body);
+  return ok(res, result, '월별 수입/예산이 설정되었습니다.');
 });

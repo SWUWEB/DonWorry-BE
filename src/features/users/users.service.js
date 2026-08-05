@@ -234,3 +234,73 @@ export const updateNotificationSettings = async (userId, body) => {
     errorCode: ERROR_CODES.USER4091,
   });
 };
+
+const toCurrentYearMonth = () => {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const month = String(kst.getUTCMonth() + 1).padStart(2, '0');
+  return `${kst.getUTCFullYear()}-${month}`;
+};
+
+export const getBudget = async (userId, yearMonth) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+  if (!user) {
+    throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.USER4041,
+    });
+  }
+  const targetYearMonth = yearMonth ?? toCurrentYearMonth();
+  const budget = await prisma.monthlyBudget.findUnique({
+    where: {
+      userId_yearMonth: {
+        userId,
+        yearMonth: targetYearMonth,
+      },
+    },
+  });
+  if (!budget) return null;
+  return {
+    yearMonth: budget.yearMonth,
+    monthlyIncome: budget.monthlyIncome !== null ? budget.monthlyIncome.toString() : null,
+    monthlyBudget: budget.monthlyBudget.toString(),
+  };
+};
+
+export const setBudget = async (userId, body) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+  if (!user) {
+    throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.USER4041,
+    });
+  }
+  const { yearMonth, monthlyIncome, monthlyBudget } = body;
+  const updateData = { monthlyBudget };
+  if (monthlyIncome !== undefined) {
+    updateData.monthlyIncome = monthlyIncome;
+  }
+
+  const budget = await prisma.monthlyBudget.upsert({
+    where: {
+      userId_yearMonth: {
+        userId,
+        yearMonth,
+      },
+    },
+    update: updateData,
+    create: {
+      userId,
+      yearMonth,
+      monthlyIncome: monthlyIncome ?? null,
+      monthlyBudget,
+    },
+  });
+  return {
+    yearMonth: budget.yearMonth,
+    monthlyIncome: budget.monthlyIncome !== null ? budget.monthlyIncome.toString() : null,
+    monthlyBudget: budget.monthlyBudget.toString(),
+  };
+};
