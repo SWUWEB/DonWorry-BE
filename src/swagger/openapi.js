@@ -755,6 +755,87 @@ export const openApiDocument = {
           data: { $ref: '#/components/schemas/MonthlyBudgetResult' },
         },
       },
+      HomeSummaryResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '홈 요약 조회 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              goalAchievement: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', enum: ['NOT_SET', 'IN_PROGRESS', 'ACHIEVED'] },
+                  rate: { type: 'integer', example: 70 },
+                  remainingAmount: { type: 'number', nullable: true, example: 150000 },
+                  message: { type: 'string', example: '이번 달 목표 70% 달성했어요 🎯' },
+                },
+              },
+              consumptionChart: {
+                type: 'object',
+                properties: {
+                  hasData: { type: 'boolean' },
+                  categories: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        categoryCode: { type: 'string', example: 'FOOD_SNACK' },
+                        categoryLabel: { type: 'string', example: '음식' },
+                        amount: { type: 'number', example: 200000 },
+                        ratio: { type: 'integer', example: 33 },
+                      },
+                    },
+                  },
+                  others: {
+                    type: 'object',
+                    nullable: true,
+                    properties: {
+                      amount: { type: 'number', example: 50000 },
+                      ratio: { type: 'integer', example: 9 },
+                    },
+                  },
+                  summaryText: {
+                    type: 'string',
+                    example: '이번 달에는 음식 소비가 전체 지출의 33%를 차지했어요.',
+                  },
+                },
+              },
+              thisMonthSpending: {
+                type: 'object',
+                properties: {
+                  amount: { type: 'number', example: 350000 },
+                  comparisonRate: { type: 'integer', nullable: true, example: 12 },
+                  comparisonMessage: { type: 'string', nullable: true, example: '지난달보다 +12%' },
+                },
+              },
+              remainingBudget: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', enum: ['NOT_SET', 'WITHIN', 'EXCEEDED'] },
+                  amount: { type: 'number', nullable: true, example: 150000 },
+                  message: { type: 'string', example: '목표까지 남았어요' },
+                },
+              },
+            },
+          },
+        },
+      },
+      DailyQuestionResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '오늘의 소비 질문 조회 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              questionText: { type: 'string', example: '오늘 계획하지 않은 소비가 있었나요?' },
+              date: { type: 'string', format: 'date', example: '2026-07-30' },
+            },
+          },
+        },
+      },
       ConsumptionRecordResult: {
         type: 'object',
         properties: {
@@ -1938,13 +2019,50 @@ export const openApiDocument = {
       },
     },
     '/api/v1/home/summary': {
-      get: securedOperation('Home', '홈 요약 조회'),
+      get: {
+        ...securedOperation('Home', '홈 요약 조회'),
+        responses: {
+          200: {
+            description: '홈 요약 조회 성공',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/HomeSummaryResponse' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/home/cheer-message': {
       get: securedOperation('Home', '응원 메시지 조회'),
     },
     '/api/v1/home/daily-question': {
-      get: securedOperation('Home', '오늘의 소비 질문 조회'),
+      get: {
+        ...securedOperation('Home', '오늘의 소비 질문 조회'),
+        responses: {
+          200: {
+            description: '오늘의 소비 질문 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DailyQuestionResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
     },
     '/api/v1/consumption-records': {
       get: {
