@@ -78,14 +78,15 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
       });
     }
 
-    if (
-      decisionType === 'DELAY' &&
-      temptation.waitUntil &&
-      new Date() < new Date(temptation.waitUntil)
-    ) {
-      throw new HttpError(400, '아직 재판단 시간이 되지 않았습니다.', {
-        errorCode: ERROR_CODES.WISH4003,
-      });
+    const now = new Date();
+    const whereCondition = {
+      id: temptationId,
+      userId,
+      status: 'WAITING',
+    };
+
+    if (decisionType === 'DELAY') {
+      whereCondition.OR = [{ waitUntil: null }, { waitUntil: { lte: now } }];
     }
 
     const nextStatus = STATUS_MAP[decisionType];
@@ -97,16 +98,32 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
     }
 
     const updateResult = await tx.wishlistItem.updateMany({
-      where: {
-        id: temptationId,
-        userId,
-        status: 'WAITING',
-      },
+      where: whereCondition,
       data: updateData,
     });
 
     if (updateResult.count === 0) {
-      throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
+      const latestItem = await tx.wishlistItem.findUnique({
+        where: { id: temptationId },
+      });
+
+      if (!latestItem || latestItem.status !== 'WAITING') {
+        throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
+          errorCode: ERROR_CODES.WISH4091,
+        });
+      }
+
+      if (
+        decisionType === 'DELAY' &&
+        latestItem.waitUntil &&
+        now < new Date(latestItem.waitUntil)
+      ) {
+        throw new HttpError(400, '아직 재판단 시간이 되지 않았습니다.', {
+          errorCode: ERROR_CODES.WISH4003,
+        });
+      }
+
+      throw new HttpError(409, '이미 처리가 완료되었거나 중복된 요청입니다.', {
         errorCode: ERROR_CODES.WISH4091,
       });
     }
@@ -117,7 +134,7 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
         decisionType,
         selectedWaitType: mappedWaitType,
         selectedWaitUntil,
-        decidedAt: new Date(),
+        decidedAt: now,
       },
     });
 
@@ -131,7 +148,7 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
           productUrl: temptation.productUrl ?? null,
           reason: temptation.reason ?? null,
           type: 'SKIPPED',
-          occurredAt: new Date(),
+          occurredAt: now,
         },
       });
     }
