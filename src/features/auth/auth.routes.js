@@ -5,7 +5,7 @@ import {
   checkEmailController,
   checkLoginIdController,
   confirmEmailVerificationController,
-  createNotImplementedController,
+  confirmPasswordResetController,
   confirmKakaoLinkEmailController,
   kakaoLinkPasswordController,
   kakaoLoginController,
@@ -36,8 +36,6 @@ import {
 
 export const authRouter = Router();
 
-const todo = createNotImplementedController('auth');
-
 authRouter.post('/signup', validate(signupDto), signupController);
 authRouter.post('/login', validate(loginDto), loginController);
 authRouter.post('/logout', requireAuth, validate(logoutDto), logoutController);
@@ -59,7 +57,11 @@ authRouter.post(
   validate(passwordResetRequestDto),
   requestPasswordResetController,
 );
-authRouter.patch('/password-reset/confirm', validate(passwordResetConfirmDto), todo);
+authRouter.patch(
+  '/password-reset/confirm',
+  validate(passwordResetConfirmDto),
+  confirmPasswordResetController,
+);
 authRouter.post('/kakao/login', validate(kakaoLoginDto), kakaoLoginController);
 authRouter.post('/kakao/link', validate(kakaoLinkPasswordDto), kakaoLinkPasswordController);
 authRouter.post(

@@ -4,6 +4,7 @@ import {
   checkEmail,
   checkLoginId,
   confirmEmailVerification,
+  confirmPasswordReset,
   kakaoLinkByEmail,
   kakaoLinkByPassword,
   kakaoLogin,
@@ -92,4 +93,10 @@ export const requestPasswordResetController = asyncHandler(async (req, res) => {
   const result = await requestPasswordReset(req.validated.body);
 
   return ok(res, result, '입력한 이메일로 계정 복구 안내를 전송했습니다.');
+});
+
+export const confirmPasswordResetController = asyncHandler(async (req, res) => {
+  await confirmPasswordReset(req.validated.body);
+
+  return ok(res, null, '비밀번호 재설정이 완료되었습니다.');
 });

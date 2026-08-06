@@ -11,6 +11,8 @@ process.env.JWT_ACCESS_SECRET = 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 process.env.CORS_ORIGIN = 'http://localhost:5173';
 process.env.AUTH_PASSWORD_RESET_MIN_RESPONSE_MS = '0';
+process.env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS = '5';
+process.env.AUTH_EMAIL_CONFIRM_LOCK_SECONDS = '300';
 
 const { createApp } = await import('../src/app.js');
 const { prisma } = await import('../src/prisma/client.js');
@@ -49,6 +51,31 @@ const createUser = async ({ email, loginId, passwordHash = null, kakaoUserId = n
 };
 
 const createLocalPasswordHash = () => bcrypt.hash('Password123!', 12);
+
+const createPasswordResetToken = async ({
+  user,
+  code = '123456',
+  expiresAt = new Date(Date.now() + 600_000),
+  usedAt = null,
+  failedAttemptCount = 0,
+  blockedUntil = null,
+}) => {
+  return prisma.authToken.create({
+    data: {
+      userId: user.id,
+      emailSnapshot: user.email,
+      tokenType: 'PASSWORD_RESET',
+      tokenHash: await bcrypt.hash(code, 4),
+      expiresAt,
+      usedAt,
+      failedAttemptCount,
+      blockedUntil,
+    },
+  });
+};
+
+const confirmPasswordReset = (body) =>
+  request(app).patch('/api/v1/auth/password-reset/confirm').send(body);
 
 const deleteTestData = async () => {
   const users = await prisma.user.findMany({
@@ -311,6 +338,242 @@ test('잘못된 이메일과 추가 필드를 거부한다', async () => {
 test('Swagger에 비밀번호 재설정 요청 API의 public 응답을 문서화한다', async () => {
   const response = await request(app).get('/api-docs.json');
   const operation = response.body.paths['/api/v1/auth/password-reset/request'].post;
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(operation.security, []);
+  assert.ok(operation.requestBody);
+  assert.ok(operation.responses['200']);
+  assert.ok(operation.responses['400']);
+  assert.ok(operation.responses['429']);
+  assert.equal(operation.responses['501'], undefined);
+});
+
+test('유효한 인증 코드로 비밀번호를 변경하고 기존 로그인 세션을 모두 폐기한다', async () => {
+  const user = await createUser({
+    email: 'password-reset-local@example.com',
+    loginId: 'resetlocal1',
+    passwordHash: await createLocalPasswordHash(),
+  });
+  const firstLogin = await request(app).post('/api/v1/auth/login').send({
+    loginId: user.loginId,
+    password: 'Password123!',
+  });
+  const secondLogin = await request(app).post('/api/v1/auth/login').send({
+    loginId: user.loginId,
+    password: 'Password123!',
+  });
+  const resetToken = await createPasswordResetToken({ user });
+
+  const response = await confirmPasswordReset({
+    email: ' PASSWORD-RESET-LOCAL@example.com ',
+    code: '123456',
+    newPassword: 'Changed123!',
+    newPasswordConfirm: 'Changed123!',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, {
+    success: true,
+    message: '비밀번호 재설정이 완료되었습니다.',
+    data: null,
+  });
+
+  const [consumedResetToken, activeRefreshTokenCount, oldLogin, newLogin] = await Promise.all([
+    prisma.authToken.findUnique({ where: { id: resetToken.id } }),
+    prisma.authToken.count({
+      where: { userId: user.id, tokenType: 'REFRESH_TOKEN', usedAt: null },
+    }),
+    request(app).post('/api/v1/auth/login').send({
+      loginId: user.loginId,
+      password: 'Password123!',
+    }),
+    request(app).post('/api/v1/auth/login').send({
+      loginId: user.loginId,
+      password: 'Changed123!',
+    }),
+  ]);
+
+  assert.ok(consumedResetToken.usedAt);
+  assert.equal(consumedResetToken.failedAttemptCount, 0);
+  assert.equal(activeRefreshTokenCount, 0);
+  assert.equal(oldLogin.status, 401);
+  assert.equal(newLogin.status, 200);
+
+  const [firstRefresh, secondRefresh] = await Promise.all([
+    request(app).post('/api/v1/auth/refresh').send({
+      refreshToken: firstLogin.body.data.refreshToken,
+    }),
+    request(app).post('/api/v1/auth/refresh').send({
+      refreshToken: secondLogin.body.data.refreshToken,
+    }),
+  ]);
+  assert.equal(firstRefresh.status, 401);
+  assert.equal(secondRefresh.status, 401);
+});
+
+test('잘못된 인증 코드는 실패 횟수를 증가시키고 비밀번호를 변경하지 않는다', async () => {
+  const user = await createUser({
+    email: 'password-reset-local@example.com',
+    loginId: 'resetlocal1',
+    passwordHash: await createLocalPasswordHash(),
+  });
+  const resetToken = await createPasswordResetToken({ user });
+
+  const response = await confirmPasswordReset({
+    email: user.email,
+    code: '999999',
+    newPassword: 'Changed123!',
+    newPasswordConfirm: 'Changed123!',
+  });
+  const [storedToken, oldLogin] = await Promise.all([
+    prisma.authToken.findUnique({ where: { id: resetToken.id } }),
+    request(app).post('/api/v1/auth/login').send({
+      loginId: user.loginId,
+      password: 'Password123!',
+    }),
+  ]);
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'AUTH4001');
+  assert.equal(storedToken.failedAttemptCount, 1);
+  assert.equal(storedToken.usedAt, null);
+  assert.equal(oldLogin.status, 200);
+});
+
+test('인증 코드 확인 실패가 최대 횟수에 도달하면 잠금 정보를 반환한다', async () => {
+  const user = await createUser({
+    email: 'password-reset-local@example.com',
+    loginId: 'resetlocal1',
+    passwordHash: await createLocalPasswordHash(),
+  });
+  await createPasswordResetToken({ user, failedAttemptCount: 4 });
+
+  const response = await confirmPasswordReset({
+    email: user.email,
+    code: '999999',
+    newPassword: 'Changed123!',
+    newPasswordConfirm: 'Changed123!',
+  });
+
+  assertRateLimitResponse(response, 'PASSWORD_RESET_CONFIRM_LOCK');
+});
+
+test('잠긴 인증 코드는 올바른 코드여도 잠금 해제 전까지 사용할 수 없다', async () => {
+  const user = await createUser({
+    email: 'password-reset-local@example.com',
+    loginId: 'resetlocal1',
+    passwordHash: await createLocalPasswordHash(),
+  });
+  await createPasswordResetToken({
+    user,
+    failedAttemptCount: 5,
+    blockedUntil: new Date(Date.now() + 300_000),
+  });
+
+  const response = await confirmPasswordReset({
+    email: user.email,
+    code: '123456',
+    newPassword: 'Changed123!',
+    newPasswordConfirm: 'Changed123!',
+  });
+
+  assertRateLimitResponse(response, 'PASSWORD_RESET_CONFIRM_LOCK');
+});
+
+test('만료되거나 이미 사용된 인증 코드를 거부한다', async () => {
+  const user = await createUser({
+    email: 'password-reset-local@example.com',
+    loginId: 'resetlocal1',
+    passwordHash: await createLocalPasswordHash(),
+  });
+  await createPasswordResetToken({ user, expiresAt: new Date(Date.now() - 1_000) });
+
+  const expiredResponse = await confirmPasswordReset({
+    email: user.email,
+    code: '123456',
+    newPassword: 'Changed123!',
+    newPasswordConfirm: 'Changed123!',
+  });
+
+  await prisma.authToken.deleteMany({ where: { userId: user.id, tokenType: 'PASSWORD_RESET' } });
+  await createPasswordResetToken({ user, usedAt: new Date() });
+
+  const usedResponse = await confirmPasswordReset({
+    email: user.email,
+    code: '123456',
+    newPassword: 'Changed123!',
+    newPasswordConfirm: 'Changed123!',
+  });
+
+  assert.equal(expiredResponse.status, 400);
+  assert.equal(expiredResponse.body.code, 'AUTH4001');
+  assert.equal(usedResponse.status, 400);
+  assert.equal(usedResponse.body.code, 'AUTH4001');
+});
+
+test('기존 비밀번호와 같은 새 비밀번호는 거부하고 인증 코드를 보존한다', async () => {
+  const user = await createUser({
+    email: 'password-reset-local@example.com',
+    loginId: 'resetlocal1',
+    passwordHash: await createLocalPasswordHash(),
+  });
+  const resetToken = await createPasswordResetToken({ user });
+
+  const response = await confirmPasswordReset({
+    email: user.email,
+    code: '123456',
+    newPassword: 'Password123!',
+    newPasswordConfirm: 'Password123!',
+  });
+  const storedToken = await prisma.authToken.findUnique({ where: { id: resetToken.id } });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'AUTH4001');
+  assert.equal(storedToken.usedAt, null);
+});
+
+test('완료 요청 DTO는 필수 필드, 비밀번호 확인 일치, 추가 필드를 검증한다', async () => {
+  const baseBody = {
+    email: 'password-reset-local@example.com',
+    code: '123456',
+    newPassword: 'Changed123!',
+    newPasswordConfirm: 'Changed123!',
+  };
+  const [missingResponse, mismatchResponse, extraFieldResponse] = await Promise.all([
+    confirmPasswordReset({ ...baseBody, code: undefined }),
+    confirmPasswordReset({ ...baseBody, newPasswordConfirm: 'Another123!' }),
+    confirmPasswordReset({ ...baseBody, token: 'unexpected' }),
+  ]);
+
+  for (const response of [missingResponse, mismatchResponse, extraFieldResponse]) {
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, 'COMMON4001');
+  }
+});
+
+test('동일한 인증 코드는 동시에 요청되어도 한 번만 사용할 수 있다', async () => {
+  const user = await createUser({
+    email: 'password-reset-local@example.com',
+    loginId: 'resetlocal1',
+    passwordHash: await createLocalPasswordHash(),
+  });
+  await createPasswordResetToken({ user });
+  const body = {
+    email: user.email,
+    code: '123456',
+    newPassword: 'Changed123!',
+    newPasswordConfirm: 'Changed123!',
+  };
+
+  const responses = await Promise.all([confirmPasswordReset(body), confirmPasswordReset(body)]);
+  const statuses = responses.map((response) => response.status).sort();
+
+  assert.deepEqual(statuses, [200, 400]);
+});
+
+test('Swagger에 비밀번호 재설정 완료 API의 public 응답을 문서화한다', async () => {
+  const response = await request(app).get('/api-docs.json');
+  const operation = response.body.paths['/api/v1/auth/password-reset/confirm'].patch;
 
   assert.equal(response.status, 200);
   assert.deepEqual(operation.security, []);
