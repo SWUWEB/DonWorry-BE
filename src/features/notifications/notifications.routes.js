@@ -5,6 +5,7 @@ import {
   listNotificationsController,
   markNotificationReadController,
   markAllNotificationsReadController,
+  deleteNotificationController,
 } from './notifications.controller.js';
 import { notificationIdDto, listNotificationsDto } from './notifications.dto.js';
 
@@ -17,4 +18,9 @@ notificationsRouter.patch(
   '/:notificationId/read',
   validate(notificationIdDto),
   markNotificationReadController,
+);
+notificationsRouter.delete(
+  '/:notificationId',
+  validate(notificationIdDto),
+  deleteNotificationController,
 );
