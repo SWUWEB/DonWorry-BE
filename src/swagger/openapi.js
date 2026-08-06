@@ -390,7 +390,7 @@ export const openApiDocument = {
         properties: {
           success: { type: 'boolean', enum: [true] },
           message: { type: 'string', example: '비밀번호 재설정이 완료되었습니다.' },
-          data: { type: 'null' },
+          data: { type: 'object', nullable: true },
         },
       },
       EmailVerificationConfirmResponse: {

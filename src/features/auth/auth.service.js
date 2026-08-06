@@ -221,6 +221,9 @@ const throwPasswordResetRateLimitedError = (retryAt, now, rateLimitType) => {
   });
 };
 
+const isPrismaTransactionConflictError = (error) =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+
 const recordPasswordResetRequest = async (email, now) => {
   const requestKeyHash = createPasswordResetRequestKeyHash(email);
   const cooldownStartedAt = new Date(now.getTime() - emailVerificationResendCooldownSeconds * 1000);
@@ -306,8 +309,7 @@ const recordPasswordResetRequest = async (email, now) => {
       await recordRequest();
       return;
     } catch (error) {
-      const shouldRetry =
-        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      const shouldRetry = isPrismaTransactionConflictError(error);
 
       if (!shouldRetry || attempt === 2) {
         throw error;
@@ -763,54 +765,62 @@ export const confirmPasswordReset = async ({ email, code, newPassword }) => {
 
   const passwordHash = await bcrypt.hash(newPassword, passwordSaltRounds);
 
-  await prisma.$transaction(async (tx) => {
-    const consumeResult = await tx.authToken.updateMany({
-      where: {
-        id: authToken.id,
-        userId: authToken.userId,
-        tokenType: 'PASSWORD_RESET',
-        usedAt: null,
-        expiresAt: { gt: now },
-        OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
-      },
-      data: {
-        usedAt: now,
-        failedAttemptCount: 0,
-        blockedUntil: null,
-      },
-    });
+  await prisma
+    .$transaction(async (tx) => {
+      const consumeResult = await tx.authToken.updateMany({
+        where: {
+          id: authToken.id,
+          userId: authToken.userId,
+          tokenType: 'PASSWORD_RESET',
+          usedAt: null,
+          expiresAt: { gt: now },
+          OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
+        },
+        data: {
+          usedAt: now,
+          failedAttemptCount: 0,
+          blockedUntil: null,
+        },
+      });
 
-    if (consumeResult.count !== 1) {
-      throwPasswordResetConfirmError();
-    }
+      if (consumeResult.count !== 1) {
+        throwPasswordResetConfirmError();
+      }
 
-    await tx.user.update({
-      where: { id: authToken.userId },
-      data: { passwordHash },
-    });
+      await tx.user.update({
+        where: { id: authToken.userId },
+        data: { passwordHash },
+      });
 
-    await tx.authToken.updateMany({
-      where: {
-        userId: authToken.userId,
-        tokenType: 'PASSWORD_RESET',
-        usedAt: null,
-      },
-      data: {
-        usedAt: now,
-        failedAttemptCount: 0,
-        blockedUntil: null,
-      },
-    });
+      await tx.authToken.updateMany({
+        where: {
+          userId: authToken.userId,
+          tokenType: 'PASSWORD_RESET',
+          usedAt: null,
+        },
+        data: {
+          usedAt: now,
+          failedAttemptCount: 0,
+          blockedUntil: null,
+        },
+      });
 
-    await tx.authToken.updateMany({
-      where: {
-        userId: authToken.userId,
-        tokenType: 'REFRESH_TOKEN',
-        usedAt: null,
-      },
-      data: { usedAt: now },
+      await tx.authToken.updateMany({
+        where: {
+          userId: authToken.userId,
+          tokenType: 'REFRESH_TOKEN',
+          usedAt: null,
+        },
+        data: { usedAt: now },
+      });
+    })
+    .catch((error) => {
+      if (isPrismaTransactionConflictError(error)) {
+        throwPasswordResetConfirmError();
+      }
+
+      throw error;
     });
-  });
 };
 
 export const confirmEmailVerification = async ({ email, code }) => {

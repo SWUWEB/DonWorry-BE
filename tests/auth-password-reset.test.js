@@ -378,11 +378,13 @@ test('유효한 인증 코드로 비밀번호를 변경하고 기존 로그인 �
     data: null,
   });
 
-  const [consumedResetToken, activeRefreshTokenCount, oldLogin, newLogin] = await Promise.all([
+  const [consumedResetToken, activeRefreshTokenCount] = await Promise.all([
     prisma.authToken.findUnique({ where: { id: resetToken.id } }),
     prisma.authToken.count({
       where: { userId: user.id, tokenType: 'REFRESH_TOKEN', usedAt: null },
     }),
+  ]);
+  const [oldLogin, newLogin] = await Promise.all([
     request(app).post('/api/v1/auth/login').send({
       loginId: user.loginId,
       password: 'Password123!',
@@ -574,6 +576,7 @@ test('동일한 인증 코드는 동시에 요청되어도 한 번만 사용할 
 test('Swagger에 비밀번호 재설정 완료 API의 public 응답을 문서화한다', async () => {
   const response = await request(app).get('/api-docs.json');
   const operation = response.body.paths['/api/v1/auth/password-reset/confirm'].patch;
+  const responseSchema = response.body.components.schemas.PasswordResetConfirmResponse;
 
   assert.equal(response.status, 200);
   assert.deepEqual(operation.security, []);
@@ -582,4 +585,5 @@ test('Swagger에 비밀번호 재설정 완료 API의 public 응답을 문서화
   assert.ok(operation.responses['400']);
   assert.ok(operation.responses['429']);
   assert.equal(operation.responses['501'], undefined);
+  assert.deepEqual(responseSchema.properties.data, { type: 'object', nullable: true });
 });
