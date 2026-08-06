@@ -30,10 +30,7 @@ import {
 } from '../features/notifications/notifications.dto.js';
 import { upsertOnboardingDto } from '../features/onboarding/onboarding.dto.js';
 import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
-import {
-  createWishlistDecisionDto,
-  temptationIdDto,
-} from '../features/temptations/temptations.dto.js';
+import { createWishlistDecisionDto } from '../features/temptations/temptations.dto.js';
 import {
   changePasswordDto,
   notificationSettingsDto,
@@ -358,6 +355,25 @@ export const openApiDocument = {
                 example: '123456',
                 description: 'Development only. Returned when SMTP delivery is skipped or fails.',
               },
+            },
+          },
+        },
+      },
+      PasswordResetRequestResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: {
+            type: 'string',
+            example: '입력한 이메일로 계정 복구 안내를 전송했습니다.',
+          },
+          data: {
+            type: 'object',
+            required: ['codeTtlSeconds', 'resendCooldownSeconds'],
+            properties: {
+              codeTtlSeconds: { type: 'integer', minimum: 1, example: 600 },
+              resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
             },
           },
         },
@@ -1506,7 +1522,43 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/password-reset/request': {
-      post: publicJsonOperation('Auth', '비밀번호 재설정 요청', passwordResetRequestDto),
+      post: {
+        ...publicJsonOperation('Auth', '비밀번호 재설정 요청', passwordResetRequestDto),
+        description:
+          '계정 존재 여부와 로그인 방식을 노출하지 않고 항상 동일한 성공 응답을 반환합니다. LOCAL 비밀번호 로그인이 가능한 계정에는 재설정 인증 코드를, 카카오 전용 계정에는 카카오 로그인 안내를 발송합니다.',
+        responses: {
+          200: {
+            description: 'Password reset guidance accepted',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/PasswordResetRequestResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: 'Password reset request rate limited',
+            headers: {
+              'Retry-After': {
+                description: '요청을 다시 시도할 수 있을 때까지 남은 초',
+                schema: { type: 'integer', minimum: 1, example: 42 },
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/password-reset/confirm': {
       patch: publicJsonOperation('Auth', '비밀번호 재설정 완료', passwordResetConfirmDto),
@@ -2920,8 +2972,117 @@ export const openApiDocument = {
       },
     },
     '/api/v1/temptations/{temptationId}/decisions': {
-      get: withZodDto(securedOperation('Temptations', '재판단 기록 조회'), temptationIdDto),
-      post: securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+      post: {
+        ...securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+        responses: {
+          201: {
+            description: '재판단 기록 추가 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', example: '6' },
+                        wishlistItemId: { type: 'string', example: '2' },
+                        decisionType: { type: 'string', example: 'DELAY' },
+                        selectedWaitType: { type: 'string', example: 'ONE_DAY' },
+                        selectedWaitUntil: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-08-01T14:37:35.850Z',
+                        },
+                        decidedAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-31T14:37:35.857Z',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '유효하지 않은 요청 데이터',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                examples: {
+                  MISSING_WAIT_TYPE: {
+                    summary: '고민 연장 시 대기 시간 미선택 (WISH4002)',
+                    value: {
+                      success: false,
+                      code: 'WISH4002',
+                      message: '고민 시간 연장 시 추가 대기 시간 선택은 필수입니다.',
+                    },
+                  },
+                  NOT_YET_REDECISION_TIME: {
+                    summary: '아직 재판단 시간이 지나지 않음 (WISH4003)',
+                    value: {
+                      success: false,
+                      code: 'WISH4003',
+                      message: '아직 고민 시간이 끝나지 않아 추가 연장을 할 수 없습니다.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: {
+            description: '접근 권한 없음 (타인의 항목)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4031',
+                  message: '접근 권한이 없습니다.',
+                },
+              },
+            },
+          },
+          404: {
+            description: '존재하지 않는 항목',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4041',
+                  message: '해당 위시리스트 항목을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          409: {
+            description: '이미 처리가 완료되었거나 대기 상태가 아닌 항목',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4091',
+                  message: '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
   },
 };

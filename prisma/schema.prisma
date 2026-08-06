@@ -20,6 +20,10 @@ enum TokenType {
   KAKAO_LINK_EMAIL
 }
 
+enum AuthRequestType {
+  PASSWORD_RESET
+}
+
 enum ReportType {
   MONTHLY_TOTAL
   CATEGORY
@@ -52,16 +56,6 @@ enum DecisionType {
   BUY
   SKIP
   DELAY
-}
-
-enum DecisionReasonType {
-  NECESSARY
-  HAS_ALTERNATIVE
-  LOW_NECESSITY
-  RECENT_SIMILAR_PURCHASE
-  PRICE_BURDEN
-  NEED_MORE_TIME
-  OTHER
 }
 
 enum WithdrawalReasonType {
@@ -133,6 +127,17 @@ model AuthToken {
   @@index([userId])
   @@index([tokenFamilyId, tokenType, usedAt], map: "auth_tokens_token_family_type_used_idx")
   @@map("auth_tokens")
+}
+
+model AuthRequestLog {
+  id             BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  requestKeyHash String          @map("request_key_hash") @db.Char(64)
+  requestType    AuthRequestType @map("request_type")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  @@index([requestKeyHash, requestType, createdAt], map: "auth_request_logs_key_type_created_idx")
+  @@index([createdAt], map: "auth_request_logs_created_idx")
+  @@map("auth_request_logs")
 }
 
 model ConsumptionAnalysisReport {
@@ -253,22 +258,15 @@ model WishlistItem {
 }
 
 model WishlistDecision {
-  id                BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
-  wishlistItemId    BigInt              @map("wishlist_item_id") @db.UnsignedBigInt
-  decisionRound     Int                 @map("decision_round") @db.UnsignedInt
-  decisionType      DecisionType        @map("decision_type")
-  reasonAlternative Boolean?            @map("reason_alternative")
-  reasonNeed        Boolean?            @map("reason_need")
-  reasonRecentBuy   Boolean?            @map("reason_recent_buy")
-  reasonType        DecisionReasonType? @map("reason_type")
-  reasonDetail      String?             @map("reason_detail") @db.Text
-  selectedWaitType  WaitType?           @map("selected_wait_type")
-  selectedWaitUntil DateTime?           @map("selected_wait_until")
-  decidedAt         DateTime            @default(now()) @map("decided_at")
+  id                BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  wishlistItemId    BigInt       @map("wishlist_item_id") @db.UnsignedBigInt
+  decisionType      DecisionType @map("decision_type")
+  selectedWaitType  WaitType?    @map("selected_wait_type")
+  selectedWaitUntil DateTime?    @map("selected_wait_until")
+  decidedAt         DateTime     @default(now()) @map("decided_at")
 
   wishlistItem WishlistItem @relation(fields: [wishlistItemId], references: [id], onDelete: Cascade)
 
-  @@unique([wishlistItemId, decisionRound])
   @@index([wishlistItemId])
   @@map("wishlist_decisions")
 }
