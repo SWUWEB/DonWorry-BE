@@ -20,6 +20,10 @@ enum TokenType {
   KAKAO_LINK_EMAIL
 }
 
+enum AuthRequestType {
+  PASSWORD_RESET
+}
+
 enum ReportType {
   MONTHLY_TOTAL
   CATEGORY
@@ -123,6 +127,17 @@ model AuthToken {
   @@index([userId])
   @@index([tokenFamilyId, tokenType, usedAt], map: "auth_tokens_token_family_type_used_idx")
   @@map("auth_tokens")
+}
+
+model AuthRequestLog {
+  id             BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  requestKeyHash String          @map("request_key_hash") @db.Char(64)
+  requestType    AuthRequestType @map("request_type")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  @@index([requestKeyHash, requestType, createdAt], map: "auth_request_logs_key_type_created_idx")
+  @@index([createdAt], map: "auth_request_logs_created_idx")
+  @@map("auth_request_logs")
 }
 
 model ConsumptionAnalysisReport {

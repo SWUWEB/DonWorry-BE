@@ -12,6 +12,7 @@ import {
   refreshAccessToken,
   requestKakaoLinkEmailVerification,
   requestEmailVerification,
+  requestPasswordReset,
   signup,
 } from './auth.service.js';
 
@@ -85,4 +86,10 @@ export const confirmEmailVerificationController = asyncHandler(async (req, res) 
   const result = await confirmEmailVerification(req.validated.body);
 
   return ok(res, result, '이메일 인증이 완료되었습니다.');
+});
+
+export const requestPasswordResetController = asyncHandler(async (req, res) => {
+  const result = await requestPasswordReset(req.validated.body);
+
+  return ok(res, result, '입력한 이메일로 계정 복구 안내를 전송했습니다.');
 });

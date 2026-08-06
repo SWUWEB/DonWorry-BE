@@ -26,6 +26,7 @@ const envSchema = z.object({
   AUTH_EMAIL_SEND_LIMIT: z.coerce.number().int().positive().default(3),
   AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   AUTH_EMAIL_CONFIRM_LOCK_SECONDS: z.coerce.number().int().positive().default(300),
+  AUTH_PASSWORD_RESET_MIN_RESPONSE_MS: z.coerce.number().int().nonnegative().default(300),
   SMTP_HOST: z.string().optional().default(''),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_SECURE: z
