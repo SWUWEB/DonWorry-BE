@@ -106,7 +106,7 @@ export const emailVerificationConfirmDto = z.object({
 });
 
 export const passwordResetRequestDto = z.object({
-  body: z.object({ email }),
+  body: z.object({ email }).strict(),
 });
 
 export const passwordResetConfirmDto = z.object({

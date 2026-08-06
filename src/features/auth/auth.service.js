@@ -6,7 +6,11 @@ import { env } from '../../config/env.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { prisma } from '../../prisma/client.js';
 import { HttpError } from '../../utils/http-error.js';
-import { sendEmailVerificationCode } from './auth.mailer.js';
+import {
+  sendEmailVerificationCode,
+  sendKakaoLoginGuide,
+  sendPasswordResetCode,
+} from './auth.mailer.js';
 import { getKakaoUser } from './kakao.client.js';
 
 const passwordSaltRounds = 12;
@@ -17,6 +21,7 @@ const emailVerificationSendLimitWindowSeconds = env.AUTH_EMAIL_SEND_LIMIT_WINDOW
 const emailVerificationSendLimit = env.AUTH_EMAIL_SEND_LIMIT;
 const emailVerificationConfirmMaxAttempts = env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS;
 const emailVerificationConfirmLockSeconds = env.AUTH_EMAIL_CONFIRM_LOCK_SECONDS;
+const passwordResetMinResponseMs = env.AUTH_PASSWORD_RESET_MIN_RESPONSE_MS;
 const dummyPasswordHash = '$2b$12$nDS70w.TSxO.D2NgJnu9Ke6MCDX7bMWto3SoH4nXS9tmaTL06Okhu';
 const emailVerificationRateLimitTypes = {
   RESEND_COOLDOWN: 'RESEND_COOLDOWN',
@@ -177,6 +182,110 @@ export const createEmailVerificationToken = (email) => {
 
 const createEmailVerificationCode = () => {
   return randomInt(0, 1_000_000).toString().padStart(6, '0');
+};
+
+const createPasswordResetRequestKeyHash = (email) => {
+  return createHash('sha256')
+    .update(`${env.JWT_REFRESH_SECRET}:password-reset:${email}`)
+    .digest('hex');
+};
+
+const throwPasswordResetRateLimitedError = (retryAt, now, rateLimitType) => {
+  throw new HttpError(429, '비밀번호 재설정 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
+    errorCode: ERROR_CODES.AUTH4291,
+    ...createRateLimitMetadata(retryAt, now, rateLimitType),
+  });
+};
+
+const recordPasswordResetRequest = async (email, now) => {
+  const requestKeyHash = createPasswordResetRequestKeyHash(email);
+  const cooldownStartedAt = new Date(now.getTime() - emailVerificationResendCooldownSeconds * 1000);
+  const limitWindowStartedAt = new Date(
+    now.getTime() - emailVerificationSendLimitWindowSeconds * 1000,
+  );
+
+  const recordRequest = () =>
+    prisma.$transaction(
+      async (tx) => {
+        await tx.authRequestLog.deleteMany({
+          where: { createdAt: { lte: limitWindowStartedAt } },
+        });
+
+        const recentRequest = await tx.authRequestLog.findFirst({
+          where: {
+            requestKeyHash,
+            requestType: 'PASSWORD_RESET',
+            createdAt: { gt: cooldownStartedAt },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        });
+        const requestsInWindow = await tx.authRequestLog.findMany({
+          where: {
+            requestKeyHash,
+            requestType: 'PASSWORD_RESET',
+            createdAt: { gt: limitWindowStartedAt },
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        });
+        const activeLimits = [];
+
+        if (recentRequest) {
+          activeLimits.push({
+            retryAt: new Date(
+              recentRequest.createdAt.getTime() + emailVerificationResendCooldownSeconds * 1000,
+            ),
+            rateLimitType: emailVerificationRateLimitTypes.RESEND_COOLDOWN,
+          });
+        }
+
+        if (requestsInWindow.length >= emailVerificationSendLimit) {
+          const releaseRequestIndex = requestsInWindow.length - emailVerificationSendLimit;
+          activeLimits.push({
+            retryAt: new Date(
+              requestsInWindow[releaseRequestIndex].createdAt.getTime() +
+                emailVerificationSendLimitWindowSeconds * 1000,
+            ),
+            rateLimitType: emailVerificationRateLimitTypes.SEND_LIMIT,
+          });
+        }
+
+        if (activeLimits.length > 0) {
+          const effectiveLimit = activeLimits.reduce((latestLimit, currentLimit) =>
+            currentLimit.retryAt > latestLimit.retryAt ? currentLimit : latestLimit,
+          );
+          throwPasswordResetRateLimitedError(
+            effectiveLimit.retryAt,
+            now,
+            effectiveLimit.rateLimitType,
+          );
+        }
+
+        await tx.authRequestLog.create({
+          data: {
+            requestKeyHash,
+            requestType: 'PASSWORD_RESET',
+            createdAt: now,
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await recordRequest();
+      return;
+    } catch (error) {
+      const shouldRetry =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+
+      if (!shouldRetry || attempt === 2) {
+        throw error;
+      }
+    }
+  }
 };
 
 const assertEmailVerificationRequestAllowed = async (email, now) => {
@@ -366,6 +475,101 @@ export const requestEmailVerification = async ({ email }) => {
     resendCooldownSeconds: emailVerificationResendCooldownSeconds,
     ...(env.NODE_ENV === 'development' && !emailDelivery?.delivered ? { debugCode: code } : {}),
   };
+};
+
+const createMinimumResponseDelay = () => {
+  if (env.NODE_ENV === 'test' || passwordResetMinResponseMs === 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => setTimeout(resolve, passwordResetMinResponseMs));
+};
+
+const issuePasswordResetCode = async ({ userId, email, code, codeHash, now, expiresAt }) => {
+  const authToken = await prisma.authToken.create({
+    data: {
+      userId,
+      emailSnapshot: email,
+      tokenType: 'PASSWORD_RESET',
+      tokenHash: codeHash,
+      expiresAt,
+    },
+    select: { id: true },
+  });
+
+  try {
+    const delivery = await sendPasswordResetCode({
+      email,
+      code,
+      codeTtlSeconds: emailVerificationCodeTtlSeconds,
+    });
+
+    if (env.NODE_ENV === 'production' && !delivery?.delivered) {
+      throw new Error('Password reset code was not delivered.');
+    }
+  } catch (_error) {
+    await prisma.authToken.deleteMany({ where: { id: authToken.id } });
+    return;
+  }
+
+  await prisma.authToken.updateMany({
+    where: {
+      id: { not: authToken.id },
+      userId,
+      tokenType: 'PASSWORD_RESET',
+      usedAt: null,
+    },
+    data: {
+      usedAt: now,
+      failedAttemptCount: 0,
+      blockedUntil: null,
+    },
+  });
+};
+
+export const requestPasswordReset = async ({ email }) => {
+  const now = new Date();
+  await recordPasswordResetRequest(email, now);
+
+  const minimumResponseDelay = createMinimumResponseDelay();
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        passwordHash: true,
+        kakaoUserId: true,
+      },
+    });
+    const code = createEmailVerificationCode();
+    const codeHash = await bcrypt.hash(code, passwordSaltRounds);
+    const expiresAt = new Date(now.getTime() + emailVerificationCodeTtlSeconds * 1000);
+
+    if (user?.passwordHash) {
+      await issuePasswordResetCode({
+        userId: user.id,
+        email,
+        code,
+        codeHash,
+        now,
+        expiresAt,
+      });
+    } else if (user?.kakaoUserId) {
+      try {
+        await sendKakaoLoginGuide({ email });
+      } catch (_error) {
+        // 계정 유형을 외부에 노출하지 않도록 메일 발송 실패도 공통 성공 응답으로 처리한다.
+      }
+    }
+
+    return {
+      codeTtlSeconds: emailVerificationCodeTtlSeconds,
+      resendCooldownSeconds: emailVerificationResendCooldownSeconds,
+    };
+  } finally {
+    await minimumResponseDelay;
+  }
 };
 
 const recordEmailVerificationFailedAttempt = async (authToken, now) => {
