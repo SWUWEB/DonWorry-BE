@@ -592,6 +592,14 @@ export const openApiDocument = {
           data: { nullable: true, example: null },
         },
       },
+      DeleteNotificationResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 삭제 성공' },
+          data: { nullable: true, example: null },
+        },
+      },
       ConsumptionReportDetailResponse: {
         type: 'object',
         required: ['success', 'message', 'data'],
@@ -2539,6 +2547,45 @@ export const openApiDocument = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '요청한 알림을 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'NOTIFICATION4041',
+                  message: '요청한 알림을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/notifications/{notificationId}': {
+      delete: {
+        ...withZodDto(securedOperation('Notifications', '알림 삭제'), notificationIdDto),
+        responses: {
+          200: {
+            description: '알림 삭제 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DeleteNotificationResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ValidationErrorResponse',
+                },
               },
             },
           },
