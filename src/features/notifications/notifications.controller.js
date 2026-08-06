@@ -4,6 +4,7 @@ import {
   listNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotification,
 } from './notifications.service.js';
 
 export const listNotificationsController = asyncHandler(async (req, res) => {
@@ -19,4 +20,9 @@ export const markNotificationReadController = asyncHandler(async (req, res) => {
 export const markAllNotificationsReadController = asyncHandler(async (req, res) => {
   await markAllNotificationsRead(BigInt(req.user.userId));
   return ok(res, null, '알림 전체 읽음 처리 성공');
+});
+
+export const deleteNotificationController = asyncHandler(async (req, res) => {
+  await deleteNotification(BigInt(req.user.userId), req.validated.params.notificationId);
+  return ok(res, null, '알림 삭제 성공');
 });
