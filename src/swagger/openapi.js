@@ -30,10 +30,7 @@ import {
 } from '../features/notifications/notifications.dto.js';
 import { upsertOnboardingDto } from '../features/onboarding/onboarding.dto.js';
 import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
-import {
-  createWishlistDecisionDto,
-  temptationIdDto,
-} from '../features/temptations/temptations.dto.js';
+import { createWishlistDecisionDto } from '../features/temptations/temptations.dto.js';
 import {
   changePasswordDto,
   notificationSettingsDto,
@@ -2928,8 +2925,117 @@ export const openApiDocument = {
       },
     },
     '/api/v1/temptations/{temptationId}/decisions': {
-      get: withZodDto(securedOperation('Temptations', '재판단 기록 조회'), temptationIdDto),
-      post: securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+      post: {
+        ...securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+        responses: {
+          201: {
+            description: '재판단 기록 추가 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', example: '6' },
+                        wishlistItemId: { type: 'string', example: '2' },
+                        decisionType: { type: 'string', example: 'DELAY' },
+                        selectedWaitType: { type: 'string', example: 'ONE_DAY' },
+                        selectedWaitUntil: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-08-01T14:37:35.850Z',
+                        },
+                        decidedAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-31T14:37:35.857Z',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '유효하지 않은 요청 데이터',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                examples: {
+                  MISSING_WAIT_TYPE: {
+                    summary: '고민 연장 시 대기 시간 미선택 (WISH4002)',
+                    value: {
+                      success: false,
+                      code: 'WISH4002',
+                      message: '고민 시간 연장 시 추가 대기 시간 선택은 필수입니다.',
+                    },
+                  },
+                  NOT_YET_REDECISION_TIME: {
+                    summary: '아직 재판단 시간이 지나지 않음 (WISH4003)',
+                    value: {
+                      success: false,
+                      code: 'WISH4003',
+                      message: '아직 고민 시간이 끝나지 않아 추가 연장을 할 수 없습니다.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: {
+            description: '접근 권한 없음 (타인의 항목)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4031',
+                  message: '접근 권한이 없습니다.',
+                },
+              },
+            },
+          },
+          404: {
+            description: '존재하지 않는 항목',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4041',
+                  message: '해당 위시리스트 항목을 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          409: {
+            description: '이미 처리가 완료되었거나 대기 상태가 아닌 항목',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'WISH4091',
+                  message: '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
   },
 };
