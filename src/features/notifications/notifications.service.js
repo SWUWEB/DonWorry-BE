@@ -64,17 +64,13 @@ export const markAllNotificationsRead = async (userId) => {
 };
 
 export const deleteNotification = async (userId, notificationId) => {
-  const notification = await prisma.notification.findFirst({
+  const result = await prisma.notification.deleteMany({
     where: { id: notificationId, userId },
-    select: { id: true },
   });
 
-  if (!notification) {
+  if (result.count === 0) {
     throw new HttpError(404, '요청한 알림을 찾을 수 없습니다.', {
       errorCode: ERROR_CODES.NOTIFICATION4041,
     });
   }
-  await prisma.notification.delete({
-    where: { id: notificationId },
-  });
 };
