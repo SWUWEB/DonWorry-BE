@@ -208,7 +208,11 @@ const recordPasswordResetRequest = async (email, now) => {
     prisma.$transaction(
       async (tx) => {
         await tx.authRequestLog.deleteMany({
-          where: { createdAt: { lte: limitWindowStartedAt } },
+          where: {
+            requestKeyHash,
+            requestType: 'PASSWORD_RESET',
+            createdAt: { lte: limitWindowStartedAt },
+          },
         });
 
         const recentRequest = await tx.authRequestLog.findFirst({
@@ -284,6 +288,9 @@ const recordPasswordResetRequest = async (email, now) => {
       if (!shouldRetry || attempt === 2) {
         throw error;
       }
+
+      const retryDelayMs = 10 * 2 ** attempt + randomInt(0, 11);
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
     }
   }
 };
@@ -485,6 +492,12 @@ const createMinimumResponseDelay = () => {
   return new Promise((resolve) => setTimeout(resolve, passwordResetMinResponseMs));
 };
 
+const logPasswordRecoveryEmailFailure = (emailType, error) => {
+  console.error(`[auth] ${emailType} email delivery failed.`, {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
+  });
+};
+
 const issuePasswordResetCode = async ({ userId, email, code, codeHash, now, expiresAt }) => {
   const authToken = await prisma.authToken.create({
     data: {
@@ -507,7 +520,8 @@ const issuePasswordResetCode = async ({ userId, email, code, codeHash, now, expi
     if (env.NODE_ENV === 'production' && !delivery?.delivered) {
       throw new Error('Password reset code was not delivered.');
     }
-  } catch (_error) {
+  } catch (error) {
+    logPasswordRecoveryEmailFailure('password reset', error);
     await prisma.authToken.deleteMany({ where: { id: authToken.id } });
     return;
   }
@@ -558,7 +572,8 @@ export const requestPasswordReset = async ({ email }) => {
     } else if (user?.kakaoUserId) {
       try {
         await sendKakaoLoginGuide({ email });
-      } catch (_error) {
+      } catch (error) {
+        logPasswordRecoveryEmailFailure('Kakao login guide', error);
         // 계정 유형을 외부에 노출하지 않도록 메일 발송 실패도 공통 성공 응답으로 처리한다.
       }
     }

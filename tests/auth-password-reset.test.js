@@ -269,6 +269,30 @@ test('동일 시간 구간의 비밀번호 재설정 요청 횟수를 제한한�
   assertRateLimitResponse(response, 'SEND_LIMIT');
 });
 
+test('요청 처리 중 다른 이메일의 만료된 rate limit 로그를 삭제하지 않는다', async () => {
+  const otherEmail = 'password-reset-other@example.com';
+  const otherRequestKeyHash = createHash('sha256')
+    .update(`${process.env.JWT_REFRESH_SECRET}:password-reset:${otherEmail}`)
+    .digest('hex');
+  const otherRequestLog = await prisma.authRequestLog.create({
+    data: {
+      requestKeyHash: otherRequestKeyHash,
+      requestType: 'PASSWORD_RESET',
+      createdAt: new Date(Date.now() - 600_000),
+    },
+  });
+
+  const response = await request(app).post('/api/v1/auth/password-reset/request').send({
+    email: 'password-reset-missing@example.com',
+  });
+  const preservedLog = await prisma.authRequestLog.findUnique({
+    where: { id: otherRequestLog.id },
+  });
+
+  assert.equal(response.status, 200);
+  assert.ok(preservedLog);
+});
+
 test('잘못된 이메일과 추가 필드를 거부한다', async () => {
   const invalidEmailResponse = await request(app)
     .post('/api/v1/auth/password-reset/request')

@@ -6,6 +6,11 @@ const brand = {
   textPrimary: '#243130',
   textSecondary: '#6B7280',
 };
+const smtpTimeouts = {
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 20_000,
+};
 
 const isSmtpConfigured = () => {
   return Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
@@ -161,6 +166,7 @@ const sendMail = async ({ email, subject, text, html, productionErrorMessage }) 
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_SECURE,
+    ...smtpTimeouts,
     auth: {
       user: env.SMTP_USER,
       pass: env.SMTP_PASS,
