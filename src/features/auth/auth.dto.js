@@ -110,5 +110,16 @@ export const passwordResetRequestDto = z.object({
 });
 
 export const passwordResetConfirmDto = z.object({
-  body: z.object({ token: z.string().min(1), newPassword: password }),
+  body: z
+    .object({
+      email,
+      code: emailVerificationCode,
+      newPassword: password,
+      newPasswordConfirm: z.string().min(1, '비밀번호 확인은 필수입니다.'),
+    })
+    .strict()
+    .refine((data) => data.newPassword === data.newPasswordConfirm, {
+      message: '비밀번호가 일치하지 않습니다.',
+      path: ['newPasswordConfirm'],
+    }),
 });

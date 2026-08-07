@@ -27,6 +27,7 @@ const emailVerificationRateLimitTypes = {
   RESEND_COOLDOWN: 'RESEND_COOLDOWN',
   SEND_LIMIT: 'SEND_LIMIT',
   CONFIRM_LOCK: 'CONFIRM_LOCK',
+  PASSWORD_RESET_CONFIRM_LOCK: 'PASSWORD_RESET_CONFIRM_LOCK',
 };
 
 const durationUnitToMs = {
@@ -174,6 +175,29 @@ const throwEmailVerificationConfirmRateLimitedError = (retryAt, now) => {
   });
 };
 
+const throwPasswordResetConfirmError = (
+  message = '비밀번호 재설정 인증 정보가 올바르지 않습니다.',
+) => {
+  throw new HttpError(400, message, {
+    errorCode: ERROR_CODES.AUTH4001,
+  });
+};
+
+const throwPasswordResetConfirmRateLimitedError = (retryAt, now) => {
+  throw new HttpError(
+    429,
+    '비밀번호 재설정 인증 확인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+    {
+      errorCode: ERROR_CODES.AUTH4291,
+      ...createRateLimitMetadata(
+        retryAt,
+        now,
+        emailVerificationRateLimitTypes.PASSWORD_RESET_CONFIRM_LOCK,
+      ),
+    },
+  );
+};
+
 export const createEmailVerificationToken = (email) => {
   return jwt.sign({ purpose: 'emailVerification', email }, env.JWT_ACCESS_SECRET, {
     expiresIn: emailVerificationJwtTtl,
@@ -196,6 +220,9 @@ const throwPasswordResetRateLimitedError = (retryAt, now, rateLimitType) => {
     ...createRateLimitMetadata(retryAt, now, rateLimitType),
   });
 };
+
+const isPrismaTransactionConflictError = (error) =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
 
 const recordPasswordResetRequest = async (email, now) => {
   const requestKeyHash = createPasswordResetRequestKeyHash(email);
@@ -282,8 +309,7 @@ const recordPasswordResetRequest = async (email, now) => {
       await recordRequest();
       return;
     } catch (error) {
-      const shouldRetry =
-        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      const shouldRetry = isPrismaTransactionConflictError(error);
 
       if (!shouldRetry || attempt === 2) {
         throw error;
@@ -587,7 +613,12 @@ export const requestPasswordReset = async ({ email }) => {
   }
 };
 
-const recordEmailVerificationFailedAttempt = async (authToken, now) => {
+const recordEmailVerificationFailedAttempt = async (
+  authToken,
+  now,
+  throwConfirmError = throwEmailVerificationConfirmError,
+  throwRateLimitedError = throwEmailVerificationConfirmRateLimitedError,
+) => {
   const lockUntil = new Date(now.getTime() + emailVerificationConfirmLockSeconds * 1000);
 
   if (authToken.blockedUntil && authToken.blockedUntil <= now) {
@@ -628,11 +659,11 @@ const recordEmailVerificationFailedAttempt = async (authToken, now) => {
   });
 
   if (!updatedAuthToken || updatedAuthToken.usedAt) {
-    throwEmailVerificationConfirmError();
+    throwConfirmError();
   }
 
   if (updatedAuthToken.blockedUntil && updatedAuthToken.blockedUntil > now) {
-    throwEmailVerificationConfirmRateLimitedError(updatedAuthToken.blockedUntil, now);
+    throwRateLimitedError(updatedAuthToken.blockedUntil, now);
   }
 
   if (updatedAuthToken.failedAttemptCount >= emailVerificationConfirmMaxAttempts) {
@@ -647,7 +678,7 @@ const recordEmailVerificationFailedAttempt = async (authToken, now) => {
     });
 
     if (lockResult.count === 1) {
-      throwEmailVerificationConfirmRateLimitedError(lockUntil, now);
+      throwRateLimitedError(lockUntil, now);
     }
 
     const lockedAuthToken = await prisma.authToken.findUnique({
@@ -656,15 +687,140 @@ const recordEmailVerificationFailedAttempt = async (authToken, now) => {
     });
 
     if (lockedAuthToken?.blockedUntil && lockedAuthToken.blockedUntil > now) {
-      throwEmailVerificationConfirmRateLimitedError(lockedAuthToken.blockedUntil, now);
+      throwRateLimitedError(lockedAuthToken.blockedUntil, now);
     }
 
-    throwEmailVerificationConfirmError();
+    throwConfirmError();
   }
 
   if (updateResult.count !== 1) {
-    throwEmailVerificationConfirmError();
+    throwConfirmError();
   }
+};
+
+export const confirmPasswordReset = async ({ email, code, newPassword }) => {
+  const now = new Date();
+  const authToken = await prisma.authToken.findFirst({
+    where: {
+      emailSnapshot: email,
+      tokenType: 'PASSWORD_RESET',
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: {
+      id: true,
+      userId: true,
+      tokenHash: true,
+      expiresAt: true,
+      usedAt: true,
+      failedAttemptCount: true,
+      blockedUntil: true,
+      user: {
+        select: {
+          id: true,
+          passwordHash: true,
+        },
+      },
+    },
+  });
+
+  if (!authToken) {
+    await bcrypt.compare(code, dummyPasswordHash);
+    throwPasswordResetConfirmError();
+  }
+
+  if (!authToken.userId || !authToken.user?.passwordHash) {
+    await bcrypt.compare(code, authToken.tokenHash);
+    throwPasswordResetConfirmError();
+  }
+
+  if (authToken.usedAt) {
+    throwPasswordResetConfirmError();
+  }
+
+  if (authToken.expiresAt <= now) {
+    throwPasswordResetConfirmError();
+  }
+
+  if (authToken.blockedUntil && authToken.blockedUntil > now) {
+    throwPasswordResetConfirmRateLimitedError(authToken.blockedUntil, now);
+  }
+
+  const isCodeMatched = await bcrypt.compare(code, authToken.tokenHash);
+
+  if (!isCodeMatched) {
+    await recordEmailVerificationFailedAttempt(
+      authToken,
+      now,
+      throwPasswordResetConfirmError,
+      throwPasswordResetConfirmRateLimitedError,
+    );
+    throwPasswordResetConfirmError();
+  }
+
+  const isSamePassword = await bcrypt.compare(newPassword, authToken.user.passwordHash);
+
+  if (isSamePassword) {
+    throwPasswordResetConfirmError('새 비밀번호는 기존 비밀번호와 달라야 합니다.');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, passwordSaltRounds);
+
+  await prisma
+    .$transaction(async (tx) => {
+      const consumeResult = await tx.authToken.updateMany({
+        where: {
+          id: authToken.id,
+          userId: authToken.userId,
+          tokenType: 'PASSWORD_RESET',
+          usedAt: null,
+          expiresAt: { gt: now },
+          OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
+        },
+        data: {
+          usedAt: now,
+          failedAttemptCount: 0,
+          blockedUntil: null,
+        },
+      });
+
+      if (consumeResult.count !== 1) {
+        throwPasswordResetConfirmError();
+      }
+
+      await tx.user.update({
+        where: { id: authToken.userId },
+        data: { passwordHash },
+      });
+
+      await tx.authToken.updateMany({
+        where: {
+          userId: authToken.userId,
+          tokenType: 'PASSWORD_RESET',
+          usedAt: null,
+        },
+        data: {
+          usedAt: now,
+          failedAttemptCount: 0,
+          blockedUntil: null,
+        },
+      });
+
+      await tx.authToken.updateMany({
+        where: {
+          userId: authToken.userId,
+          tokenType: 'REFRESH_TOKEN',
+          usedAt: null,
+        },
+        data: { usedAt: now },
+      });
+    })
+    .catch((error) => {
+      if (isPrismaTransactionConflictError(error)) {
+        throwPasswordResetConfirmError();
+      }
+
+      throw error;
+    });
 };
 
 export const confirmEmailVerification = async ({ email, code }) => {
