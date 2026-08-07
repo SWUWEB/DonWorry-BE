@@ -215,7 +215,13 @@ export const openApiDocument = {
           },
           rateLimitType: {
             type: 'string',
-            enum: ['RESEND_COOLDOWN', 'SEND_LIMIT', 'CONFIRM_LOCK', 'KAKAO_LINK_PASSWORD_LOCK'],
+            enum: [
+              'RESEND_COOLDOWN',
+              'SEND_LIMIT',
+              'CONFIRM_LOCK',
+              'PASSWORD_RESET_CONFIRM_LOCK',
+              'KAKAO_LINK_PASSWORD_LOCK',
+            ],
             example: 'RESEND_COOLDOWN',
             description: '적용된 이메일 인증 제한 종류',
           },
@@ -376,6 +382,15 @@ export const openApiDocument = {
               resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
             },
           },
+        },
+      },
+      PasswordResetConfirmResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '비밀번호 재설정이 완료되었습니다.' },
+          data: { type: 'object', nullable: true },
         },
       },
       EmailVerificationConfirmResponse: {
@@ -1561,7 +1576,57 @@ export const openApiDocument = {
       },
     },
     '/api/v1/auth/password-reset/confirm': {
-      patch: publicJsonOperation('Auth', '비밀번호 재설정 완료', passwordResetConfirmDto),
+      patch: {
+        ...publicJsonOperation('Auth', '비밀번호 재설정 완료', passwordResetConfirmDto),
+        description:
+          '이메일로 발급된 인증 코드를 확인해 비밀번호를 변경하고, 해당 사용자의 기존 리프레시 토큰을 모두 폐기합니다.',
+        responses: {
+          200: {
+            description: 'Password reset completed',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/PasswordResetConfirmResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request, code, password, expired code, or already used code',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+              },
+            },
+          },
+          429: {
+            description: 'Password reset confirmation rate limited',
+            headers: {
+              'Retry-After': {
+                description: '인증 확인을 다시 시도할 수 있을 때까지 남은 초',
+                schema: { type: 'integer', minimum: 1, example: 300 },
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH4291',
+                  message:
+                    '비밀번호 재설정 인증 확인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+                  retryAfterSeconds: 300,
+                  retryAt: '2026-07-09T12:39:56.000Z',
+                  rateLimitType: 'PASSWORD_RESET_CONFIRM_LOCK',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/auth/kakao/login': {
       post: {

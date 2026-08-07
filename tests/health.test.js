@@ -280,6 +280,7 @@ test('GET /api-docs.json documents email verification rate limit responses', asy
     'RESEND_COOLDOWN',
     'SEND_LIMIT',
     'CONFIRM_LOCK',
+    'PASSWORD_RESET_CONFIRM_LOCK',
     'KAKAO_LINK_PASSWORD_LOCK',
   ]);
   assert.equal(rateLimitSchema.properties.retryAfterSeconds.type, 'integer');
