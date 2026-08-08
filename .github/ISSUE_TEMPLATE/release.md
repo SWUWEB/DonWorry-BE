@@ -29,5 +29,6 @@ develop 브랜치에 누적된 변경사항을 main으로 릴리즈 배포합니
 - [ ] release PR 생성 (develop → main)
 - [ ] 리뷰/체크 통과
 - [ ] main 머지
-- [ ] deploy-ec2 수동 실행 (workflow_dispatch, ref: main)
-- [ ] 배포 검증 완료 (ssm-send-step, ssm-order, compose-ps)
+- [ ] GitHub Actions `CD` 실행 성공 확인 (`main` push 또는 `workflow_dispatch`, ref: `main`)
+- [ ] Cloud Run migration Job (`donworry-migrate`) 성공 확인
+- [ ] Cloud Run 서비스 (`donworry-api`) 새 리비전 배포 및 정상 응답 확인

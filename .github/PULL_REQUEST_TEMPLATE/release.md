@@ -16,16 +16,19 @@
 - [ ] self-review 완료
 - [ ] 테스트 및 로컬 실행 확인 완료
 
-## 🧪 테스트 결과
+## 🚀 배포 검증
 
-- GitHub Actions `deploy-ec2` 실행 확인 (`workflow_dispatch`, ref: `main`)
+- GitHub Actions `CD` 실행 확인 (`main` push 또는 `workflow_dispatch`, ref: `main`)
   - 결과:
-  - 스크린샷: ![ssm-send-step]()
+  - 실행 링크:
+  - 스크린샷: ![cloud-run-cd]()
 
-- 원격 배포 순서/재기동 확인
+- Cloud Run migration Job (`donworry-migrate`) 성공 확인
   - 결과:
-  - 스크린샷: ![ssm-order]()
+  - 실행 로그 링크:
+  - 스크린샷: ![cloud-run-migration-job]()
 
-- 배포 후 컨테이너 상태 확인
+- Cloud Run 서비스 (`donworry-api`) 새 리비전 배포 및 정상 응답 확인
   - 결과:
-  - 스크린샷: ![compose-ps]()
+  - 리비전/로그 링크:
+  - 스크린샷: ![cloud-run-revision]()
