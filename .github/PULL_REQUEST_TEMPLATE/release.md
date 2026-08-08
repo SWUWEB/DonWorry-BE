@@ -21,14 +21,14 @@
 - GitHub Actions `CD` 실행 확인 (`main` push 또는 `workflow_dispatch`, ref: `main`)
   - 결과:
   - 실행 링크:
-  - 스크린샷: ![cloud-run-cd]()
+  - 스크린샷:
 
 - Cloud Run migration Job (`donworry-migrate`) 성공 확인
   - 결과:
   - 실행 로그 링크:
-  - 스크린샷: ![cloud-run-migration-job]()
+  - 스크린샷:
 
 - Cloud Run 서비스 (`donworry-api`) 새 리비전 배포 및 정상 응답 확인
   - 결과:
   - 리비전/로그 링크:
-  - 스크린샷: ![cloud-run-revision]()
+  - 스크린샷:
