@@ -1,0 +1,102 @@
+import { asyncHandler } from '../../utils/async-handler.js';
+import { created, noContent, ok, notImplemented } from '../../utils/api-response.js';
+import {
+  checkEmail,
+  checkLoginId,
+  confirmEmailVerification,
+  confirmPasswordReset,
+  kakaoLinkByEmail,
+  kakaoLinkByPassword,
+  kakaoLogin,
+  login,
+  logout,
+  refreshAccessToken,
+  requestKakaoLinkEmailVerification,
+  requestEmailVerification,
+  requestPasswordReset,
+  signup,
+} from './auth.service.js';
+
+export const createNotImplementedController = (featureName) => (_req, res) => {
+  return notImplemented(res, featureName);
+};
+
+export const signupController = asyncHandler(async (req, res) => {
+  const user = await signup(req.validated.body);
+
+  return created(res, user, '회원가입이 완료되었습니다.');
+});
+
+export const loginController = asyncHandler(async (req, res) => {
+  const result = await login(req.validated.body);
+
+  return ok(res, result, '로그인이 완료되었습니다.');
+});
+
+export const logoutController = asyncHandler(async (req, res) => {
+  await logout(req.validated.body, BigInt(req.user.userId));
+
+  return noContent(res);
+});
+
+export const kakaoLoginController = asyncHandler(async (req, res) => {
+  const result = await kakaoLogin(req.validated.body);
+  return ok(res, result, '카카오 로그인이 완료되었습니다.');
+});
+
+export const kakaoLinkPasswordController = asyncHandler(async (req, res) => {
+  const result = await kakaoLinkByPassword(req.validated.body);
+  return ok(res, result, '카카오 계정 연결이 완료되었습니다.');
+});
+
+export const requestKakaoLinkEmailController = asyncHandler(async (req, res) => {
+  const result = await requestKakaoLinkEmailVerification(req.validated.body);
+  return ok(res, result, '계정 연결 이메일 인증 요청이 완료되었습니다.');
+});
+
+export const confirmKakaoLinkEmailController = asyncHandler(async (req, res) => {
+  const result = await kakaoLinkByEmail(req.validated.body);
+  return ok(res, result, '카카오 계정 연결이 완료되었습니다.');
+});
+
+export const refreshTokenController = asyncHandler(async (req, res) => {
+  const result = await refreshAccessToken(req.validated.body);
+
+  return ok(res, result, '토큰 재발급이 완료되었습니다.');
+});
+
+export const checkEmailController = asyncHandler(async (req, res) => {
+  const result = await checkEmail(req.validated.query);
+
+  return ok(res, result);
+});
+
+export const checkLoginIdController = asyncHandler(async (req, res) => {
+  const result = await checkLoginId(req.validated.query);
+
+  return ok(res, result);
+});
+
+export const requestEmailVerificationController = asyncHandler(async (req, res) => {
+  const result = await requestEmailVerification(req.validated.body);
+
+  return ok(res, result, '이메일 인증 요청이 완료되었습니다.');
+});
+
+export const confirmEmailVerificationController = asyncHandler(async (req, res) => {
+  const result = await confirmEmailVerification(req.validated.body);
+
+  return ok(res, result, '이메일 인증이 완료되었습니다.');
+});
+
+export const requestPasswordResetController = asyncHandler(async (req, res) => {
+  const result = await requestPasswordReset(req.validated.body);
+
+  return ok(res, result, '입력한 이메일로 계정 복구 안내를 전송했습니다.');
+});
+
+export const confirmPasswordResetController = asyncHandler(async (req, res) => {
+  await confirmPasswordReset(req.validated.body);
+
+  return ok(res, null, '비밀번호 재설정이 완료되었습니다.');
+});

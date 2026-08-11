@@ -1,0 +1,427 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import jwt from 'jsonwebtoken';
+import request from 'supertest';
+
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL =
+  process.env.TEST_DATABASE_URL ||
+  process.env.DATABASE_URL ||
+  'mysql://donworry:donworry@localhost:3307/donworry_test';
+if (!process.env.DATABASE_URL.includes('_test')) {
+  throw new Error('DB write tests must run against a test database.');
+}
+process.env.JWT_ACCESS_SECRET = 'test-access-secret';
+process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
+process.env.CORS_ORIGIN = 'http://localhost:5173';
+
+const { createApp } = await import('../src/app.js');
+const { prisma } = await import('../src/prisma/client.js');
+
+test('GET /health returns healthy status', async () => {
+  const response = await request(createApp()).get('/health');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+});
+
+test('unknown route returns 404', async () => {
+  const response = await request(createApp()).get('/missing');
+
+  assert.equal(response.status, 404);
+  assert.equal(response.body.success, false);
+});
+
+test('GET /api-docs.json exposes bearer auth OpenAPI config', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.openapi, '3.0.3');
+  assert.equal(response.body.components.securitySchemes.bearerAuth.type, 'http');
+  assert.equal(response.body.components.securitySchemes.bearerAuth.scheme, 'bearer');
+  assert.deepEqual(response.body.paths['/api/v1/users/me'].get.security, [{ bearerAuth: [] }]);
+});
+
+test('protected routes accept only access purpose JWT', async () => {
+  const app = createApp();
+
+  await prisma.user.deleteMany({
+    where: {
+      OR: [{ email: 'auth-health@example.com' }, { loginId: 'authhl1' }],
+    },
+  });
+
+  const user = await prisma.user.create({
+    data: {
+      email: 'auth-health@example.com',
+      loginId: 'authhl1',
+      nickname: 'auth-health-user',
+      passwordHash: 'test-password-hash',
+      emailVerifiedAt: new Date(),
+    },
+    select: { id: true },
+  });
+
+  try {
+    const emailVerificationToken = jwt.sign(
+      { purpose: 'emailVerification', email: 'user@example.com' },
+      process.env.JWT_ACCESS_SECRET,
+    );
+
+    const accessToken = jwt.sign(
+      { purpose: 'access', userId: user.id.toString() },
+      process.env.JWT_ACCESS_SECRET,
+    );
+
+    const rejectedResponse = await request(app)
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${emailVerificationToken}`);
+
+    const acceptedResponse = await request(app)
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    assert.equal(rejectedResponse.status, 401);
+    assert.equal(rejectedResponse.body.success, false);
+
+    assert.equal(acceptedResponse.status, 200);
+    assert.equal(acceptedResponse.body.success, true);
+    assert.equal(acceptedResponse.body.data.id, user.id.toString());
+  } finally {
+    await prisma.user.deleteMany({
+      where: { id: user.id },
+    });
+  }
+});
+
+test('GET /api-docs.json generates request body schema from Zod DTO', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const signupSchema =
+    response.body.paths['/api/v1/auth/signup'].post.requestBody.content['application/json'].schema;
+
+  assert.equal(signupSchema.type, 'object');
+  assert.deepEqual(signupSchema.required.sort(), [
+    'email',
+    'emailVerificationToken',
+    'loginId',
+    'name',
+    'password',
+    'passwordConfirm',
+    'phoneNumber',
+  ]);
+  assert.equal(signupSchema.properties.email.format, 'email');
+  assert.equal(signupSchema.properties.loginId.type, 'string');
+
+  const loginSchema =
+    response.body.paths['/api/v1/auth/login'].post.requestBody.content['application/json'].schema;
+
+  assert.deepEqual(loginSchema.required.sort(), ['loginId', 'password']);
+  assert.equal(loginSchema.properties.email, undefined);
+  assert.equal(loginSchema.properties.loginId.type, 'string');
+  assert.equal(loginSchema.additionalProperties, false);
+});
+
+test('GET /api-docs.json generates query and path parameters from Zod DTO', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const loginIdParameter = response.body.paths['/api/v1/auth/check-login-id'].get.parameters[0];
+  const emailParameter = response.body.paths['/api/v1/auth/check-email'].get.parameters[0];
+  const wishlistIdParameter =
+    response.body.paths['/api/v1/wishlist-items/{wishlistId}'].get.parameters[0];
+
+  assert.equal(emailParameter.name, 'email');
+  assert.equal(emailParameter.in, 'query');
+  assert.equal(emailParameter.required, true);
+  assert.equal(emailParameter.schema.type, 'string');
+  assert.equal(emailParameter.schema.format, 'email');
+
+  assert.equal(loginIdParameter.name, 'loginId');
+  assert.equal(loginIdParameter.in, 'query');
+  assert.equal(loginIdParameter.required, true);
+  assert.equal(loginIdParameter.schema.type, 'string');
+
+  assert.equal(wishlistIdParameter.name, 'wishlistId');
+  assert.equal(wishlistIdParameter.in, 'path');
+  assert.equal(wishlistIdParameter.required, true);
+  assert.equal(wishlistIdParameter.schema.type, 'integer');
+  assert.equal(wishlistIdParameter.schema.format, 'int64');
+});
+
+test('GET /api-docs.json exposes check email response example as public API', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const operation = response.body.paths['/api/v1/auth/check-email'].get;
+
+  assert.deepEqual(operation.security, []);
+  assert.equal(
+    operation.responses[200].content['application/json'].schema.$ref,
+    '#/components/schemas/CheckEmailResponse',
+  );
+  assert.equal(
+    response.body.components.schemas.CheckEmailResponse.properties.data.properties.available
+      .example,
+    true,
+  );
+});
+
+test('GET /api-docs.json documents login response and auth failure', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const operation = response.body.paths['/api/v1/auth/login'].post;
+
+  assert.deepEqual(operation.security, []);
+  assert.equal(
+    operation.responses[200].content['application/json'].schema.$ref,
+    '#/components/schemas/LoginResponse',
+  );
+  assert.equal(
+    operation.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/ErrorResponse',
+  );
+  assert.equal(
+    response.body.components.schemas.LoginResponse.properties.data.properties.user.properties.email
+      .format,
+    'email',
+  );
+  assert.equal(
+    response.body.components.schemas.LoginResponse.properties.data.properties.refreshToken.type,
+    'string',
+  );
+});
+
+test('GET /api-docs.json documents refresh token API', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const operation = response.body.paths['/api/v1/auth/refresh'].post;
+  const requestSchema = operation.requestBody.content['application/json'].schema;
+
+  assert.deepEqual(operation.security, []);
+  assert.deepEqual(requestSchema.required, ['refreshToken']);
+  assert.equal(requestSchema.properties.refreshToken.type, 'string');
+  assert.equal(
+    operation.responses[200].content['application/json'].schema.$ref,
+    '#/components/schemas/RefreshTokenResponse',
+  );
+  assert.equal(
+    operation.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/ErrorResponse',
+  );
+  assert.equal(
+    response.body.components.schemas.RefreshTokenResponse.properties.data.properties.accessToken
+      .type,
+    'string',
+  );
+});
+
+test('GET /api-docs.json documents logout authentication, request, and responses', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const operation = response.body.paths['/api/v1/auth/logout'].post;
+  const requestSchema = operation.requestBody.content['application/json'].schema;
+
+  assert.deepEqual(operation.security, [{ bearerAuth: [] }]);
+  assert.deepEqual(requestSchema.required, ['refreshToken']);
+  assert.equal(requestSchema.properties.refreshToken.type, 'string');
+  assert.equal(operation.responses[204].content, undefined);
+  assert.equal(
+    operation.responses[400].content['application/json'].schema.$ref,
+    '#/components/schemas/ValidationErrorResponse',
+  );
+  assert.equal(
+    operation.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/ErrorResponse',
+  );
+  assert.match(operation.description, /클라이언트가 access token과 refresh token을 모두 삭제/);
+  assert.match(operation.description, /다른 token family의 세션은 유지/);
+});
+
+test('GET /api-docs.json documents email verification timer fields', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const emailVerificationDataSchema =
+    response.body.components.schemas.EmailVerificationResponse.properties.data;
+
+  assert.equal(emailVerificationDataSchema.properties.codeTtlSeconds.example, 600);
+  assert.equal(emailVerificationDataSchema.properties.resendCooldownSeconds.example, 60);
+  assert.equal(
+    emailVerificationDataSchema.properties.debugCode.description.includes('Development'),
+    true,
+  );
+  assert.equal(emailVerificationDataSchema.properties.expiresInMinutes, undefined);
+});
+
+test('GET /api-docs.json documents email verification rate limit responses', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const rateLimitSchema = response.body.components.schemas.RateLimitErrorResponse;
+  const requestRateLimitResponse =
+    response.body.paths['/api/v1/auth/email-verifications'].post.responses[429];
+  const confirmRateLimitResponse =
+    response.body.paths['/api/v1/auth/email-verifications/confirm'].post.responses[429];
+
+  assert.deepEqual(rateLimitSchema.properties.rateLimitType.enum, [
+    'RESEND_COOLDOWN',
+    'SEND_LIMIT',
+    'CONFIRM_LOCK',
+    'PASSWORD_RESET_CONFIRM_LOCK',
+    'KAKAO_LINK_PASSWORD_LOCK',
+  ]);
+  assert.equal(rateLimitSchema.properties.retryAfterSeconds.type, 'integer');
+  assert.equal(rateLimitSchema.properties.retryAt.format, 'date-time');
+  assert.equal(requestRateLimitResponse.headers['Retry-After'].schema.type, 'integer');
+  assert.equal(
+    requestRateLimitResponse.content['application/json'].schema.$ref,
+    '#/components/schemas/RateLimitErrorResponse',
+  );
+  assert.equal(confirmRateLimitResponse.headers['Retry-After'].schema.type, 'integer');
+  assert.equal(
+    confirmRateLimitResponse.content['application/json'].schema.$ref,
+    '#/components/schemas/RateLimitErrorResponse',
+  );
+});
+
+test('GET /api-docs.json documents validation error response shape', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+
+  const validationErrorSchema = response.body.components.schemas.ValidationErrorResponse;
+  const emailVerification400 =
+    response.body.paths['/api/v1/auth/email-verifications'].post.responses[400].content[
+      'application/json'
+    ].schema;
+  const signup400 =
+    response.body.paths['/api/v1/auth/signup'].post.responses[400].content['application/json']
+      .schema;
+
+  assert.equal(validationErrorSchema.properties.errors.type, 'object');
+  assert.equal(validationErrorSchema.properties.errors.properties.fieldErrors.type, 'object');
+  assert.deepEqual(emailVerification400, {
+    $ref: '#/components/schemas/ValidationErrorResponse',
+  });
+  assert.deepEqual(signup400.anyOf, [
+    { $ref: '#/components/schemas/ValidationErrorResponse' },
+    { $ref: '#/components/schemas/ErrorResponse' },
+  ]);
+});
+
+test('DELETE /api/v1/users/me/saving-goal resets goal fields', async () => {
+  const app = createApp();
+
+  await prisma.user.deleteMany({
+    where: {
+      OR: [{ email: 'saving-goal-delete@example.com' }, { loginId: 'sgdel001' }],
+    },
+  });
+
+  const user = await prisma.user.create({
+    data: {
+      email: 'saving-goal-delete@example.com',
+      loginId: 'sgdel001',
+      nickname: 'saving-goal-delete-user',
+      passwordHash: 'test-password-hash',
+      emailVerifiedAt: new Date(),
+      savingGoalText: '목돈 마련',
+      targetSavingAmount: 500000n,
+      savingGoalIsActive: true,
+    },
+    select: { id: true },
+  });
+
+  try {
+    const accessToken = jwt.sign(
+      { purpose: 'access', userId: user.id.toString() },
+      process.env.JWT_ACCESS_SECRET,
+    );
+
+    const response = await request(app)
+      .delete('/api/v1/users/me/saving-goal')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.success, true);
+    assert.equal(response.body.data.savingGoalIsActive, false);
+
+    const persistedUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { savingGoalText: true, targetSavingAmount: true, savingGoalIsActive: true },
+    });
+
+    assert.equal(persistedUser.savingGoalText, null);
+    assert.equal(persistedUser.targetSavingAmount, null);
+    assert.equal(persistedUser.savingGoalIsActive, false);
+  } finally {
+    await prisma.user.deleteMany({
+      where: { id: user.id },
+    });
+  }
+});
+
+test('GET /api-docs.json documents Kakao login and account linking APIs', async () => {
+  const response = await request(createApp()).get('/api-docs.json');
+
+  assert.equal(response.status, 200);
+  const login = response.body.paths['/api/v1/auth/kakao/login'].post;
+  const passwordLink = response.body.paths['/api/v1/auth/kakao/link'].post;
+  const emailLinkRequest = response.body.paths['/api/v1/auth/kakao/link/email-verifications'].post;
+  const emailLink = response.body.paths['/api/v1/auth/kakao/link/email-verifications/confirm'].post;
+
+  assert.deepEqual(login.security, []);
+  assert.deepEqual(login.requestBody.content['application/json'].schema.required, [
+    'authorizationCode',
+  ]);
+  assert.deepEqual(login.responses[409].content['application/json'].schema.oneOf, [
+    { $ref: '#/components/schemas/KakaoLinkRequiredResponse' },
+    { $ref: '#/components/schemas/KakaoAccountConflictResponse' },
+  ]);
+  assert.deepEqual(
+    response.body.components.schemas.KakaoLinkRequiredResponse.properties.data.required,
+    ['linkingToken', 'verificationMethods', 'expiresInSeconds'],
+  );
+  assert.ok(login.responses[502]);
+  assert.deepEqual(passwordLink.requestBody.content['application/json'].schema.required.sort(), [
+    'linkingToken',
+    'password',
+  ]);
+  assert.deepEqual(passwordLink.responses[401].content['application/json'].schema.oneOf, [
+    { $ref: '#/components/schemas/KakaoLinkTokenErrorResponse' },
+    { $ref: '#/components/schemas/KakaoLinkVerificationErrorResponse' },
+  ]);
+  assert.equal(
+    emailLinkRequest.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/KakaoLinkTokenErrorResponse',
+  );
+  assert.equal(
+    emailLinkRequest.responses[200].content['application/json'].schema.$ref,
+    '#/components/schemas/KakaoLinkEmailVerificationResponse',
+  );
+  assert.deepEqual(
+    response.body.components.schemas.KakaoLinkEmailVerificationResponse.properties.data.required,
+    ['email', 'codeTtlSeconds', 'resendCooldownSeconds'],
+  );
+  assert.deepEqual(emailLink.requestBody.content['application/json'].schema.required.sort(), [
+    'code',
+    'linkingToken',
+  ]);
+  assert.equal(
+    emailLink.responses[401].content['application/json'].schema.$ref,
+    '#/components/schemas/KakaoLinkTokenErrorResponse',
+  );
+});
