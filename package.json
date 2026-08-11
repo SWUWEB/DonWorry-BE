@@ -14,6 +14,7 @@
     "prisma:generate": "prisma generate",
     "prisma:format": "prisma format",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "node prisma/seed.js"
   },
@@ -31,6 +32,7 @@
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "nodemailer": "^9.0.3",
+    "prisma": "^6.19.3",
     "swagger-ui-express": "^5.0.1",
     "undici": "6.27.0",
     "zod": "^4.4.3"
@@ -39,7 +41,6 @@
     "eslint": "^8.57.1",
     "nodemon": "^3.1.14",
     "prettier": "^3.8.3",
-    "prisma": "^6.19.3",
     "supertest": "^7.2.2"
   }
 }

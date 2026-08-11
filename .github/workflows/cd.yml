@@ -64,8 +64,8 @@ jobs:
               --service-account="${RUNTIME_SERVICE_ACCOUNT}" \
               --set-cloudsql-instances="${CLOUD_SQL_INSTANCE}" \
               --set-secrets="DATABASE_URL=donworry-database-url:latest" \
-              --command="npx" \
-              --args="prisma,migrate,deploy"
+              --command="npm" \
+              --args="run,prisma:migrate:deploy"
           else
             gcloud run jobs create "${MIGRATION_JOB_NAME}" \
               --project="${PROJECT_ID}" \
@@ -74,8 +74,8 @@ jobs:
               --service-account="${RUNTIME_SERVICE_ACCOUNT}" \
               --set-cloudsql-instances="${CLOUD_SQL_INSTANCE}" \
               --set-secrets="DATABASE_URL=donworry-database-url:latest" \
-              --command="npx" \
-              --args="prisma,migrate,deploy"
+              --command="npm" \
+              --args="run,prisma:migrate:deploy"
           fi
 
       - name: Run Prisma migrations
