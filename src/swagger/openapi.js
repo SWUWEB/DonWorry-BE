@@ -570,11 +570,18 @@ export const openApiDocument = {
       },
       GetNotificationSettingsResponse: {
         type: 'object',
+        required: ['success', 'message', 'data'],
         properties: {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: '알림 설정 조회 성공' },
           data: {
             type: 'object',
+            required: [
+              'notifyGeneralEnabled',
+              'notifyGoalEnabled',
+              'notifyTemptationEnabled',
+              'notifyPushEnabled',
+            ],
             properties: {
               notifyGeneralEnabled: { type: 'boolean', example: true },
               notifyGoalEnabled: { type: 'boolean', example: true },
