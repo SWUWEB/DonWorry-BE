@@ -1,7 +1,8 @@
-import { ok, notImplemented } from '../../utils/api-response.js';
+import { ok } from '../../utils/api-response.js';
 import {
   getMe,
   updateMe,
+  changePassword,
   updateSavingGoal,
   deleteSavingGoal,
   deleteUser,
@@ -11,10 +12,6 @@ import {
 } from './users.service.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 
-export const createNotImplementedController = (featureName) => (_req, res) => {
-  return notImplemented(res, featureName);
-};
-
 export const getMeController = asyncHandler(async (req, res) => {
   const result = await getMe(BigInt(req.user.userId));
   return ok(res, result, '회원 정보 조회 성공');
@@ -23,6 +20,12 @@ export const getMeController = asyncHandler(async (req, res) => {
 export const updateMeController = asyncHandler(async (req, res) => {
   const result = await updateMe(BigInt(req.user.userId), req.validated.body);
   return ok(res, result, '회원 정보 수정 성공');
+});
+
+export const changePasswordController = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.validated.body;
+  await changePassword(BigInt(req.user.userId), currentPassword, newPassword);
+  return ok(res, null, '비밀번호가 변경되었습니다.');
 });
 
 export const updateSavingGoalController = asyncHandler(async (req, res) => {

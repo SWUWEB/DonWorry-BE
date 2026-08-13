@@ -52,10 +52,31 @@ export const updateMeDto = z.object({
 });
 
 export const changePasswordDto = z.object({
-  body: z.object({
-    currentPassword: z.string().min(8).max(100),
-    newPassword: z.string().min(8).max(100),
-  }),
+  body: z
+    .object({
+      currentPassword: z
+        .string({ error: '현재 비밀번호를 입력해주세요.' })
+        .min(1, '현재 비밀번호를 입력해주세요.'),
+      newPassword: z
+        .string({ error: '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.' })
+        .min(8, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .max(100, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .regex(/[A-Za-z]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .regex(/[0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .regex(/[^A-Za-z0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.'),
+      newPasswordConfirm: z
+        .string({ error: '새 비밀번호를 다시 입력해주세요.' })
+        .min(1, '새 비밀번호를 다시 입력해주세요.'),
+    })
+    .strict()
+    .refine((body) => body.currentPassword !== body.newPassword, {
+      message: '현재 비밀번호와 다른 비밀번호를 입력해주세요.',
+      path: ['newPassword'],
+    })
+    .refine((body) => body.newPassword === body.newPasswordConfirm, {
+      message: '새 비밀번호가 일치하지 않습니다.',
+      path: ['newPasswordConfirm'],
+    }),
 });
 
 export const savingGoalDto = z.object({
