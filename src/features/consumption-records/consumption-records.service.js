@@ -373,6 +373,7 @@ export const getConsumptionRecord = async ({ userId, consumptionRecordId, now = 
   const recentCategoryConsumptions = await prisma.consumptionRecord.findMany({
     where: {
       userId: BigInt(userId),
+      id: { not: record.id },
       type: 'CONSUMED',
       categoryCode: record.categoryCode,
       occurredAt: {
