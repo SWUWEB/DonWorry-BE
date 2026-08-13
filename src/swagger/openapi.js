@@ -918,11 +918,11 @@ export const openApiDocument = {
                 type: 'integer',
                 minimum: 0,
                 example: 3,
-                description: '최근 28일간 동일 카테고리의 실제 소비 횟수',
+                description: '현재 기록을 제외한 최근 28일간 동일 카테고리의 실제 소비 횟수',
               },
               recentCategoryConsumptions: {
                 type: 'array',
-                description: '최근 28일간 동일 카테고리의 실제 소비 내역',
+                description: '현재 기록을 제외한 최근 28일간 동일 카테고리의 실제 소비 내역',
                 items: { $ref: '#/components/schemas/ConsumptionRecordResult' },
               },
             },
