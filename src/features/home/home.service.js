@@ -42,6 +42,28 @@ export const getMessageLevel = (achievementRate) => {
   return 'LEVEL_1';
 };
 
+const parseDecimal = (value) => {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(value.toString());
+  if (!match) throw new TypeError('금액은 0 이상의 숫자여야 합니다.');
+  const fraction = match[2] ?? '';
+  return {
+    unscaled: BigInt(`${match[1]}${fraction}`),
+    scale: fraction.length,
+  };
+};
+
+export const calculateAchievementRate = (skippedAmount, targetAmount) => {
+  const skipped = parseDecimal(skippedAmount);
+  const target = parseDecimal(targetAmount);
+  const scale = Math.max(skipped.scale, target.scale);
+  const skippedScaled = skipped.unscaled * 10n ** BigInt(scale - skipped.scale);
+  const targetScaled = target.unscaled * 10n ** BigInt(scale - target.scale);
+
+  if (targetScaled <= 0n) return 0;
+  const rate = (skippedScaled * 100n) / targetScaled;
+  return Number(rate > 100n ? 100n : rate);
+};
+
 const selectDailyMessage = (userId, dateKey, messageLevel) => {
   const messages = CHEER_MESSAGES[messageLevel];
   const seed = `${userId}:${dateKey}:${messageLevel}`;
@@ -54,7 +76,7 @@ const selectDailyMessage = (userId, dateKey, messageLevel) => {
 };
 
 export const buildCheerMessage = ({ userId, targetAmount, skippedAmount, now = new Date() }) => {
-  const achievementRate = Math.min(100, Math.floor((skippedAmount / targetAmount) * 100));
+  const achievementRate = calculateAchievementRate(skippedAmount, targetAmount);
   const messageLevel = getMessageLevel(achievementRate);
   return {
     achievementRate,
@@ -239,7 +261,7 @@ export const getCheerMessage = async (userId, now = new Date(), prismaClient = p
       errorCode: ERROR_CODES.USER4041,
     });
   }
-  if (user.targetSavingAmount === null || Number(user.targetSavingAmount) <= 0) {
+  if (user.targetSavingAmount === null || user.targetSavingAmount <= 0n) {
     throw new HttpError(404, '목표 금액이 설정되지 않았습니다.', {
       errorCode: ERROR_CODES.GOAL4041,
     });
@@ -252,8 +274,8 @@ export const getCheerMessage = async (userId, now = new Date(), prismaClient = p
 
   return buildCheerMessage({
     userId,
-    targetAmount: Number(user.targetSavingAmount),
-    skippedAmount: Number(skipped._sum.price ?? 0),
+    targetAmount: user.targetSavingAmount,
+    skippedAmount: skipped._sum.price ?? 0n,
     now,
   });
 };

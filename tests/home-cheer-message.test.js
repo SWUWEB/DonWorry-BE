@@ -10,7 +10,7 @@ process.env.JWT_ACCESS_SECRET = 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 process.env.CORS_ORIGIN = 'http://localhost:5173';
 
-const { buildCheerMessage, getCheerMessage, getMessageLevel } =
+const { buildCheerMessage, calculateAchievementRate, getCheerMessage, getMessageLevel } =
   await import('../src/features/home/home.service.js');
 const { createApp } = await import('../src/app.js');
 const { prisma } = await import('../src/prisma/client.js');
@@ -71,6 +71,12 @@ test('achievement rate is floored and capped at 100', () => {
     buildCheerMessage({ userId: 1n, targetAmount: 100, skippedAmount: 130 }).achievementRate,
     100,
   );
+});
+
+test('achievement rate preserves BigInt and decimal precision', () => {
+  assert.equal(calculateAchievementRate('4503599627370496.50', 9007199254740993n), 50);
+  assert.equal(calculateAchievementRate('8999999999999999.99', 9000000000000000n), 99);
+  assert.equal(calculateAchievementRate('100.99', 100n), 100);
 });
 
 test('same user, KST date, and level always select the same message', () => {
