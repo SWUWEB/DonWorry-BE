@@ -235,6 +235,25 @@ export const updateNotificationSettings = async (userId, body) => {
   });
 };
 
+export const getNotificationSettings = async (userId) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      notifyGeneralEnabled: true,
+      notifyGoalEnabled: true,
+      notifyTemptationEnabled: true,
+      notifyPushEnabled: true,
+    },
+  });
+
+  if (!user) {
+    throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.USER4041,
+    });
+  }
+  return user;
+};
+
 const toCurrentYearMonth = () => {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
