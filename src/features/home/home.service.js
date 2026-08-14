@@ -4,6 +4,7 @@ import { CATEGORY_MAP } from '../../config/categories.js';
 import { getBudget } from '../users/users.service.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
+import { CHEER_MESSAGES } from '../../config/cheer-messages.js';
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const getKst = (date = new Date()) => new Date(date.getTime() + KST_OFFSET_MS);
@@ -31,6 +32,57 @@ const getKstDateKey = (date) => {
   const month = String(kst.getUTCMonth() + 1).padStart(2, '0');
   const day = String(kst.getUTCDate()).padStart(2, '0');
   return `${year}${month}${day}`;
+};
+
+export const getMessageLevel = (achievementRate) => {
+  if (achievementRate >= 90) return 'LEVEL_5';
+  if (achievementRate >= 70) return 'LEVEL_4';
+  if (achievementRate >= 50) return 'LEVEL_3';
+  if (achievementRate >= 20) return 'LEVEL_2';
+  return 'LEVEL_1';
+};
+
+const parseDecimal = (value) => {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(value.toString());
+  if (!match) throw new TypeError('금액은 0 이상의 숫자여야 합니다.');
+  const fraction = match[2] ?? '';
+  return {
+    unscaled: BigInt(`${match[1]}${fraction}`),
+    scale: fraction.length,
+  };
+};
+
+export const calculateAchievementRate = (skippedAmount, targetAmount) => {
+  const skipped = parseDecimal(skippedAmount);
+  const target = parseDecimal(targetAmount);
+  const scale = Math.max(skipped.scale, target.scale);
+  const skippedScaled = skipped.unscaled * 10n ** BigInt(scale - skipped.scale);
+  const targetScaled = target.unscaled * 10n ** BigInt(scale - target.scale);
+
+  if (targetScaled <= 0n) return 0;
+  const rate = (skippedScaled * 100n) / targetScaled;
+  return Number(rate > 100n ? 100n : rate);
+};
+
+const selectDailyMessage = (userId, dateKey, messageLevel) => {
+  const messages = CHEER_MESSAGES[messageLevel];
+  const seed = `${userId}:${dateKey}:${messageLevel}`;
+  let hash = 2166136261;
+  for (const character of seed) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return messages[(hash >>> 0) % messages.length];
+};
+
+export const buildCheerMessage = ({ userId, targetAmount, skippedAmount, now = new Date() }) => {
+  const achievementRate = calculateAchievementRate(skippedAmount, targetAmount);
+  const messageLevel = getMessageLevel(achievementRate);
+  return {
+    achievementRate,
+    message: selectDailyMessage(userId, getKstDateKey(now), messageLevel),
+    messageLevel,
+  };
 };
 
 const calculateRatio = (amount, total) => {
@@ -196,4 +248,34 @@ export const getDailyQuestion = async (now = new Date()) => {
     questionText: DAILY_QUESTIONS[questionIndex],
     date: `${dateKey.slice(0, 4)}-${dateKey.slice(4, 6)}-${dateKey.slice(6, 8)}`,
   };
+};
+
+export const getCheerMessage = async (userId, now = new Date(), prismaClient = prisma) => {
+  const user = await prismaClient.user.findUnique({
+    where: { id: userId },
+    select: { targetSavingAmount: true },
+  });
+
+  if (!user) {
+    throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.USER4041,
+    });
+  }
+  if (user.targetSavingAmount === null || user.targetSavingAmount <= 0n) {
+    throw new HttpError(404, '목표 금액이 설정되지 않았습니다.', {
+      errorCode: ERROR_CODES.GOAL4041,
+    });
+  }
+
+  const skipped = await prismaClient.consumptionRecord.aggregate({
+    where: { userId, type: 'SKIPPED', price: { gt: 0 } },
+    _sum: { price: true },
+  });
+
+  return buildCheerMessage({
+    userId,
+    targetAmount: user.targetSavingAmount,
+    skippedAmount: skipped._sum.price ?? 0n,
+    now,
+  });
 };
