@@ -123,7 +123,7 @@ export const setBudgetDto = z.object({
   body: z.object({
     yearMonth: z.string().regex(YEAR_MONTH_REGEX, 'yearMonth는 YYYY-MM 형식이어야 합니다.'),
     monthlyIncome: z.coerce.bigint().nonnegative('수입 금액은 0원 이상이어야 합니다.').optional(),
-    monthlyBudget: z.coerce.bigint().nonnegative('예산 금액은 0원 이상이어야 합니다.'),
+    monthlyBudget: z.coerce.bigint().nonnegative('예산 금액은 0원 이상이어야 합니다.').optional(),
 
     categoryBudgets: z
       .array(

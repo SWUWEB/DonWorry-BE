@@ -350,34 +350,64 @@ export const setBudget = async (userId, body) => {
     });
   }
   const { yearMonth, monthlyIncome, monthlyBudget, categoryBudgets } = body;
-  const normalizedCategoryBudgets = categoryBudgets?.map((item) => ({
-    ...item,
-    budgetAmount: item.budgetAmount.toString(),
-  }));
-
-  const updateData = { monthlyBudget };
-  if (monthlyIncome !== undefined) {
-    updateData.monthlyIncome = monthlyIncome;
-  }
-  if (categoryBudgets !== undefined) {
-    updateData.categoryBudgets = normalizedCategoryBudgets;
-  }
-
-  await prisma.monthlyBudget.upsert({
+  const existing = await prisma.monthlyBudget.findUnique({
     where: {
       userId_yearMonth: {
         userId,
         yearMonth,
       },
     },
-    update: updateData,
-    create: {
-      userId,
-      yearMonth,
-      monthlyIncome: monthlyIncome ?? null,
-      monthlyBudget,
-      categoryBudgets: normalizedCategoryBudgets ?? [],
-    },
   });
+
+  const normalizedCategoryBudgets = categoryBudgets?.map((item) => ({
+    ...item,
+    budgetAmount: item.budgetAmount.toString(),
+  }));
+
+  let mergedCategoryBudgets = existing?.categoryBudgets ?? [];
+  if (categoryBudgets !== undefined) {
+    const categoryBudgetMap = new Map(
+      mergedCategoryBudgets.map((item) => [item.categoryCode, item]),
+    );
+    for (const item of normalizedCategoryBudgets) {
+      categoryBudgetMap.set(item.categoryCode, item);
+    }
+    mergedCategoryBudgets = Array.from(categoryBudgetMap.values());
+  }
+
+  if (!existing) {
+    await prisma.monthlyBudget.create({
+      data: {
+        userId,
+        yearMonth,
+        monthlyIncome: monthlyIncome ?? null,
+        monthlyBudget: monthlyBudget ?? 0,
+        categoryBudgets: mergedCategoryBudgets,
+      },
+    });
+  } else {
+    const updateData = {
+      categoryBudgets: mergedCategoryBudgets,
+    };
+    if (monthlyIncome !== undefined) {
+      updateData.monthlyIncome = monthlyIncome;
+    }
+    if (categoryBudgets !== undefined) {
+      updateData.categoryBudgets = mergedCategoryBudgets;
+    }
+    if (monthlyBudget !== undefined) {
+      updateData.monthlyBudget = monthlyBudget;
+    }
+
+    await prisma.monthlyBudget.update({
+      where: {
+        userId_yearMonth: {
+          userId,
+          yearMonth,
+        },
+      },
+      data: updateData,
+    });
+  }
   return await getBudget(userId, yearMonth);
 };
