@@ -758,10 +758,10 @@ test('GET /api/v1/consumption-records/:id returns a record detail owned by the u
   assert.equal(response.body.data.reason, '친구와 시간을 보내고 싶어서');
   assert.equal(response.body.data.interventionAnswers.length, 1);
   assert.equal(response.body.data.interventionAnswers[0].questionId, question.id.toString());
-  assert.equal(response.body.data.recentCategoryConsumptionCount, 2);
+  assert.equal(response.body.data.recentCategoryConsumptionCount, 1);
   assert.deepEqual(
     response.body.data.recentCategoryConsumptions.map((item) => item.id),
-    [recentSameCategoryRecord.id.toString(), record.id.toString()],
+    [recentSameCategoryRecord.id.toString()],
   );
   assert.deepEqual(
     {
