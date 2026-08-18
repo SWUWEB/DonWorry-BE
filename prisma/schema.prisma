@@ -281,13 +281,14 @@ model WithdrawalAudit {
 }
 
 model MonthlyBudget {
-  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  userId        BigInt   @map("user_id") @db.UnsignedBigInt
-  yearMonth     String   @map("year_month") @db.Char(7)
-  monthlyIncome BigInt?  @map("monthly_income") @db.UnsignedBigInt
-  monthlyBudget BigInt   @map("monthly_budget") @db.UnsignedBigInt
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userId          BigInt   @map("user_id") @db.UnsignedBigInt
+  yearMonth       String   @map("year_month") @db.Char(7)
+  monthlyIncome   BigInt?  @map("monthly_income") @db.UnsignedBigInt
+  monthlyBudget   BigInt   @map("monthly_budget") @db.UnsignedBigInt
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  categoryBudgets Json?    @map("category_budgets")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

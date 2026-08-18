@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CATEGORY_CODE_SET } from '../../config/categories.js';
 
 const name = z
   .string()
@@ -123,5 +124,19 @@ export const setBudgetDto = z.object({
     yearMonth: z.string().regex(YEAR_MONTH_REGEX, 'yearMonth는 YYYY-MM 형식이어야 합니다.'),
     monthlyIncome: z.coerce.bigint().nonnegative('수입 금액은 0원 이상이어야 합니다.').optional(),
     monthlyBudget: z.coerce.bigint().nonnegative('예산 금액은 0원 이상이어야 합니다.'),
+
+    categoryBudgets: z
+      .array(
+        z.object({
+          categoryCode: z
+            .string()
+            .min(1)
+            .refine((val) => CATEGORY_CODE_SET.has(val), {
+              message: '유효한 카테고리 코드가 아닙니다.',
+            }),
+          budgetAmount: z.coerce.bigint().nonnegative('예산 금액은 0원 이상이어야 합니다.'),
+        }),
+      )
+      .optional(),
   }),
 });

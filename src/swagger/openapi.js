@@ -797,6 +797,35 @@ export const openApiDocument = {
             description: '월 수입',
           },
           monthlyBudget: { type: 'string', example: '500000', description: '월 예산' },
+          spentAmount: {
+            type: 'string',
+            example: '300000',
+            description: '총 지출 금액',
+          },
+          remainingAmount: {
+            type: 'string',
+            example: '700000',
+            description: '수입 기준 잔액',
+          },
+          usageRate: {
+            type: 'integer',
+            example: 30,
+            description: '수입 대비 총 사용률(%)',
+          },
+          categoryBudgets: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                categoryCode: { type: 'string', example: 'FOOD_SNACK' },
+                budgetAmount: { type: 'string', example: '400000' },
+                spentAmount: { type: 'string', example: '287000' },
+                remainingAmount: { type: 'string', example: '113000' },
+                usageRate: { type: 'integer', example: 72 },
+              },
+            },
+            description: '카테고리별 예산 상세 목록',
+          },
         },
       },
       GetMonthlyBudgetResponse: {

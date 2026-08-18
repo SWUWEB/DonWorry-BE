@@ -280,10 +280,63 @@ export const getBudget = async (userId, yearMonth) => {
     },
   });
   if (!budget) return null;
+
+  const startDate = new Date(`${targetYearMonth}-01T00:00:00.000Z`);
+  const endDate = new Date(new Date(startDate).setUTCMonth(startDate.getUTCMonth() + 1));
+  const consumptionRecords = await prisma.consumptionRecord.findMany({
+    where: {
+      userId,
+      occurredAt: {
+        gte: startDate,
+        lt: endDate,
+      },
+      type: 'CONSUMED',
+    },
+  });
+
+  const spentMap = {};
+  let totalSpentAmount = 0;
+  for (const record of consumptionRecords) {
+    const categoryKey = record.categoryCode ?? 'ETC';
+    const amount = Number(record.price || 0);
+    spentMap[categoryKey] = (spentMap[categoryKey] || 0) + amount;
+    totalSpentAmount += amount;
+  }
+
+  const rawCategoryBudgets = budget.categoryBudgets;
+  let categoryBudgetsResult = [];
+
+  if (Array.isArray(rawCategoryBudgets)) {
+    categoryBudgetsResult = rawCategoryBudgets.map((item) => {
+      const categoryKey = item.categoryCode;
+      const budgetAmount = Number(item.budgetAmount || 0);
+      const spentAmount = spentMap[categoryKey] || 0;
+      const remainingAmount = budgetAmount - spentAmount;
+      const usageRate =
+        budgetAmount > 0 ? Math.min(100, Math.round((spentAmount / budgetAmount) * 100)) : 0;
+      return {
+        ...item,
+        budgetAmount: budgetAmount.toString(),
+        spentAmount: spentAmount.toString(),
+        remainingAmount: remainingAmount.toString(),
+        usageRate,
+      };
+    });
+  }
+  const totalMonthlyIncome = Number(budget.monthlyIncome || 0);
+  const totalRemainingAmount = totalMonthlyIncome - totalSpentAmount;
+  const totalUsageRate =
+    totalMonthlyIncome > 0
+      ? Math.min(100, Math.round((totalSpentAmount / totalMonthlyIncome) * 100))
+      : 0;
   return {
     yearMonth: budget.yearMonth,
     monthlyIncome: budget.monthlyIncome !== null ? budget.monthlyIncome.toString() : null,
     monthlyBudget: budget.monthlyBudget.toString(),
+    spentAmount: totalSpentAmount.toString(),
+    remainingAmount: totalRemainingAmount.toString(),
+    usageRate: totalUsageRate,
+    categoryBudgets: categoryBudgetsResult,
   };
 };
 
@@ -296,13 +349,21 @@ export const setBudget = async (userId, body) => {
       errorCode: ERROR_CODES.USER4041,
     });
   }
-  const { yearMonth, monthlyIncome, monthlyBudget } = body;
+  const { yearMonth, monthlyIncome, monthlyBudget, categoryBudgets } = body;
+  const normalizedCategoryBudgets = categoryBudgets?.map((item) => ({
+    ...item,
+    budgetAmount: item.budgetAmount.toString(),
+  }));
+
   const updateData = { monthlyBudget };
   if (monthlyIncome !== undefined) {
     updateData.monthlyIncome = monthlyIncome;
   }
+  if (categoryBudgets !== undefined) {
+    updateData.categoryBudgets = normalizedCategoryBudgets;
+  }
 
-  const budget = await prisma.monthlyBudget.upsert({
+  await prisma.monthlyBudget.upsert({
     where: {
       userId_yearMonth: {
         userId,
@@ -315,11 +376,8 @@ export const setBudget = async (userId, body) => {
       yearMonth,
       monthlyIncome: monthlyIncome ?? null,
       monthlyBudget,
+      categoryBudgets: normalizedCategoryBudgets ?? [],
     },
   });
-  return {
-    yearMonth: budget.yearMonth,
-    monthlyIncome: budget.monthlyIncome !== null ? budget.monthlyIncome.toString() : null,
-    monthlyBudget: budget.monthlyBudget.toString(),
-  };
+  return await getBudget(userId, yearMonth);
 };
