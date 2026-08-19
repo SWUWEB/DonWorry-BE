@@ -123,8 +123,16 @@ export const setBudgetDto = z.object({
   body: z
     .object({
       yearMonth: z.string().regex(YEAR_MONTH_REGEX, 'yearMonth는 YYYY-MM 형식이어야 합니다.'),
-      monthlyIncome: z.coerce.bigint().nonnegative('수입 금액은 0원 이상이어야 합니다.').optional(),
-      monthlyBudget: z.coerce.bigint().nonnegative('예산 금액은 0원 이상이어야 합니다.').optional(),
+      monthlyIncome: z.coerce
+        .bigint()
+        .nonnegative('수입 금액은 0원 이상이어야 합니다.')
+        .max(1000000000n, '금액이 너무 큽니다.')
+        .optional(),
+      monthlyBudget: z.coerce
+        .bigint()
+        .nonnegative('예산 금액은 0원 이상이어야 합니다.')
+        .max(1000000000n, '금액이 너무 큽니다.')
+        .optional(),
 
       categoryBudgets: z
         .array(
@@ -132,7 +140,10 @@ export const setBudgetDto = z.object({
             categoryCode: z.enum(CATEGORY_CODES, {
               message: '유효한 카테고리 코드가 아닙니다.',
             }),
-            budgetAmount: z.coerce.bigint().nonnegative('예산 금액은 0원 이상이어야 합니다.'),
+            budgetAmount: z.coerce
+              .bigint()
+              .nonnegative('예산 금액은 0원 이상이어야 합니다.')
+              .max(1000000000n, '금액이 너무 큽니다.'),
           }),
         )
         .refine((items) => new Set(items.map((item) => item.categoryCode)).size === items.length, {
