@@ -15,9 +15,9 @@ const serializeNotification = (notification) => ({
 });
 
 const buildOrderBy = (sort) => {
-  if (sort === 'OLDEST') return [{ createdAt: 'asc' }, { id: 'asc' }];
-  if (sort === 'UNREAD_FIRST') return [{ isRead: 'asc' }, { createdAt: 'desc' }, { id: 'desc' }];
-  return [{ createdAt: 'desc' }, { id: 'desc' }];
+  if (sort === 'OLDEST') return [{ notifyAt: 'asc' }, { id: 'asc' }];
+  if (sort === 'UNREAD_FIRST') return [{ isRead: 'asc' }, { notifyAt: 'desc' }, { id: 'desc' }];
+  return [{ notifyAt: 'desc' }, { id: 'desc' }];
 };
 
 export const listNotifications = async (userId, query) => {

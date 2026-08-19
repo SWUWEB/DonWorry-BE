@@ -161,6 +161,7 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
           notifyAt: { gt: now },
         },
         data: {
+          title: '결단의 시간이 왔어요!',
           notifyAt: selectedWaitUntil,
           body: `'${temptation.productName}' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?`,
         },
