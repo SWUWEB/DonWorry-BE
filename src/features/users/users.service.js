@@ -254,11 +254,19 @@ export const getNotificationSettings = async (userId) => {
   return user;
 };
 
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const toCurrentYearMonth = () => {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const month = String(kst.getUTCMonth() + 1).padStart(2, '0');
   return `${kst.getUTCFullYear()}-${month}`;
+};
+const getKstMonthRange = (yearMonth) => {
+  const [year, month] = yearMonth.split('-').map(Number);
+  return {
+    startAt: new Date(Date.UTC(year, month - 1, 1) - KST_OFFSET_MS),
+    endAt: new Date(Date.UTC(year, month, 1) - KST_OFFSET_MS),
+  };
 };
 
 export const getBudget = async (userId, yearMonth) => {
@@ -281,17 +289,17 @@ export const getBudget = async (userId, yearMonth) => {
   });
   if (!budget) return null;
 
-  const startDate = new Date(`${targetYearMonth}-01T00:00:00.000Z`);
-  const endDate = new Date(new Date(startDate).setUTCMonth(startDate.getUTCMonth() + 1));
+  const { startAt, endAt } = getKstMonthRange(targetYearMonth);
   const consumptionRecords = await prisma.consumptionRecord.findMany({
     where: {
       userId,
       occurredAt: {
-        gte: startDate,
-        lt: endDate,
+        gte: startAt,
+        lt: endAt,
       },
       type: 'CONSUMED',
     },
+    select: { categoryCode: true, price: true },
   });
 
   const spentMap = {};
@@ -350,64 +358,44 @@ export const setBudget = async (userId, body) => {
     });
   }
   const { yearMonth, monthlyIncome, monthlyBudget, categoryBudgets } = body;
-  const existing = await prisma.monthlyBudget.findUnique({
-    where: {
-      userId_yearMonth: {
-        userId,
-        yearMonth,
-      },
-    },
-  });
-
   const normalizedCategoryBudgets = categoryBudgets?.map((item) => ({
     ...item,
     budgetAmount: item.budgetAmount.toString(),
   }));
 
-  let mergedCategoryBudgets = existing?.categoryBudgets ?? [];
-  if (categoryBudgets !== undefined) {
-    const categoryBudgetMap = new Map(
-      mergedCategoryBudgets.map((item) => [item.categoryCode, item]),
-    );
-    for (const item of normalizedCategoryBudgets) {
-      categoryBudgetMap.set(item.categoryCode, item);
-    }
-    mergedCategoryBudgets = Array.from(categoryBudgetMap.values());
-  }
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.monthlyBudget.findUnique({
+      where: { userId_yearMonth: { userId, yearMonth } },
+    });
 
-  if (!existing) {
-    await prisma.monthlyBudget.create({
-      data: {
+    let mergedCategoryBudgets = Array.isArray(existing?.categoryBudgets)
+      ? existing.categoryBudgets
+      : [];
+    if (categoryBudgets !== undefined) {
+      const categoryBudgetMap = new Map(
+        mergedCategoryBudgets.map((item) => [item.categoryCode, item]),
+      );
+      for (const item of normalizedCategoryBudgets) {
+        categoryBudgetMap.set(item.categoryCode, item);
+      }
+      mergedCategoryBudgets = Array.from(categoryBudgetMap.values());
+    }
+
+    await tx.monthlyBudget.upsert({
+      where: { userId_yearMonth: { userId, yearMonth } },
+      create: {
         userId,
         yearMonth,
         monthlyIncome: monthlyIncome ?? null,
-        monthlyBudget: monthlyBudget ?? 0,
+        monthlyBudget: monthlyBudget ?? 0n,
+        categoryBudgets: mergedCategoryBudgets,
+      },
+      update: {
+        ...(monthlyIncome !== undefined && { monthlyIncome }),
+        ...(monthlyBudget !== undefined && { monthlyBudget }),
         categoryBudgets: mergedCategoryBudgets,
       },
     });
-  } else {
-    const updateData = {
-      categoryBudgets: mergedCategoryBudgets,
-    };
-    if (monthlyIncome !== undefined) {
-      updateData.monthlyIncome = monthlyIncome;
-    }
-    if (categoryBudgets !== undefined) {
-      updateData.categoryBudgets = mergedCategoryBudgets;
-    }
-    if (monthlyBudget !== undefined) {
-      updateData.monthlyBudget = monthlyBudget;
-    }
-
-    await prisma.monthlyBudget.update({
-      where: {
-        userId_yearMonth: {
-          userId,
-          yearMonth,
-        },
-      },
-      data: updateData,
-    });
-  }
+  });
   return await getBudget(userId, yearMonth);
 };
