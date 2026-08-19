@@ -33,7 +33,7 @@ test.after(async () => {
   await prisma.$disconnect();
 });
 
-test('PUT /api/v1/users/me/budget: 동시에 다른 카테고리를 수정해도 둘 다 반영된다', async () => {
+test('PUT /api/v1/users/me/budget: 전체 카테고리 예산 리스트를 저장하면 통째로 교체되어 반영된다', async () => {
   const user = await prisma.user.create({
     data: { email: testEmail, loginId: testLoginId, nickname: 'budget-concurrency-test' },
   });
@@ -55,18 +55,18 @@ test('PUT /api/v1/users/me/budget: 동시에 다른 카테고리를 수정해도
     },
   });
 
-  const put = (categoryBudgets) =>
-    request(app)
-      .put('/api/v1/users/me/budget')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ yearMonth, categoryBudgets });
-
-  const [foodRes, cafeRes] = await Promise.all([
-    put([{ categoryCode: 'FOOD_SNACK', budgetAmount: 150 }]),
-    put([{ categoryCode: 'CAFE_DESSERT', budgetAmount: 250 }]),
-  ]);
-  assert.equal(foodRes.status, 200);
-  assert.equal(cafeRes.status, 200);
+  const res = await request(app)
+    .put('/api/v1/users/me/budget')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      yearMonth,
+      monthlyBudget: 500000,
+      categoryBudgets: [
+        { categoryCode: 'FOOD_SNACK', budgetAmount: 150 },
+        { categoryCode: 'CAFE_DESSERT', budgetAmount: 250 },
+      ],
+    });
+  assert.equal(res.status, 200);
 
   const { categoryBudgets } = (
     await request(app)
@@ -74,6 +74,7 @@ test('PUT /api/v1/users/me/budget: 동시에 다른 카테고리를 수정해도
       .set('Authorization', `Bearer ${token}`)
   ).body.data;
 
+  assert.equal(categoryBudgets.length, 2);
   assert.equal(categoryBudgets.find((c) => c.categoryCode === 'FOOD_SNACK').budgetAmount, '150');
   assert.equal(categoryBudgets.find((c) => c.categoryCode === 'CAFE_DESSERT').budgetAmount, '250');
 });

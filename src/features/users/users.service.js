@@ -375,17 +375,9 @@ export const setBudget = async (userId, body) => {
           where: { userId_yearMonth: { userId, yearMonth } },
         });
 
-        let mergedCategoryBudgets = Array.isArray(existing?.categoryBudgets)
-          ? existing.categoryBudgets
-          : [];
+        let mergedCategoryBudgets = existing?.categoryBudgets ?? [];
         if (categoryBudgets !== undefined) {
-          const categoryBudgetMap = new Map(
-            mergedCategoryBudgets.map((item) => [item.categoryCode, item]),
-          );
-          for (const item of normalizedCategoryBudgets) {
-            categoryBudgetMap.set(item.categoryCode, item);
-          }
-          mergedCategoryBudgets = Array.from(categoryBudgetMap.values());
+          mergedCategoryBudgets = normalizedCategoryBudgets;
         }
 
         await tx.monthlyBudget.upsert({

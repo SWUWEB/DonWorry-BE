@@ -156,7 +156,7 @@ export const setBudgetDto = z.object({
       (data) =>
         data.monthlyBudget !== undefined ||
         data.monthlyIncome !== undefined ||
-        (data.categoryBudgets && data.categoryBudgets.length > 0),
+        data.categoryBudgets !== undefined,
       {
         message: '월 예산, 월 수입, 카테고리 예산 중 최소 하나는 입력해야 합니다.',
         path: ['monthlyBudget'],
