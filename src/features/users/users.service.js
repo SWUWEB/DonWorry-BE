@@ -3,6 +3,8 @@ import { HttpError } from '../../utils/http-error.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { createHmac } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
+import { randomInt } from 'node:crypto';
 
 export const getMe = async (userId) => {
   const user = await prisma.user.findUnique({
@@ -348,6 +350,9 @@ export const getBudget = async (userId, yearMonth) => {
   };
 };
 
+const isPrismaTransactionConflictError = (error) =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+
 export const setBudget = async (userId, body) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -363,39 +368,59 @@ export const setBudget = async (userId, body) => {
     budgetAmount: item.budgetAmount.toString(),
   }));
 
-  await prisma.$transaction(async (tx) => {
-    const existing = await tx.monthlyBudget.findUnique({
-      where: { userId_yearMonth: { userId, yearMonth } },
-    });
+  const upsertBudget = () =>
+    prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.monthlyBudget.findUnique({
+          where: { userId_yearMonth: { userId, yearMonth } },
+        });
 
-    let mergedCategoryBudgets = Array.isArray(existing?.categoryBudgets)
-      ? existing.categoryBudgets
-      : [];
-    if (categoryBudgets !== undefined) {
-      const categoryBudgetMap = new Map(
-        mergedCategoryBudgets.map((item) => [item.categoryCode, item]),
-      );
-      for (const item of normalizedCategoryBudgets) {
-        categoryBudgetMap.set(item.categoryCode, item);
+        let mergedCategoryBudgets = Array.isArray(existing?.categoryBudgets)
+          ? existing.categoryBudgets
+          : [];
+        if (categoryBudgets !== undefined) {
+          const categoryBudgetMap = new Map(
+            mergedCategoryBudgets.map((item) => [item.categoryCode, item]),
+          );
+          for (const item of normalizedCategoryBudgets) {
+            categoryBudgetMap.set(item.categoryCode, item);
+          }
+          mergedCategoryBudgets = Array.from(categoryBudgetMap.values());
+        }
+
+        await tx.monthlyBudget.upsert({
+          where: { userId_yearMonth: { userId, yearMonth } },
+          create: {
+            userId,
+            yearMonth,
+            monthlyIncome: monthlyIncome ?? null,
+            monthlyBudget: monthlyBudget ?? 0n,
+            categoryBudgets: mergedCategoryBudgets,
+          },
+          update: {
+            ...(monthlyIncome !== undefined && { monthlyIncome }),
+            ...(monthlyBudget !== undefined && { monthlyBudget }),
+            categoryBudgets: mergedCategoryBudgets,
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await upsertBudget();
+      break;
+    } catch (error) {
+      const shouldRetry = isPrismaTransactionConflictError(error);
+
+      if (!shouldRetry || attempt === 2) {
+        throw error;
       }
-      mergedCategoryBudgets = Array.from(categoryBudgetMap.values());
-    }
 
-    await tx.monthlyBudget.upsert({
-      where: { userId_yearMonth: { userId, yearMonth } },
-      create: {
-        userId,
-        yearMonth,
-        monthlyIncome: monthlyIncome ?? null,
-        monthlyBudget: monthlyBudget ?? 0n,
-        categoryBudgets: mergedCategoryBudgets,
-      },
-      update: {
-        ...(monthlyIncome !== undefined && { monthlyIncome }),
-        ...(monthlyBudget !== undefined && { monthlyBudget }),
-        categoryBudgets: mergedCategoryBudgets,
-      },
-    });
-  });
+      const retryDelayMs = 10 * 2 ** attempt + randomInt(0, 11);
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
+  }
   return await getBudget(userId, yearMonth);
 };
