@@ -170,7 +170,7 @@ model Notification {
   notificationType NotificationType @default(GENERAL) @map("notification_type")
   createdAt        DateTime         @default(now()) @map("created_at")
   title            String           @db.VarChar(100)
-  body             String           @db.VarChar(255)
+  body             String           @db.VarChar(500)
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   wishlistItem WishlistItem? @relation(fields: [wishlistItemId], references: [id], onDelete: SetNull)
