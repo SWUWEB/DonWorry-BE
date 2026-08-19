@@ -1,12 +1,20 @@
 import { prisma } from '../../prisma/client.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { HttpError } from '../../utils/http-error.js';
+import { createNotificationInTx } from '../notifications/notifications.service.js';
 
 const WAIT_TYPE_MAP = {
   '1H': 'ONE_HOUR',
   '1D': 'ONE_DAY',
   '3D': 'THREE_DAYS',
   '1W': 'ONE_WEEK',
+};
+
+const WAIT_TYPE_LABEL = {
+  '1H': '1시간',
+  '1D': '1일',
+  '3D': '3일',
+  '1W': '1주일',
 };
 
 const calculateWaitUntil = (waitType) => {
@@ -34,20 +42,40 @@ export const createWishlistItem = async (userId, itemData) => {
   const { categoryCode, productName, productUrl, price, productImageUrl, reason, waitType } =
     itemData;
   const waitUntil = calculateWaitUntil(waitType);
+  const waitLabel = WAIT_TYPE_LABEL[waitType] || '1시간';
 
-  return await prisma.wishlistItem.create({
-    data: {
+  return await prisma.$transaction(async (tx) => {
+    const item = await tx.wishlistItem.create({
+      data: {
+        userId,
+        categoryCode,
+        productName,
+        productUrl,
+        price,
+        productImageUrl,
+        reason,
+        waitType: WAIT_TYPE_MAP[waitType] || 'ONE_HOUR',
+        waitUntil,
+        status: 'WAITING',
+      },
+    });
+    await createNotificationInTx(tx, {
       userId,
-      categoryCode,
-      productName,
-      productUrl,
-      price,
-      productImageUrl,
-      reason,
-      waitType: WAIT_TYPE_MAP[waitType] || 'ONE_HOUR',
-      waitUntil,
-      status: 'WAITING',
-    },
+      notificationType: 'TEMPTATION',
+      title: '새로운 유혹이 추가됨',
+      body: `'${productName}'를 위시리스트에 담았습니다. ${waitLabel} 뒤에 다시 물어볼게요!`,
+      wishlistItemId: item.id,
+    });
+
+    await createNotificationInTx(tx, {
+      userId,
+      notificationType: 'TEMPTATION',
+      title: '결단의 시간이 왔어요!',
+      body: `'${productName}' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?`,
+      wishlistItemId: item.id,
+      notifyAt: waitUntil,
+    });
+    return item;
   });
 };
 
@@ -96,7 +124,7 @@ export const getWishlistItemById = async (userId, validatedParams) => {
 
 export const updateWishlistItem = async (userId, validatedParams, updateData) => {
   // 1. DB 존재 여부(404) 및 작성자 권한(403)을 먼저 검증
-  await getValidatedItem(userId, validatedParams);
+  const existing = await getValidatedItem(userId, validatedParams);
 
   // 2. 업데이트할 데이터 구성
   const dataToUpdate = {};
@@ -109,8 +137,10 @@ export const updateWishlistItem = async (userId, validatedParams, updateData) =>
     dataToUpdate.productImageUrl = updateData.productImageUrl;
   if (updateData?.reason !== undefined) dataToUpdate.reason = updateData.reason;
 
+  let newWaitUntil = null;
   if (updateData?.waitType) {
-    dataToUpdate.waitUntil = calculateWaitUntil(updateData.waitType);
+    newWaitUntil = calculateWaitUntil(updateData.waitType);
+    dataToUpdate.waitUntil = newWaitUntil;
     dataToUpdate.waitType = WAIT_TYPE_MAP[updateData.waitType];
   }
 
@@ -121,16 +151,40 @@ export const updateWishlistItem = async (userId, validatedParams, updateData) =>
     });
   }
 
-  return await prisma.wishlistItem.update({
-    where: { id: BigInt(validatedParams.wishlistId) },
-    data: dataToUpdate,
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.wishlistItem.update({
+      where: { id: existing.id },
+      data: dataToUpdate,
+    });
+    if (newWaitUntil) {
+      const productName = dataToUpdate.productName ?? existing.productName;
+
+      await tx.notification.updateMany({
+        where: {
+          wishlistItemId: existing.id,
+          notificationType: 'TEMPTATION',
+          notifyAt: { gt: new Date() },
+        },
+        data: {
+          notifyAt: newWaitUntil,
+          body: `'${productName}' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?`,
+        },
+      });
+    }
+    return updated;
   });
 };
 
 export const deleteWishlistItem = async (userId, validatedParams) => {
-  await getValidatedItem(userId, validatedParams);
+  const item = await getValidatedItem(userId, validatedParams);
 
-  return await prisma.wishlistItem.delete({
-    where: { id: BigInt(validatedParams.wishlistId) },
+  return await prisma.$transaction(async (tx) => {
+    await tx.notification.deleteMany({
+      where: {
+        wishlistItemId: item.id,
+        notifyAt: { gt: new Date() },
+      },
+    });
+    return await tx.wishlistItem.delete({ where: { id: item.id } });
   });
 };

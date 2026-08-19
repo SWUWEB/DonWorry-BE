@@ -1,6 +1,7 @@
 import { prisma } from '../../prisma/client.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { HttpError } from '../../utils/http-error.js';
+import { createNotificationInTx } from '../notifications/notifications.service.js';
 
 const WAIT_TYPE_MAP = {
   '1H': 'ONE_HOUR',
@@ -149,6 +150,38 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
           reason: temptation.reason ?? null,
           type: 'SKIPPED',
           occurredAt: now,
+        },
+      });
+    }
+    if (decisionType === 'DELAY') {
+      const updatedCount = await tx.notification.updateMany({
+        where: {
+          wishlistItemId: temptation.id,
+          notificationType: 'TEMPTATION',
+          notifyAt: { gt: now },
+        },
+        data: {
+          notifyAt: selectedWaitUntil,
+          body: `'${temptation.productName}' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?`,
+        },
+      });
+
+      if (updatedCount.count === 0) {
+        await createNotificationInTx(tx, {
+          userId,
+          notificationType: 'TEMPTATION',
+          title: '결단의 시간이 왔어요!',
+          body: `'${temptation.productName}' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?`,
+          wishlistItemId: temptation.id,
+          notifyAt: selectedWaitUntil,
+        });
+      }
+    } else {
+      await tx.notification.deleteMany({
+        where: {
+          wishlistItemId: temptation.id,
+          notificationType: 'TEMPTATION',
+          notifyAt: { gt: now },
         },
       });
     }
