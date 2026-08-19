@@ -63,7 +63,10 @@ export const changePasswordDto = z.object({
         .max(100, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
         .regex(/[A-Za-z]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
         .regex(/[0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .regex(/[^A-Za-z0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.'),
+        .regex(/[^A-Za-z0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .refine((value) => Buffer.byteLength(value, 'utf8') <= 72, {
+          message: '비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.',
+        }),
       newPasswordConfirm: z
         .string({ error: '새 비밀번호를 다시 입력해주세요.' })
         .min(1, '새 비밀번호를 다시 입력해주세요.'),
