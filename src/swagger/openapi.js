@@ -568,6 +568,29 @@ export const openApiDocument = {
           },
         },
       },
+      GetNotificationSettingsResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '알림 설정 조회 성공' },
+          data: {
+            type: 'object',
+            required: [
+              'notifyGeneralEnabled',
+              'notifyGoalEnabled',
+              'notifyTemptationEnabled',
+              'notifyPushEnabled',
+            ],
+            properties: {
+              notifyGeneralEnabled: { type: 'boolean', example: true },
+              notifyGoalEnabled: { type: 'boolean', example: true },
+              notifyTemptationEnabled: { type: 'boolean', example: false },
+              notifyPushEnabled: { type: 'boolean', example: false },
+            },
+          },
+        },
+      },
       UpdateNotificationSettingsResponse: {
         type: 'object',
         properties: {
@@ -871,6 +894,35 @@ export const openApiDocument = {
             properties: {
               questionText: { type: 'string', example: '오늘 계획하지 않은 소비가 있었나요?' },
               date: { type: 'string', format: 'date', example: '2026-07-30' },
+            },
+          },
+        },
+      },
+      CheerMessageResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '응원 메시지 조회 성공' },
+          data: {
+            type: 'object',
+            required: ['achievementRate', 'message', 'messageLevel'],
+            properties: {
+              achievementRate: {
+                type: 'integer',
+                minimum: 0,
+                maximum: 100,
+                example: 72,
+                description:
+                  '목표 금액 대비 누적 참은 소비 금액의 달성률(소수점 이하 버림, 최대 100)',
+              },
+              message: { type: 'string', example: '목표가 바로 앞이에요! 조금만 더 힘내요.' },
+              messageLevel: {
+                type: 'string',
+                enum: ['LEVEL_1', 'LEVEL_2', 'LEVEL_3', 'LEVEL_4', 'LEVEL_5'],
+                example: 'LEVEL_4',
+                description: '달성률 0~19, 20~49, 50~69, 70~89, 90~100 구간',
+              },
             },
           },
         },
@@ -2022,6 +2074,33 @@ export const openApiDocument = {
       },
     },
     '/api/v1/users/me/notification-settings': {
+      get: {
+        ...securedOperation('Users', '알림 설정 조회'),
+        responses: {
+          200: {
+            description: '알림 설정 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GetNotificationSettingsResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
       patch: {
         ...securedJsonOperation('Users', '알림 설정 수정', notificationSettingsDto),
         description: '전체 알림과 세부 알림은 동일한 요청에서 함께 변경할 수 없습니다.',
@@ -2236,7 +2315,44 @@ export const openApiDocument = {
       },
     },
     '/api/v1/home/cheer-message': {
-      get: securedOperation('Home', '응원 메시지 조회'),
+      get: {
+        ...securedOperation('Home', '응원 메시지 조회'),
+        description:
+          '누적 참은 소비 금액으로 목표 달성률을 계산하고, 동일 사용자·동일 날짜에 동일한 메시지를 반환합니다. 날짜 기준은 KST입니다.',
+        responses: {
+          200: {
+            description: '응원 메시지 조회 성공',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/CheerMessageResponse' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '목표 금액 미설정 또는 사용자 미존재',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  goalNotSet: {
+                    value: {
+                      success: false,
+                      code: 'GOAL4041',
+                      message: '목표 금액이 설정되지 않았습니다.',
+                    },
+                  },
+                  userNotFound: {
+                    value: {
+                      success: false,
+                      code: 'USER4041',
+                      message: '사용자를 찾을 수 없습니다.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/home/daily-question': {
       get: {

@@ -7,6 +7,7 @@ import {
   deleteSavingGoal,
   deleteUser,
   updateNotificationSettings,
+  getNotificationSettings,
   getBudget,
   setBudget,
 } from './users.service.js';
@@ -50,6 +51,11 @@ export const deleteUserController = asyncHandler(async (req, res) => {
 export const updateNotificationSettingsController = asyncHandler(async (req, res) => {
   const result = await updateNotificationSettings(BigInt(req.user.userId), req.validated.body);
   return ok(res, result, '알림 설정 수정 성공');
+});
+
+export const getNotificationSettingsController = asyncHandler(async (req, res) => {
+  const result = await getNotificationSettings(BigInt(req.user.userId));
+  return ok(res, result, '알림 설정 조회 성공');
 });
 
 export const getBudgetController = asyncHandler(async (req, res) => {

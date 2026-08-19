@@ -8,6 +8,7 @@ import {
   updateSavingGoalController,
   deleteSavingGoalController,
   deleteUserController,
+  getNotificationSettingsController,
   updateNotificationSettingsController,
   getBudgetController,
   setBudgetController,
@@ -31,6 +32,7 @@ usersRouter.delete('/me', validate(deleteUserDto), deleteUserController);
 usersRouter.patch('/me/password', validate(changePasswordDto), changePasswordController);
 usersRouter.put('/me/saving-goal', validate(savingGoalDto), updateSavingGoalController);
 usersRouter.delete('/me/saving-goal', deleteSavingGoalController);
+usersRouter.get('/me/notification-settings', getNotificationSettingsController);
 usersRouter.patch(
   '/me/notification-settings',
   validate(notificationSettingsDto),
