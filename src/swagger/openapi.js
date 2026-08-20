@@ -2935,15 +2935,34 @@ export const openApiDocument = {
                       type: 'array',
                       items: {
                         type: 'object',
+                        required: [
+                          'id',
+                          'userId',
+                          'categoryCode',
+                          'productName',
+                          'waitType',
+                          'status',
+                          'createdAt',
+                          'updatedAt',
+                        ],
                         properties: {
                           id: { type: 'string', example: '1' },
                           userId: { type: 'string', example: '1' },
                           categoryCode: { type: 'string', example: 'ELECTRONICS' },
                           productName: { type: 'string', example: '맥북 프로' },
-                          productUrl: { type: 'string', example: 'https://apple.com/kr/macbook' },
-                          price: { type: 'string', example: '2500000' },
+                          productUrl: {
+                            type: 'string',
+                            nullable: true,
+                            example: 'https://apple.com/kr/macbook',
+                          },
+                          price: {
+                            type: 'string',
+                            nullable: true,
+                            example: '2500000',
+                          },
                           productImageUrl: {
                             type: 'string',
+                            nullable: true,
                             example: 'https://images.com/macbook.png',
                           },
                           reason: {
@@ -2955,9 +2974,20 @@ export const openApiDocument = {
                           waitUntil: {
                             type: 'string',
                             format: 'date-time',
+                            nullable: true,
                             example: '2026-07-23T18:00:00.000Z',
                           },
                           status: { type: 'string', example: 'WAITING' },
+                          createdAt: {
+                            type: 'string',
+                            format: 'date-time',
+                            example: '2026-07-16T18:00:00.000Z',
+                          },
+                          updatedAt: {
+                            type: 'string',
+                            format: 'date-time',
+                            example: '2026-07-16T18:00:00.000Z',
+                          },
                         },
                       },
                     },
@@ -2982,15 +3012,34 @@ export const openApiDocument = {
                     success: { type: 'boolean', example: true },
                     data: {
                       type: 'object',
+                      required: [
+                        'id',
+                        'userId',
+                        'categoryCode',
+                        'productName',
+                        'waitType',
+                        'status',
+                        'createdAt',
+                        'updatedAt',
+                      ],
                       properties: {
                         id: { type: 'string', example: '1' },
                         userId: { type: 'string', example: '1' },
                         categoryCode: { type: 'string', example: 'ELECTRONICS' },
                         productName: { type: 'string', example: '맥북 프로' },
-                        productUrl: { type: 'string', example: 'https://apple.com/kr/macbook' },
-                        price: { type: 'string', example: '2500000' },
+                        productUrl: {
+                          type: 'string',
+                          nullable: true,
+                          example: 'https://apple.com/kr/macbook',
+                        },
+                        price: {
+                          type: 'string',
+                          nullable: true,
+                          example: '2500000',
+                        },
                         productImageUrl: {
                           type: 'string',
+                          nullable: true,
                           example: 'https://images.com/macbook.png',
                         },
                         reason: {
@@ -3002,9 +3051,20 @@ export const openApiDocument = {
                         waitUntil: {
                           type: 'string',
                           format: 'date-time',
+                          nullable: true,
                           example: '2026-07-23T18:00:00.000Z',
                         },
                         status: { type: 'string', example: 'WAITING' },
+                        createdAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-16T18:00:00.000Z',
+                        },
+                        updatedAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-16T18:00:00.000Z',
+                        },
                       },
                     },
                   },
@@ -3030,15 +3090,34 @@ export const openApiDocument = {
                     success: { type: 'boolean', example: true },
                     data: {
                       type: 'object',
+                      required: [
+                        'id',
+                        'userId',
+                        'categoryCode',
+                        'productName',
+                        'waitType',
+                        'status',
+                        'createdAt',
+                        'updatedAt',
+                      ],
                       properties: {
                         id: { type: 'string', example: '1' },
                         userId: { type: 'string', example: '1' },
                         categoryCode: { type: 'string', example: 'ELECTRONICS' },
                         productName: { type: 'string', example: '맥북 프로' },
-                        productUrl: { type: 'string', example: 'https://apple.com/kr/macbook' },
-                        price: { type: 'string', example: '2500000' },
+                        productUrl: {
+                          type: 'string',
+                          nullable: true,
+                          example: 'https://apple.com/kr/macbook',
+                        },
+                        price: {
+                          type: 'string',
+                          nullable: true,
+                          example: '2500000',
+                        },
                         productImageUrl: {
                           type: 'string',
+                          nullable: true,
                           example: 'https://images.com/macbook.png',
                         },
                         reason: {
@@ -3050,9 +3129,20 @@ export const openApiDocument = {
                         waitUntil: {
                           type: 'string',
                           format: 'date-time',
+                          nullable: true,
                           example: '2026-07-23T18:00:00.000Z',
                         },
                         status: { type: 'string', example: 'WAITING' },
+                        createdAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-16T18:00:00.000Z',
+                        },
+                        updatedAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-16T18:00:00.000Z',
+                        },
                       },
                     },
                   },
@@ -3106,14 +3196,36 @@ export const openApiDocument = {
                     success: { type: 'boolean', example: true },
                     data: {
                       type: 'object',
+                      required: [
+                        'id',
+                        'userId',
+                        'categoryCode',
+                        'productName',
+                        'waitType',
+                        'status',
+                        'createdAt',
+                        'updatedAt',
+                      ],
                       properties: {
                         id: { type: 'string', example: '1' },
                         userId: { type: 'string', example: '1' },
                         categoryCode: { type: 'string', example: 'ELECTRONICS' },
                         productName: { type: 'string', example: '아이패드 프로' },
-                        productUrl: { type: 'string', example: 'https://apple.com/kr/ipad' },
-                        price: { type: 'string', example: '1500000' },
-                        productImageUrl: { type: 'string', example: 'https://images.com/ipad.png' },
+                        productUrl: {
+                          type: 'string',
+                          nullable: true,
+                          example: 'https://apple.com/kr/ipad',
+                        },
+                        price: {
+                          type: 'string',
+                          nullable: true,
+                          example: '1500000',
+                        },
+                        productImageUrl: {
+                          type: 'string',
+                          nullable: true,
+                          example: 'https://images.com/ipad.png',
+                        },
                         reason: {
                           type: 'string',
                           nullable: true,
@@ -3123,9 +3235,20 @@ export const openApiDocument = {
                         waitUntil: {
                           type: 'string',
                           format: 'date-time',
+                          nullable: true,
                           example: '2026-07-17T18:00:00.000Z',
                         },
                         status: { type: 'string', example: 'WAITING' },
+                        createdAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-16T18:00:00.000Z',
+                        },
+                        updatedAt: {
+                          type: 'string',
+                          format: 'date-time',
+                          example: '2026-07-17T10:30:00.000Z',
+                        },
                       },
                     },
                   },

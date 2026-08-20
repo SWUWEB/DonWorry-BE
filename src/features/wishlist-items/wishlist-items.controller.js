@@ -17,6 +17,8 @@ const serializeWishlistItem = (item) => {
     id: item.id.toString(),
     userId: item.userId.toString(),
     price: item.price ? item.price.toString() : null,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
   };
 };
 
