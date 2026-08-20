@@ -5,6 +5,9 @@ import { ERROR_CODES } from '../../config/error-codes.js';
 const serializeNotification = (notification) => ({
   id: notification.id.toString(),
   notificationType: notification.notificationType,
+  title: notification.title,
+  body: notification.body,
+  notifyAt: notification.notifyAt,
   isRead: notification.isRead,
   readAt: notification.readAt,
   wishlistItemId: notification.wishlistItemId ? notification.wishlistItemId.toString() : null,
@@ -12,13 +15,13 @@ const serializeNotification = (notification) => ({
 });
 
 const buildOrderBy = (sort) => {
-  if (sort === 'OLDEST') return [{ createdAt: 'asc' }, { id: 'asc' }];
-  if (sort === 'UNREAD_FIRST') return [{ isRead: 'asc' }, { createdAt: 'desc' }, { id: 'desc' }];
-  return [{ createdAt: 'desc' }, { id: 'desc' }];
+  if (sort === 'OLDEST') return [{ notifyAt: 'asc' }, { id: 'asc' }];
+  if (sort === 'UNREAD_FIRST') return [{ isRead: 'asc' }, { notifyAt: 'desc' }, { id: 'desc' }];
+  return [{ notifyAt: 'desc' }, { id: 'desc' }];
 };
 
 export const listNotifications = async (userId, query) => {
-  const where = { userId };
+  const where = { userId, notifyAt: { lte: new Date() } };
 
   if (query.type !== 'ALL') {
     where.notificationType = query.type;
@@ -29,9 +32,12 @@ export const listNotifications = async (userId, query) => {
     select: {
       id: true,
       notificationType: true,
+      title: true,
+      body: true,
       isRead: true,
       readAt: true,
       wishlistItemId: true,
+      notifyAt: true,
       createdAt: true,
     },
   });
@@ -73,4 +79,20 @@ export const deleteNotification = async (userId, notificationId) => {
       errorCode: ERROR_CODES.NOTIFICATION4041,
     });
   }
+};
+
+export const createNotificationInTx = (
+  tx,
+  { userId, notificationType, title, body, notifyAt, wishlistItemId = null },
+) => {
+  return tx.notification.create({
+    data: {
+      userId,
+      wishlistItemId,
+      notificationType,
+      title,
+      body,
+      notifyAt: notifyAt ?? new Date(),
+    },
+  });
 };
