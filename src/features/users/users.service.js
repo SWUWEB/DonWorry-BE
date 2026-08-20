@@ -3,6 +3,8 @@ import { HttpError } from '../../utils/http-error.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { createHmac } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
+import { randomInt } from 'node:crypto';
 
 export const getMe = async (userId) => {
   const user = await prisma.user.findUnique({
@@ -16,6 +18,10 @@ export const getMe = async (userId) => {
       phoneNumber: true,
       birthDate: true,
       gender: true,
+      email: true,
+      loginProvider: true,
+      passwordHash: true,
+      hourlyWage: true,
     },
   });
 
@@ -24,10 +30,13 @@ export const getMe = async (userId) => {
       errorCode: ERROR_CODES.USER4041,
     });
   }
+  const { passwordHash, ...rest } = user;
   return {
-    ...user,
+    ...rest,
     id: user.id.toString(),
     birthDate: user.birthDate?.toISOString().slice(0, 10) ?? null,
+    hasPassword: !!passwordHash,
+    hourlyWage: user.hourlyWage !== null ? user.hourlyWage.toString() : null,
   };
 };
 
@@ -254,11 +263,19 @@ export const getNotificationSettings = async (userId) => {
   return user;
 };
 
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const toCurrentYearMonth = () => {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const month = String(kst.getUTCMonth() + 1).padStart(2, '0');
   return `${kst.getUTCFullYear()}-${month}`;
+};
+const getKstMonthRange = (yearMonth) => {
+  const [year, month] = yearMonth.split('-').map(Number);
+  return {
+    startAt: new Date(Date.UTC(year, month - 1, 1) - KST_OFFSET_MS),
+    endAt: new Date(Date.UTC(year, month, 1) - KST_OFFSET_MS),
+  };
 };
 
 export const getBudget = async (userId, yearMonth) => {
@@ -280,12 +297,68 @@ export const getBudget = async (userId, yearMonth) => {
     },
   });
   if (!budget) return null;
+
+  const { startAt, endAt } = getKstMonthRange(targetYearMonth);
+  const consumptionRecords = await prisma.consumptionRecord.findMany({
+    where: {
+      userId,
+      occurredAt: {
+        gte: startAt,
+        lt: endAt,
+      },
+      type: 'CONSUMED',
+    },
+    select: { categoryCode: true, price: true },
+  });
+
+  const spentMap = {};
+  let totalSpentAmount = 0;
+  for (const record of consumptionRecords) {
+    const categoryKey = record.categoryCode ?? 'ETC';
+    const amount = Number(record.price || 0);
+    spentMap[categoryKey] = (spentMap[categoryKey] || 0) + amount;
+    totalSpentAmount += amount;
+  }
+
+  const rawCategoryBudgets = budget.categoryBudgets;
+  let categoryBudgetsResult = [];
+
+  if (Array.isArray(rawCategoryBudgets)) {
+    categoryBudgetsResult = rawCategoryBudgets.map((item) => {
+      const categoryKey = item.categoryCode;
+      const budgetAmount = Number(item.budgetAmount || 0);
+      const spentAmount = spentMap[categoryKey] || 0;
+      const remainingAmount = budgetAmount - spentAmount;
+      const usageRate =
+        budgetAmount > 0 ? Math.min(100, Math.round((spentAmount / budgetAmount) * 100)) : 0;
+      return {
+        ...item,
+        budgetAmount: budgetAmount.toString(),
+        spentAmount: spentAmount.toString(),
+        remainingAmount: remainingAmount.toString(),
+        usageRate,
+      };
+    });
+  }
+  const totalMonthlyIncome = Number(budget.monthlyIncome || 0);
+  const totalRemainingAmount = totalMonthlyIncome - totalSpentAmount;
+  const totalUsageRate =
+    totalMonthlyIncome > 0
+      ? Math.min(100, Math.round((totalSpentAmount / totalMonthlyIncome) * 100))
+      : 0;
   return {
     yearMonth: budget.yearMonth,
     monthlyIncome: budget.monthlyIncome !== null ? budget.monthlyIncome.toString() : null,
     monthlyBudget: budget.monthlyBudget.toString(),
+    spentAmount: totalSpentAmount.toString(),
+    remainingAmount: totalRemainingAmount.toString(),
+    usageRate: totalUsageRate,
+    categoryBudgets: categoryBudgetsResult,
   };
 };
+
+const isPrismaTransactionConflictError = (error) =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
 
 export const setBudget = async (userId, body) => {
   const user = await prisma.user.findUnique({
@@ -296,30 +369,57 @@ export const setBudget = async (userId, body) => {
       errorCode: ERROR_CODES.USER4041,
     });
   }
-  const { yearMonth, monthlyIncome, monthlyBudget } = body;
-  const updateData = { monthlyBudget };
-  if (monthlyIncome !== undefined) {
-    updateData.monthlyIncome = monthlyIncome;
-  }
+  const { yearMonth, monthlyIncome, monthlyBudget, categoryBudgets } = body;
+  const normalizedCategoryBudgets = categoryBudgets?.map((item) => ({
+    ...item,
+    budgetAmount: item.budgetAmount.toString(),
+  }));
 
-  const budget = await prisma.monthlyBudget.upsert({
-    where: {
-      userId_yearMonth: {
-        userId,
-        yearMonth,
+  const upsertBudget = () =>
+    prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.monthlyBudget.findUnique({
+          where: { userId_yearMonth: { userId, yearMonth } },
+        });
+
+        let mergedCategoryBudgets = existing?.categoryBudgets ?? [];
+        if (categoryBudgets !== undefined) {
+          mergedCategoryBudgets = normalizedCategoryBudgets;
+        }
+
+        await tx.monthlyBudget.upsert({
+          where: { userId_yearMonth: { userId, yearMonth } },
+          create: {
+            userId,
+            yearMonth,
+            monthlyIncome: monthlyIncome ?? null,
+            monthlyBudget: monthlyBudget ?? 0n,
+            categoryBudgets: mergedCategoryBudgets,
+          },
+          update: {
+            ...(monthlyIncome !== undefined && { monthlyIncome }),
+            ...(monthlyBudget !== undefined && { monthlyBudget }),
+            categoryBudgets: mergedCategoryBudgets,
+          },
+        });
       },
-    },
-    update: updateData,
-    create: {
-      userId,
-      yearMonth,
-      monthlyIncome: monthlyIncome ?? null,
-      monthlyBudget,
-    },
-  });
-  return {
-    yearMonth: budget.yearMonth,
-    monthlyIncome: budget.monthlyIncome !== null ? budget.monthlyIncome.toString() : null,
-    monthlyBudget: budget.monthlyBudget.toString(),
-  };
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await upsertBudget();
+      break;
+    } catch (error) {
+      const shouldRetry = isPrismaTransactionConflictError(error);
+
+      if (!shouldRetry || attempt === 2) {
+        throw error;
+      }
+
+      const retryDelayMs = 10 * 2 ** attempt + randomInt(0, 11);
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
+  }
+  return await getBudget(userId, yearMonth);
 };

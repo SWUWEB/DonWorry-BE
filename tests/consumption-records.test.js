@@ -15,6 +15,8 @@ const { prisma } = await import('../src/prisma/client.js');
 const { CATEGORY_CODES, CATEGORY_MAP } = await import('../src/config/categories.js');
 const { getConsumptionRatio } =
   await import('../src/features/consumption-records/consumption-records.service.js');
+const { serializeConsumptionRecord } =
+  await import('../src/features/consumption-records/consumption-records.controller.js');
 
 const app = createApp();
 
@@ -76,7 +78,7 @@ const createTestRecord = async (user, data = {}) => {
       categoryCode,
       categoryLabel: data.categoryLabel ?? CATEGORY_MAP[categoryCode],
       occurredAt: data.occurredAt ?? new Date('2026-07-09T03:30:00.000Z'),
-      riskScore: data.riskScore ?? 10,
+      riskScore: data.riskScore ?? 3,
       productUrl: data.productUrl ?? null,
       reason: data.reason ?? null,
       workHoursNeeded: data.workHoursNeeded ?? null,
@@ -350,6 +352,70 @@ test('GET /api-docs.json documents the actual consumption authentication respons
   );
 });
 
+test('GET /api-docs.json documents consumption record detail fields and risk score scale', async () => {
+  const response = await request(app).get('/api-docs.json');
+  const schema = response.body.components.schemas.ConsumptionRecordResult.properties;
+
+  assert.deepEqual(schema.productUrl, {
+    type: 'string',
+    format: 'uri',
+    nullable: true,
+    example: 'https://example.com/products/1',
+  });
+  assert.deepEqual(schema.riskScore, {
+    type: 'integer',
+    minimum: 0,
+    maximum: 5,
+    nullable: true,
+    example: 3,
+  });
+  assert.deepEqual(schema.workHoursNeeded, {
+    type: 'number',
+    minimum: 0,
+    nullable: true,
+    example: 0.5,
+  });
+  assert.equal(schema.createdAt.format, 'date-time');
+  assert.equal(schema.updatedAt.format, 'date-time');
+  assert.equal(schema.interventionAnswers.type, 'array');
+  assert.deepEqual(Object.keys(schema.interventionAnswers.items.properties), [
+    'id',
+    'questionId',
+    'answerValue',
+    'questionText',
+  ]);
+
+  const schemas = response.body.components.schemas;
+  assert.equal(
+    schemas.ConsumptionRecordListResponse.properties.data.items.$ref,
+    '#/components/schemas/ConsumptionRecordResult',
+  );
+  assert.equal(
+    schemas.ConsumptionRecordCreatedResponse.properties.data.$ref,
+    '#/components/schemas/ConsumptionRecordResult',
+  );
+  assert.equal(
+    schemas.ConsumptionRecordResponse.properties.data.$ref,
+    '#/components/schemas/ConsumptionRecordResult',
+  );
+  assert.equal(
+    schemas.ConsumptionRecordDetailResult.allOf[0].$ref,
+    '#/components/schemas/ConsumptionRecordResult',
+  );
+});
+
+test('serializeConsumptionRecord returns null for an out-of-contract legacy riskScore', () => {
+  const serialized = serializeConsumptionRecord({
+    id: 1n,
+    type: 'CONSUMED',
+    productName: 'legacy record',
+    price: 1000,
+    riskScore: 80,
+  });
+
+  assert.equal(serialized.riskScore, null);
+});
+
 test('GET /api/v1/consumption-records returns only the authenticated user records', async () => {
   const user = await createTestUser();
   const otherUser = await createTestUser({
@@ -366,6 +432,9 @@ test('GET /api/v1/consumption-records returns only the authenticated user record
   const newerRecord = await createTestRecord(user, {
     productName: 'newer own record',
     occurredAt: daysAgo(1),
+    productUrl: 'https://example.com/newer-record',
+    riskScore: 4,
+    workHoursNeeded: 1.25,
   });
   await createTestRecord(otherUser, { productName: 'other user record' });
 
@@ -378,6 +447,18 @@ test('GET /api/v1/consumption-records returns only the authenticated user record
   assert.deepEqual(
     response.body.data.map((record) => record.id),
     [newerRecord.id.toString(), olderRecord.id.toString()],
+  );
+  assert.deepEqual(
+    {
+      productUrl: response.body.data[0].productUrl,
+      riskScore: response.body.data[0].riskScore,
+      workHoursNeeded: response.body.data[0].workHoursNeeded,
+    },
+    {
+      productUrl: 'https://example.com/newer-record',
+      riskScore: 4,
+      workHoursNeeded: 1.25,
+    },
   );
 });
 
@@ -713,6 +794,9 @@ test('GET /api/v1/consumption-records/:id returns a record detail owned by the u
     categoryCode: CATEGORY_CODES[1],
     reason: '친구와 시간을 보내고 싶어서',
     occurredAt: daysAgo(2),
+    productUrl: 'https://example.com/record-detail',
+    riskScore: 5,
+    workHoursNeeded: 2.5,
   });
   const recentSameCategoryRecord = await createTestRecord(user, {
     productName: '같은 카테고리의 최근 소비',
@@ -756,6 +840,9 @@ test('GET /api/v1/consumption-records/:id returns a record detail owned by the u
   assert.equal(response.body.data.categoryCode, CATEGORY_CODES[1]);
   assert.equal(response.body.data.categoryLabel, CATEGORY_MAP[CATEGORY_CODES[1]]);
   assert.equal(response.body.data.reason, '친구와 시간을 보내고 싶어서');
+  assert.equal(response.body.data.productUrl, 'https://example.com/record-detail');
+  assert.equal(response.body.data.riskScore, 5);
+  assert.equal(response.body.data.workHoursNeeded, 2.5);
   assert.equal(response.body.data.interventionAnswers.length, 1);
   assert.equal(response.body.data.interventionAnswers[0].questionId, question.id.toString());
   assert.equal(response.body.data.recentCategoryConsumptionCount, 1);
@@ -830,7 +917,7 @@ test('PUT /api/v1/consumption-records/:id updates a record owned by the user', a
       price: 9900,
       occurredAt: '2026-07-10T12:30:00+09:00',
       category_code: CATEGORY_CODES[2],
-      riskScore: 80,
+      riskScore: 4,
       interventionAnswers: [{ questionId: question.id.toString(), answerValue: false }],
     });
 
@@ -857,7 +944,7 @@ test('PUT /api/v1/consumption-records/:id updates a record owned by the user', a
   assert.equal(updatedRecord.interventionAnswers[0].answerValue, false);
 });
 
-test('PUT /api/v1/consumption-records/:id rejects invalid values', async () => {
+test('PUT /api/v1/consumption-records/:id rejects riskScore outside the 0-5 range', async () => {
   const user = await createTestUser();
   const accessToken = createAccessToken(user);
   const record = await createTestRecord(user);
@@ -866,13 +953,28 @@ test('PUT /api/v1/consumption-records/:id rejects invalid values', async () => {
     .put(`/api/v1/consumption-records/${record.id}`)
     .set('Authorization', `Bearer ${accessToken}`)
     .send({
-      riskScore: 101,
+      riskScore: 6,
     });
 
   assert.equal(response.status, 400);
   assert.equal(response.body.success, false);
   assert.equal(response.body.code, 'COMMON4001');
   assert.ok(response.body.errors);
+});
+
+test('PUT /api/v1/consumption-records/:id rejects a non-integer riskScore', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const record = await createTestRecord(user);
+
+  const response = await request(app)
+    .put(`/api/v1/consumption-records/${record.id}`)
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ riskScore: 2.5 });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.code, 'COMMON4001');
 });
 
 test('PUT /api/v1/consumption-records/:id rejects invalid occurredAt with a consumption error code', async () => {

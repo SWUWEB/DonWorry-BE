@@ -21,14 +21,17 @@ const getAuthenticatedUserId = (req) => {
   return typeof userId === 'string' ? BigInt(userId) : userId;
 };
 
-const serializeConsumptionRecord = (record) => ({
+const normalizeRiskScore = (riskScore) =>
+  Number.isInteger(riskScore) && riskScore >= 0 && riskScore <= 5 ? riskScore : null;
+
+export const serializeConsumptionRecord = (record) => ({
   id: record.id?.toString ? record.id.toString() : record.id,
   type: record.type,
   productName: record.productName,
   price: record.price !== null && record.price !== undefined ? Number(record.price) : null,
   productUrl: record.productUrl,
   reason: record.reason,
-  riskScore: record.riskScore,
+  riskScore: normalizeRiskScore(record.riskScore),
   workHoursNeeded:
     record.workHoursNeeded !== null && record.workHoursNeeded !== undefined
       ? Number(record.workHoursNeeded)

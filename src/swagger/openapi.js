@@ -457,6 +457,25 @@ export const openApiDocument = {
                 nullable: true,
                 example: 'FEMALE',
               },
+              email: {
+                type: 'string',
+                format: 'email',
+                example: 'hong@example.com',
+              },
+              loginProvider: {
+                type: 'string',
+                enum: ['LOCAL', 'KAKAO'],
+                example: 'LOCAL',
+              },
+              hasPassword: {
+                type: 'boolean',
+                example: true,
+              },
+              hourlyWage: {
+                type: 'string',
+                nullable: true,
+                example: '10030',
+              },
             },
           },
         },
@@ -616,9 +635,15 @@ export const openApiDocument = {
             enum: ['TEMPTATION', 'GOAL', 'GENERAL'],
             example: 'TEMPTATION',
           },
+          title: { type: 'string', example: '결단의 시간이 왔어요!' },
+          body: {
+            type: 'string',
+            example: "'아이폰 17 pro' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?",
+          },
           isRead: { type: 'boolean', example: false },
           readAt: { type: 'string', format: 'date-time', nullable: true, example: null },
           wishlistItemId: { type: 'string', nullable: true, example: '3' },
+          notifyAt: { type: 'string', format: 'date-time', example: '2026-07-30T09:00:00.000Z' },
           createdAt: { type: 'string', format: 'date-time', example: '2026-07-30T09:00:00.000Z' },
         },
       },
@@ -797,6 +822,35 @@ export const openApiDocument = {
             description: '월 수입',
           },
           monthlyBudget: { type: 'string', example: '500000', description: '월 예산' },
+          spentAmount: {
+            type: 'string',
+            example: '300000',
+            description: '총 지출 금액',
+          },
+          remainingAmount: {
+            type: 'string',
+            example: '700000',
+            description: '수입 기준 잔액',
+          },
+          usageRate: {
+            type: 'integer',
+            example: 30,
+            description: '수입 대비 총 사용률(%)',
+          },
+          categoryBudgets: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                categoryCode: { type: 'string', example: 'FOOD_SNACK' },
+                budgetAmount: { type: 'string', example: '400000' },
+                spentAmount: { type: 'string', example: '287000' },
+                remainingAmount: { type: 'string', example: '113000' },
+                usageRate: { type: 'integer', example: 72 },
+              },
+            },
+            description: '카테고리별 예산 상세 목록',
+          },
         },
       },
       GetMonthlyBudgetResponse: {
@@ -934,6 +988,14 @@ export const openApiDocument = {
           type: { type: 'string', example: 'CONSUMED' },
           productName: { type: 'string', example: '쿠팡 상품' },
           price: { type: 'number', nullable: true, example: 12000 },
+          productUrl: {
+            type: 'string',
+            format: 'uri',
+            nullable: true,
+            example: 'https://example.com/products/1',
+          },
+          riskScore: { type: 'integer', minimum: 0, maximum: 5, nullable: true, example: 3 },
+          workHoursNeeded: { type: 'number', minimum: 0, nullable: true, example: 0.5 },
           categoryCode: { type: 'string', example: 'CAFE_DESSERT' },
           categoryLabel: { type: 'string', example: '카페/디저트' },
           reason: {
@@ -942,6 +1004,23 @@ export const openApiDocument = {
             example: '친구와 시간을 보내고 싶어서',
           },
           occurredAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
+          createdAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
+          updatedAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
+          interventionAnswers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', example: '1' },
+                questionId: { type: 'string', example: '1' },
+                answerValue: { type: 'boolean', example: true },
+                questionText: {
+                  type: 'string',
+                  example: '이 소비를 하기 전에 한 번 더 생각해보셨나요?',
+                },
+              },
+            },
+          },
         },
       },
       ConsumptionRecordCreatedResponse: {
@@ -2342,7 +2421,7 @@ export const openApiDocument = {
                 price: 4500,
                 productUrl: 'https://example.com/products/americano',
                 reason: '친구와 시간을 보내고 싶어서',
-                riskScore: 30,
+                riskScore: 3,
                 workHoursNeeded: 0.5,
                 category_code: 'CAFE_DESSERT',
                 interventionAnswers: [
