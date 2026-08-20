@@ -2,7 +2,7 @@
 
 상세 에러 코드는 아래 Google Sheets를 단일 원본으로 관리합니다.
 
-Google Sheets: [Error Code Single Source](https://docs.google.com/spreadsheets/d/1rCsl4SikjwKhs5etK-PVfIaEpmGj0t19pxU0FgzLH6U/edit?gid=821663418#gid=821663418)
+Google Sheets: [Error Code Single Source](https://docs.google.com/spreadsheets/d/1rCsl4SikjwKhs5etK-PVfIaEpmGj0t19pxU0FgzLH6U/edit?gid=398376403#gid=398376403)
 
 ## 운영 원칙
 
