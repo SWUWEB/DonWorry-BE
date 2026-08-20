@@ -934,6 +934,14 @@ export const openApiDocument = {
           type: { type: 'string', example: 'CONSUMED' },
           productName: { type: 'string', example: '쿠팡 상품' },
           price: { type: 'number', nullable: true, example: 12000 },
+          productUrl: {
+            type: 'string',
+            format: 'uri',
+            nullable: true,
+            example: 'https://example.com/products/1',
+          },
+          riskScore: { type: 'integer', minimum: 0, maximum: 5, nullable: true, example: 3 },
+          workHoursNeeded: { type: 'number', minimum: 0, nullable: true, example: 0.5 },
           categoryCode: { type: 'string', example: 'CAFE_DESSERT' },
           categoryLabel: { type: 'string', example: '카페/디저트' },
           reason: {
@@ -2342,7 +2350,7 @@ export const openApiDocument = {
                 price: 4500,
                 productUrl: 'https://example.com/products/americano',
                 reason: '친구와 시간을 보내고 싶어서',
-                riskScore: 30,
+                riskScore: 3,
                 workHoursNeeded: 0.5,
                 category_code: 'CAFE_DESSERT',
                 interventionAnswers: [

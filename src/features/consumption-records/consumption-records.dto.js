@@ -77,7 +77,7 @@ export const createConsumptionRecordDto = z.object({
           message: 'occurredAt must be a non-empty ISO datetime string',
         },
       ),
-    riskScore: z.number().min(0).max(100).optional(),
+    riskScore: z.number().int().min(0).max(5).optional(),
     workHoursNeeded: z.number().min(0).optional(),
     category_code: z
       .string()
