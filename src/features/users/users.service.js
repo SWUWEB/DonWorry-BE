@@ -349,7 +349,9 @@ export const getBudget = async (userId, yearMonth) => {
 
   const hourlyWage = user.hourlyWage !== null ? Number(user.hourlyWage) : null;
   const workedHours =
-    hourlyWage && hourlyWage > 0 ? Math.round(totalMonthlyIncome / hourlyWage) : null;
+    hourlyWage && hourlyWage > 0 && budget.monthlyIncome !== null
+      ? Math.round(totalMonthlyIncome / hourlyWage)
+      : null;
   const spentHours =
     hourlyWage && hourlyWage > 0 ? Math.round((totalSpentAmount / hourlyWage) * 10) / 10 : null;
   return {

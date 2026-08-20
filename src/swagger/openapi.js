@@ -861,7 +861,8 @@ export const openApiDocument = {
             type: 'integer',
             nullable: true,
             example: 52,
-            description: '이번 달 근무 시간 = round(월 수입 ÷ 시급), 시급 미설정 시 null',
+            description:
+              '이번 달 근무 시간 = round(월 수입 ÷ 시급), 시급 또는 월 수입 미설정 시 null',
           },
           spentHours: {
             type: 'number',
