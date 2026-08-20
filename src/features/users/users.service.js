@@ -18,6 +18,10 @@ export const getMe = async (userId) => {
       phoneNumber: true,
       birthDate: true,
       gender: true,
+      email: true,
+      loginProvider: true,
+      passwordHash: true,
+      hourlyWage: true,
     },
   });
 
@@ -26,10 +30,13 @@ export const getMe = async (userId) => {
       errorCode: ERROR_CODES.USER4041,
     });
   }
+  const { passwordHash, ...rest } = user;
   return {
-    ...user,
+    ...rest,
     id: user.id.toString(),
     birthDate: user.birthDate?.toISOString().slice(0, 10) ?? null,
+    hasPassword: !!passwordHash,
+    hourlyWage: user.hourlyWage !== null ? user.hourlyWage.toString() : null,
   };
 };
 

@@ -98,6 +98,7 @@ model User {
   updatedAt               DateTime      @updatedAt @map("updated_at")
   birthDate               DateTime?     @map("birth_date") @db.Date
   gender                  Gender?
+  hourlyWage              BigInt?       @map("hourly_wage") @db.UnsignedBigInt
 
   authTokens                 AuthToken[]
   consumptionAnalysisReports ConsumptionAnalysisReport[]
