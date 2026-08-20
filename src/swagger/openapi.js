@@ -457,6 +457,25 @@ export const openApiDocument = {
                 nullable: true,
                 example: 'FEMALE',
               },
+              email: {
+                type: 'string',
+                format: 'email',
+                example: 'hong@example.com',
+              },
+              loginProvider: {
+                type: 'string',
+                enum: ['LOCAL', 'KAKAO'],
+                example: 'LOCAL',
+              },
+              hasPassword: {
+                type: 'boolean',
+                example: true,
+              },
+              hourlyWage: {
+                type: 'string',
+                nullable: true,
+                example: '10030',
+              },
             },
           },
         },
