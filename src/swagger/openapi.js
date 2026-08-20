@@ -1004,6 +1004,23 @@ export const openApiDocument = {
             example: '친구와 시간을 보내고 싶어서',
           },
           occurredAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
+          createdAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
+          updatedAt: { type: 'string', format: 'date-time', example: '2026-07-02T14:52:20.000Z' },
+          interventionAnswers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', example: '1' },
+                questionId: { type: 'string', example: '1' },
+                answerValue: { type: 'boolean', example: true },
+                questionText: {
+                  type: 'string',
+                  example: '이 소비를 하기 전에 한 번 더 생각해보셨나요?',
+                },
+              },
+            },
+          },
         },
       },
       ConsumptionRecordCreatedResponse: {

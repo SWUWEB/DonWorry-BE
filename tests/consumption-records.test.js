@@ -15,6 +15,8 @@ const { prisma } = await import('../src/prisma/client.js');
 const { CATEGORY_CODES, CATEGORY_MAP } = await import('../src/config/categories.js');
 const { getConsumptionRatio } =
   await import('../src/features/consumption-records/consumption-records.service.js');
+const { serializeConsumptionRecord } =
+  await import('../src/features/consumption-records/consumption-records.controller.js');
 
 const app = createApp();
 
@@ -373,6 +375,45 @@ test('GET /api-docs.json documents consumption record detail fields and risk sco
     nullable: true,
     example: 0.5,
   });
+  assert.equal(schema.createdAt.format, 'date-time');
+  assert.equal(schema.updatedAt.format, 'date-time');
+  assert.equal(schema.interventionAnswers.type, 'array');
+  assert.deepEqual(Object.keys(schema.interventionAnswers.items.properties), [
+    'id',
+    'questionId',
+    'answerValue',
+    'questionText',
+  ]);
+
+  const schemas = response.body.components.schemas;
+  assert.equal(
+    schemas.ConsumptionRecordListResponse.properties.data.items.$ref,
+    '#/components/schemas/ConsumptionRecordResult',
+  );
+  assert.equal(
+    schemas.ConsumptionRecordCreatedResponse.properties.data.$ref,
+    '#/components/schemas/ConsumptionRecordResult',
+  );
+  assert.equal(
+    schemas.ConsumptionRecordResponse.properties.data.$ref,
+    '#/components/schemas/ConsumptionRecordResult',
+  );
+  assert.equal(
+    schemas.ConsumptionRecordDetailResult.allOf[0].$ref,
+    '#/components/schemas/ConsumptionRecordResult',
+  );
+});
+
+test('serializeConsumptionRecord returns null for an out-of-contract legacy riskScore', () => {
+  const serialized = serializeConsumptionRecord({
+    id: 1n,
+    type: 'CONSUMED',
+    productName: 'legacy record',
+    price: 1000,
+    riskScore: 80,
+  });
+
+  assert.equal(serialized.riskScore, null);
 });
 
 test('GET /api/v1/consumption-records returns only the authenticated user records', async () => {
