@@ -133,7 +133,11 @@ export const setBudgetDto = z.object({
         .nonnegative('예산 금액은 0원 이상이어야 합니다.')
         .max(1000000000n, '금액이 너무 큽니다.')
         .optional(),
-
+      hourlyWage: z.coerce
+        .bigint()
+        .nonnegative('시급은 0원 이상이어야 합니다.')
+        .max(10000000n, '금액이 너무 큽니다.')
+        .optional(),
       categoryBudgets: z
         .array(
           z.object({
@@ -156,7 +160,8 @@ export const setBudgetDto = z.object({
       (data) =>
         data.monthlyBudget !== undefined ||
         data.monthlyIncome !== undefined ||
-        data.categoryBudgets !== undefined,
+        data.categoryBudgets !== undefined ||
+        data.hourlyWage !== undefined,
       {
         message: '월 예산, 월 수입, 카테고리 예산 중 최소 하나는 입력해야 합니다.',
         path: ['monthlyBudget'],

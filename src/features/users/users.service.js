@@ -346,6 +346,12 @@ export const getBudget = async (userId, yearMonth) => {
     totalMonthlyIncome > 0
       ? Math.min(100, Math.round((totalSpentAmount / totalMonthlyIncome) * 100))
       : 0;
+
+  const hourlyWage = user.hourlyWage !== null ? Number(user.hourlyWage) : null;
+  const workedHours =
+    hourlyWage && hourlyWage > 0 ? Math.round(totalMonthlyIncome / hourlyWage) : null;
+  const spentHours =
+    hourlyWage && hourlyWage > 0 ? Math.round((totalSpentAmount / hourlyWage) * 10) / 10 : null;
   return {
     yearMonth: budget.yearMonth,
     monthlyIncome: budget.monthlyIncome !== null ? budget.monthlyIncome.toString() : null,
@@ -354,6 +360,9 @@ export const getBudget = async (userId, yearMonth) => {
     remainingAmount: totalRemainingAmount.toString(),
     usageRate: totalUsageRate,
     categoryBudgets: categoryBudgetsResult,
+    hourlyWage: hourlyWage !== null ? hourlyWage.toString() : null,
+    workedHours,
+    spentHours,
   };
 };
 
@@ -369,7 +378,7 @@ export const setBudget = async (userId, body) => {
       errorCode: ERROR_CODES.USER4041,
     });
   }
-  const { yearMonth, monthlyIncome, monthlyBudget, categoryBudgets } = body;
+  const { yearMonth, monthlyIncome, monthlyBudget, categoryBudgets, hourlyWage } = body;
   const normalizedCategoryBudgets = categoryBudgets?.map((item) => ({
     ...item,
     budgetAmount: item.budgetAmount.toString(),
@@ -402,6 +411,12 @@ export const setBudget = async (userId, body) => {
             categoryBudgets: mergedCategoryBudgets,
           },
         });
+        if (hourlyWage !== undefined) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { hourlyWage },
+          });
+        }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

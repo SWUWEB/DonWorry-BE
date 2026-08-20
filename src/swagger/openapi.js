@@ -851,6 +851,24 @@ export const openApiDocument = {
             },
             description: '카테고리별 예산 상세 목록',
           },
+          hourlyWage: {
+            type: 'string',
+            nullable: true,
+            example: '10030',
+            description: '시급 (미설정 시 null)',
+          },
+          workedHours: {
+            type: 'integer',
+            nullable: true,
+            example: 52,
+            description: '이번 달 근무 시간 = round(월 수입 ÷ 시급), 시급 미설정 시 null',
+          },
+          spentHours: {
+            type: 'number',
+            nullable: true,
+            example: 74.3,
+            description: '지출에 쓴 시간 = round(월 지출 ÷ 시급, 소수 1자리), 시급 미설정 시 null',
+          },
         },
       },
       GetMonthlyBudgetResponse: {
