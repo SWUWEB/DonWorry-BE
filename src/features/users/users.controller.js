@@ -3,6 +3,7 @@ import {
   getMe,
   updateMe,
   changePassword,
+  getSavingGoal,
   updateSavingGoal,
   deleteSavingGoal,
   deleteUser,
@@ -27,6 +28,11 @@ export const changePasswordController = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.validated.body;
   await changePassword(BigInt(req.user.userId), currentPassword, newPassword);
   return ok(res, null, '비밀번호가 변경되었습니다.');
+});
+
+export const getSavingGoalController = asyncHandler(async (req, res) => {
+  const result = await getSavingGoal(BigInt(req.user.userId));
+  return ok(res, result, '절약 목적 조회 성공');
 });
 
 export const updateSavingGoalController = asyncHandler(async (req, res) => {

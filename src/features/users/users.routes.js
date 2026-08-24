@@ -5,6 +5,7 @@ import {
   changePasswordController,
   getMeController,
   updateMeController,
+  getSavingGoalController,
   updateSavingGoalController,
   deleteSavingGoalController,
   deleteUserController,
@@ -30,6 +31,7 @@ usersRouter.get('/me', getMeController);
 usersRouter.patch('/me', validate(updateMeDto), updateMeController);
 usersRouter.delete('/me', validate(deleteUserDto), deleteUserController);
 usersRouter.patch('/me/password', validate(changePasswordDto), changePasswordController);
+usersRouter.get('/me/saving-goal', getSavingGoalController);
 usersRouter.put('/me/saving-goal', validate(savingGoalDto), updateSavingGoalController);
 usersRouter.delete('/me/saving-goal', deleteSavingGoalController);
 usersRouter.get('/me/notification-settings', getNotificationSettingsController);

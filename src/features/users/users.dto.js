@@ -84,11 +84,23 @@ export const changePasswordDto = z.object({
 });
 
 export const savingGoalDto = z.object({
-  body: z.object({
-    savingGoalText: z.string().min(1).max(255),
-    targetSavingAmount: z.coerce.bigint().positive(),
-    savingGoalIsActive: z.boolean().optional(),
-  }),
+  body: z
+    .object({
+      savingGoalText: z.string().min(1).max(255).optional(),
+      targetSavingAmount: z.coerce
+        .bigint()
+        .min(1000n, '목표 금액은 1,000원 이상이어야 합니다.')
+        .max(1000000000n, '목표 금액은 10억원 이하여야 합니다.')
+        .optional(),
+      savingGoalIsActive: z.boolean().optional(),
+    })
+    .refine(
+      (body) =>
+        body.savingGoalText !== undefined ||
+        body.targetSavingAmount !== undefined ||
+        body.savingGoalIsActive !== undefined,
+      { message: '최소 하나 이상의 수정 필드를 입력해야 합니다.' },
+    ),
 });
 
 export const notificationSettingsDto = z.object({
