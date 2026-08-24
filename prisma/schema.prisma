@@ -98,6 +98,7 @@ model User {
   updatedAt               DateTime      @updatedAt @map("updated_at")
   birthDate               DateTime?     @map("birth_date") @db.Date
   gender                  Gender?
+  hourlyWage              BigInt?       @map("hourly_wage") @db.UnsignedBigInt
 
   authTokens                 AuthToken[]
   consumptionAnalysisReports ConsumptionAnalysisReport[]
@@ -169,6 +170,8 @@ model Notification {
   readAt           DateTime?        @map("read_at")
   notificationType NotificationType @default(GENERAL) @map("notification_type")
   createdAt        DateTime         @default(now()) @map("created_at")
+  title            String           @db.VarChar(100)
+  body             String           @db.VarChar(500)
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   wishlistItem WishlistItem? @relation(fields: [wishlistItemId], references: [id], onDelete: SetNull)
@@ -281,13 +284,14 @@ model WithdrawalAudit {
 }
 
 model MonthlyBudget {
-  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  userId        BigInt   @map("user_id") @db.UnsignedBigInt
-  yearMonth     String   @map("year_month") @db.Char(7)
-  monthlyIncome BigInt?  @map("monthly_income") @db.UnsignedBigInt
-  monthlyBudget BigInt   @map("monthly_budget") @db.UnsignedBigInt
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userId          BigInt   @map("user_id") @db.UnsignedBigInt
+  yearMonth       String   @map("year_month") @db.Char(7)
+  monthlyIncome   BigInt?  @map("monthly_income") @db.UnsignedBigInt
+  monthlyBudget   BigInt   @map("monthly_budget") @db.UnsignedBigInt
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  categoryBudgets Json?    @map("category_budgets")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
