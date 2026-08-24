@@ -546,7 +546,7 @@ export const openApiDocument = {
               targetSavingAmount: { type: 'string', nullable: true, example: '1000000' },
               savingGoalText: { type: 'string', nullable: true, example: '목돈 마련' },
               savedAmount: { type: 'string', nullable: true, example: '600000' },
-              achievementRate: { type: 'integer', nullable: true, example: 86 },
+              achievementRate: { type: 'integer', nullable: true, example: 60 },
               savingGoalIsActive: { type: 'boolean', example: true },
             },
           },
