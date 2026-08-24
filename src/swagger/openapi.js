@@ -1203,11 +1203,12 @@ export const openApiDocument = {
           message: { type: 'string', example: '소비 위험도 계산에 성공했습니다.' },
           data: {
             type: 'object',
-            required: ['riskScore', 'riskLevel', 'riskMessage'],
+            required: ['riskScore', 'riskLevel', 'riskMessage', 'workHoursNeeded'],
             properties: {
               riskScore: { type: 'integer', minimum: 0, maximum: 5 },
               riskLevel: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
               riskMessage: { type: 'string' },
+              workHoursNeeded: { type: 'number', nullable: true, minimum: 0, example: 25.92 },
             },
           },
         },
@@ -2506,7 +2507,6 @@ export const openApiDocument = {
                 productUrl: 'https://example.com/products/americano',
                 reason: '친구와 시간을 보내고 싶어서',
                 riskScore: 3,
-                workHoursNeeded: 0.5,
                 category_code: 'CAFE_DESSERT',
                 interventionAnswers: [
                   {
@@ -2688,7 +2688,7 @@ export const openApiDocument = {
           calculateRiskScoreDto,
         ),
         description:
-          'Q1~Q3 답변을 모두 전달해야 하며 중복 questionId, 누락 질문, 존재하지 않거나 비활성인 질문을 검증합니다. 소비 기록은 생성하거나 수정하지 않습니다.',
+          'Q1~Q3 답변을 모두 전달해야 하며 중복 questionId, 누락 질문, 존재하지 않거나 비활성인 질문을 검증합니다. 상품 가격과 사용자 시급으로 필요 노동시간을 계산하며, 시급 미설정 시 null을 반환합니다. 소비 기록은 생성하거나 수정하지 않습니다.',
         responses: {
           200: {
             description: '소비 위험도 계산 성공',

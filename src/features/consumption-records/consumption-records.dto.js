@@ -78,7 +78,6 @@ export const createConsumptionRecordDto = z.object({
         },
       ),
     riskScore: z.number().int().min(0).max(5).optional(),
-    workHoursNeeded: z.number().min(0).optional(),
     category_code: z
       .string()
       .max(50)
@@ -154,9 +153,6 @@ const updateConsumptionRecordBodyDto = createConsumptionRecordDto.shape.body
     productUrl: createConsumptionRecordDto.shape.body.shape.productUrl.optional().nullable(),
     reason: createConsumptionRecordDto.shape.body.shape.reason.optional().nullable(),
     riskScore: createConsumptionRecordDto.shape.body.shape.riskScore.optional().nullable(),
-    workHoursNeeded: createConsumptionRecordDto.shape.body.shape.workHoursNeeded
-      .optional()
-      .nullable(),
     category_code: createConsumptionRecordDto.shape.body.shape.category_code.optional().nullable(),
   })
   .refine((data) => Object.keys(data).length > 0, {

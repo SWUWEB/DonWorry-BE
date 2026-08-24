@@ -2,6 +2,7 @@ import { CATEGORY_CODE_SET } from '../../config/categories.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { prisma } from '../../prisma/client.js';
 import { HttpError } from '../../utils/http-error.js';
+import { calculateWorkHoursNeeded } from '../../utils/work-hours.js';
 
 const QUESTION_PRESENTATION = {
   1: {
@@ -96,7 +97,7 @@ export const listInterventionQuestions = async ({ userId, categoryCode }) => {
   }
 };
 
-export const calculateRisk = async ({ interventionAnswers }) => {
+export const calculateRisk = async ({ userId, price, interventionAnswers }) => {
   const ids = interventionAnswers.map(({ questionId }) => questionId.toString());
   if (new Set(ids).size !== ids.length) {
     throw new HttpError(400, '동일한 질문에 대한 답변을 중복해서 등록할 수 없습니다.', {
@@ -105,13 +106,25 @@ export const calculateRisk = async ({ interventionAnswers }) => {
   }
 
   try {
-    const questions = await prisma.interventionQuestion.findMany({
-      where: {
-        id: { in: interventionAnswers.map(({ questionId }) => questionId) },
-        isActive: true,
-      },
-      select: { id: true, sortOrder: true, riskWeight: true },
-    });
+    const [questions, user] = await Promise.all([
+      prisma.interventionQuestion.findMany({
+        where: {
+          id: { in: interventionAnswers.map(({ questionId }) => questionId) },
+          isActive: true,
+        },
+        select: { id: true, sortOrder: true, riskWeight: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: BigInt(userId) },
+        select: { hourlyWage: true },
+      }),
+    ]);
+
+    if (!user) {
+      throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+        errorCode: ERROR_CODES.USER4041,
+      });
+    }
 
     if (questions.length !== interventionAnswers.length) {
       throw new HttpError(404, '요청한 질문을 찾을 수 없습니다.', {
@@ -145,18 +158,23 @@ export const calculateRisk = async ({ interventionAnswers }) => {
         sum + (answer.answerValue ? questionById.get(answer.questionId.toString()).riskWeight : 0),
       0,
     );
+    const workHours = calculateWorkHoursNeeded(price, user.hourlyWage);
+    const result = {
+      riskScore,
+      workHoursNeeded: workHours === null ? null : Number(workHours),
+    };
 
     if (riskScore <= 1) {
-      return { riskScore, riskLevel: 'LOW', riskMessage: '충동소비 가능성 낮음' };
+      return { ...result, riskLevel: 'LOW', riskMessage: '충동소비 가능성 낮음' };
     }
     if (riskScore <= 3) {
       return {
-        riskScore,
+        ...result,
         riskLevel: 'MEDIUM',
         riskMessage: '충동소비 가능성은 낮지만 좀 더 생각해보세요.',
       };
     }
-    return { riskScore, riskLevel: 'HIGH', riskMessage: '충동소비 가능성 높음' };
+    return { ...result, riskLevel: 'HIGH', riskMessage: '충동소비 가능성 높음' };
   } catch (error) {
     if (error instanceof HttpError) throw error;
     throw new HttpError(500, '소비 위험도를 계산하는 중 오류가 발생했습니다.', {

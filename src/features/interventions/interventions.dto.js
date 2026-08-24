@@ -12,6 +12,7 @@ export const listInterventionQuestionsDto = z.object({
 
 export const calculateRiskScoreDto = z.object({
   body: z.object({
+    price: z.coerce.number().nonnegative(),
     interventionAnswers: z.array(z.object({ questionId, answerValue: z.boolean() })),
   }),
 });
