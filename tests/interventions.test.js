@@ -44,6 +44,7 @@ const createUser = (email) =>
       email,
       loginId: email.startsWith('interventions-other') ? 'intervother' : 'intervtest',
       nickname: 'test',
+      hourlyWage: 10000,
     },
   });
 
@@ -182,6 +183,7 @@ test('POST risk analysis returns LOW, MEDIUM, HIGH without creating a record', a
       .post('/api/v1/interventions/risk-score')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        price: 260000,
         interventionAnswers: questions.map((question, index) => ({
           questionId: question.id.toString(),
           answerValue: values[index],
@@ -211,17 +213,31 @@ test('POST risk analysis returns LOW, MEDIUM, HIGH without creating a record', a
     riskScore: 4,
     riskLevel: 'HIGH',
     riskMessage: '충동소비 가능성 높음',
+    workHoursNeeded: 26,
   });
-  for (const field of [
-    'productName',
-    'price',
-    'workHoursNeeded',
-    'standardHourlyWage',
-    'riskWeight',
-  ]) {
+  for (const field of ['productName', 'price', 'standardHourlyWage', 'riskWeight']) {
     assert.equal(field in high.body.data, false);
   }
   assert.equal(await prisma.consumptionRecord.count({ where: { userId: user.id } }), 0);
+});
+
+test('POST risk analysis returns null work hours when hourly wage is not set', async () => {
+  const user = await createUser(emails[0]);
+  await prisma.user.update({ where: { id: user.id }, data: { hourlyWage: null } });
+  const questions = await ensureQuestions();
+  const response = await request(app)
+    .post('/api/v1/interventions/risk-score')
+    .set('Authorization', `Bearer ${tokenFor(user)}`)
+    .send({
+      price: 260000,
+      interventionAnswers: questions.map(({ id }) => ({
+        questionId: id.toString(),
+        answerValue: false,
+      })),
+    });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.workHoursNeeded, null);
 });
 
 test('POST risk analysis validates duplicate, missing, nonexistent, inactive and invalid answers', async () => {
@@ -232,7 +248,7 @@ test('POST risk analysis validates duplicate, missing, nonexistent, inactive and
     request(app)
       .post('/api/v1/interventions/risk-score')
       .set('Authorization', `Bearer ${token}`)
-      .send({ interventionAnswers });
+      .send({ price: 260000, interventionAnswers });
   const answers = questions.map(({ id }) => ({ questionId: id.toString(), answerValue: true }));
 
   const duplicate = await post([answers[0], answers[0], answers[2]]);
@@ -271,6 +287,7 @@ test('POST risk analysis fails safely when the stored risk policy is inconsisten
       .post('/api/v1/interventions/risk-score')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        price: 260000,
         interventionAnswers: questions.map(({ id }) => ({
           questionId: id.toString(),
           answerValue: true,
