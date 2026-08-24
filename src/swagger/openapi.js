@@ -2040,7 +2040,72 @@ export const openApiDocument = {
       },
     },
     '/api/v1/users/me/password': {
-      patch: securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),
+      patch: {
+        ...securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),
+        responses: {
+          200: {
+            description: '비밀번호가 변경되었습니다.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['success', 'message', 'data'],
+                  properties: {
+                    success: { type: 'boolean', enum: [true] },
+                    message: { type: 'string', example: '비밀번호가 변경되었습니다.' },
+                    data: { nullable: true, example: null },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '현재 비밀번호 불일치 또는 요청 값 검증 실패',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+                examples: {
+                  invalidCurrentPassword: {
+                    summary: '현재 비밀번호 불일치',
+                    value: {
+                      success: false,
+                      code: 'USER4001',
+                      message: '현재 비밀번호가 올바르지 않습니다.',
+                    },
+                  },
+                  validationFailed: {
+                    summary: '요청 값 검증 실패',
+                    value: {
+                      success: false,
+                      code: 'COMMON4001',
+                      message: 'Invalid request',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/users/me/saving-goal': {
       put: {

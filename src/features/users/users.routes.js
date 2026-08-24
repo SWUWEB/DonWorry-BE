@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../../middlewares/auth.js';
 import { validate } from '../../middlewares/validate.js';
 import {
-  createNotImplementedController,
+  changePasswordController,
   getMeController,
   updateMeController,
   updateSavingGoalController,
@@ -24,13 +24,12 @@ import {
 } from './users.dto.js';
 
 export const usersRouter = Router();
-const todo = createNotImplementedController('users');
 
 usersRouter.use(requireAuth);
 usersRouter.get('/me', getMeController);
 usersRouter.patch('/me', validate(updateMeDto), updateMeController);
 usersRouter.delete('/me', validate(deleteUserDto), deleteUserController);
-usersRouter.patch('/me/password', validate(changePasswordDto), todo);
+usersRouter.patch('/me/password', validate(changePasswordDto), changePasswordController);
 usersRouter.put('/me/saving-goal', validate(savingGoalDto), updateSavingGoalController);
 usersRouter.delete('/me/saving-goal', deleteSavingGoalController);
 usersRouter.get('/me/notification-settings', getNotificationSettingsController);
