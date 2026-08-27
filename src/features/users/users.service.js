@@ -75,13 +75,13 @@ const getEmailChangeUserAndAssertTarget = async (userId, newEmail, prismaClient 
   return user;
 };
 
-const assertEmailChangeRequestAllowed = async (userId, now) => {
+const assertEmailChangeRequestAllowed = async (userId, now, prismaClient = prisma) => {
   const cooldownStartedAt = new Date(now.getTime() - env.AUTH_EMAIL_RESEND_COOLDOWN_SECONDS * 1000);
   const limitWindowStartedAt = new Date(
     now.getTime() - env.AUTH_EMAIL_SEND_LIMIT_WINDOW_SECONDS * 1000,
   );
   const [recentRequest, requestsInWindow] = await Promise.all([
-    prisma.authToken.findFirst({
+    prismaClient.authToken.findFirst({
       where: {
         userId,
         tokenType: emailChangeTokenType,
@@ -90,7 +90,7 @@ const assertEmailChangeRequestAllowed = async (userId, now) => {
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     }),
-    prisma.authToken.findMany({
+    prismaClient.authToken.findMany({
       where: {
         userId,
         tokenType: emailChangeTokenType,
@@ -326,24 +326,49 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
 };
 
 export const requestEmailChangeVerification = async (userId, newEmail) => {
-  await getEmailChangeUserAndAssertTarget(userId, newEmail);
-
-  const now = new Date();
-  await assertEmailChangeRequestAllowed(userId, now);
-
   const code = createEmailChangeCode();
   const codeHash = await bcrypt.hash(code, passwordSaltRounds);
-  const expiresAt = new Date(now.getTime() + env.AUTH_EMAIL_CODE_TTL_SECONDS * 1000);
-  const authToken = await prisma.authToken.create({
-    data: {
-      userId,
-      emailSnapshot: newEmail,
-      tokenType: emailChangeTokenType,
-      tokenHash: codeHash,
-      expiresAt,
+  const authToken = await prisma.$transaction(
+    async (tx) => {
+      const lockedUsers = await tx.$queryRaw`
+        SELECT id
+        FROM users
+        WHERE id = ${userId}
+        FOR UPDATE
+      `;
+      if (lockedUsers.length === 0) {
+        throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+          errorCode: ERROR_CODES.USER4041,
+        });
+      }
+
+      await getEmailChangeUserAndAssertTarget(userId, newEmail, tx);
+
+      const now = new Date();
+      await assertEmailChangeRequestAllowed(userId, now, tx);
+
+      await tx.authToken.updateMany({
+        where: {
+          userId,
+          tokenType: emailChangeTokenType,
+          usedAt: null,
+        },
+        data: { usedAt: now, failedAttemptCount: 0, blockedUntil: null },
+      });
+
+      return tx.authToken.create({
+        data: {
+          userId,
+          emailSnapshot: newEmail,
+          tokenType: emailChangeTokenType,
+          tokenHash: codeHash,
+          expiresAt: new Date(now.getTime() + env.AUTH_EMAIL_CODE_TTL_SECONDS * 1000),
+        },
+        select: { id: true },
+      });
     },
-    select: { id: true },
-  });
+    { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+  );
 
   let emailDelivery;
   try {
@@ -365,16 +390,6 @@ export const requestEmailChangeVerification = async (userId, newEmail) => {
     await prisma.authToken.delete({ where: { id: authToken.id } });
     throw new Error('Email change verification code was not delivered.');
   }
-
-  await prisma.authToken.updateMany({
-    where: {
-      id: { not: authToken.id },
-      userId,
-      tokenType: emailChangeTokenType,
-      usedAt: null,
-    },
-    data: { usedAt: now, failedAttemptCount: 0, blockedUntil: null },
-  });
 
   return {
     newEmail,

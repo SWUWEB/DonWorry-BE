@@ -142,6 +142,32 @@ test('POST /users/me/email-verifications enforces the resend cooldown', async ()
   assert.ok(response.body.retryAfterSeconds > 0);
 });
 
+test('concurrent email verification requests leave exactly one usable token', async () => {
+  const user = await createUser();
+  const accessToken = accessTokenFor(user.id);
+
+  const responses = await Promise.all([
+    requestVerification(accessToken),
+    requestVerification(accessToken),
+  ]);
+
+  assert.deepEqual(responses.map(({ status }) => status).sort(), [200, 429]);
+
+  const tokens = await prisma.authToken.findMany({
+    where: { userId: user.id, tokenType: 'EMAIL_CHANGE' },
+  });
+  assert.equal(tokens.length, 1);
+  assert.equal(tokens[0].usedAt, null);
+
+  await prisma.authToken.update({
+    where: { id: tokens[0].id },
+    data: { tokenHash: await bcrypt.hash(validCode, 4) },
+  });
+  const changeResponse = await changeEmail(accessToken);
+  assert.equal(changeResponse.status, 200);
+  assert.equal(changeResponse.body.data.email, newEmail);
+});
+
 test('PATCH /users/me/email atomically changes the email and consumes pending tokens', async () => {
   const user = await createUser();
   const token = await createEmailChangeToken({ userId: user.id });
