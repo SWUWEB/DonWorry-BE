@@ -23,7 +23,10 @@ export const listInterventionQuestionsController = asyncHandler(async (req, res)
 
 export const calculateRiskController = asyncHandler(async (req, res) => {
   try {
-    const result = await calculateRisk(req.validated.body);
+    const result = await calculateRisk({
+      ...req.validated.body,
+      userId: getAuthenticatedUserId(req),
+    });
     return ok(res, result, '소비 위험도 계산에 성공했습니다.');
   } catch (error) {
     if (error instanceof HttpError) throw error;

@@ -53,10 +53,34 @@ export const updateMeDto = z.object({
 });
 
 export const changePasswordDto = z.object({
-  body: z.object({
-    currentPassword: z.string().min(8).max(100),
-    newPassword: z.string().min(8).max(100),
-  }),
+  body: z
+    .object({
+      currentPassword: z
+        .string({ error: '현재 비밀번호를 입력해주세요.' })
+        .min(1, '현재 비밀번호를 입력해주세요.'),
+      newPassword: z
+        .string({ error: '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.' })
+        .min(8, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .max(100, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .regex(/[A-Za-z]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .regex(/[0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .regex(/[^A-Za-z0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
+        .refine((value) => Buffer.byteLength(value, 'utf8') <= 72, {
+          message: '비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.',
+        }),
+      newPasswordConfirm: z
+        .string({ error: '새 비밀번호를 다시 입력해주세요.' })
+        .min(1, '새 비밀번호를 다시 입력해주세요.'),
+    })
+    .strict()
+    .refine((body) => body.currentPassword !== body.newPassword, {
+      message: '현재 비밀번호와 다른 비밀번호를 입력해주세요.',
+      path: ['newPassword'],
+    })
+    .refine((body) => body.newPassword === body.newPasswordConfirm, {
+      message: '새 비밀번호가 일치하지 않습니다.',
+      path: ['newPasswordConfirm'],
+    }),
 });
 
 export const savingGoalDto = z.object({
@@ -133,7 +157,11 @@ export const setBudgetDto = z.object({
         .nonnegative('예산 금액은 0원 이상이어야 합니다.')
         .max(1000000000n, '금액이 너무 큽니다.')
         .optional(),
-
+      hourlyWage: z.coerce
+        .bigint()
+        .positive('시급은 1원 이상이어야 합니다.')
+        .max(10000000n, '금액이 너무 큽니다.')
+        .optional(),
       categoryBudgets: z
         .array(
           z.object({
@@ -156,9 +184,10 @@ export const setBudgetDto = z.object({
       (data) =>
         data.monthlyBudget !== undefined ||
         data.monthlyIncome !== undefined ||
-        data.categoryBudgets !== undefined,
+        data.categoryBudgets !== undefined ||
+        data.hourlyWage !== undefined,
       {
-        message: '월 예산, 월 수입, 카테고리 예산 중 최소 하나는 입력해야 합니다.',
+        message: '월 예산, 월 수입, 카테고리 예산, 시급 중 최소 하나는 입력해야 합니다.',
         path: ['monthlyBudget'],
       },
     ),

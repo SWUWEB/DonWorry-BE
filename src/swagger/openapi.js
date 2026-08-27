@@ -851,6 +851,25 @@ export const openApiDocument = {
             },
             description: '카테고리별 예산 상세 목록',
           },
+          hourlyWage: {
+            type: 'string',
+            nullable: true,
+            example: '10030',
+            description: '시급 (미설정 시 null)',
+          },
+          workedHours: {
+            type: 'integer',
+            nullable: true,
+            example: 52,
+            description:
+              '이번 달 근무 시간 = round(월 수입 ÷ 시급), 시급 또는 월 수입 미설정 시 null',
+          },
+          spentHours: {
+            type: 'number',
+            nullable: true,
+            example: 74.3,
+            description: '지출에 쓴 시간 = round(월 지출 ÷ 시급, 소수 1자리), 시급 미설정 시 null',
+          },
         },
       },
       GetMonthlyBudgetResponse: {
@@ -1184,11 +1203,12 @@ export const openApiDocument = {
           message: { type: 'string', example: '소비 위험도 계산에 성공했습니다.' },
           data: {
             type: 'object',
-            required: ['riskScore', 'riskLevel', 'riskMessage'],
+            required: ['riskScore', 'riskLevel', 'riskMessage', 'workHoursNeeded'],
             properties: {
               riskScore: { type: 'integer', minimum: 0, maximum: 5 },
               riskLevel: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
               riskMessage: { type: 'string' },
+              workHoursNeeded: { type: 'number', nullable: true, minimum: 0, example: 25.92 },
             },
           },
         },
@@ -2021,7 +2041,72 @@ export const openApiDocument = {
       },
     },
     '/api/v1/users/me/password': {
-      patch: securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),
+      patch: {
+        ...securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),
+        responses: {
+          200: {
+            description: '비밀번호가 변경되었습니다.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['success', 'message', 'data'],
+                  properties: {
+                    success: { type: 'boolean', enum: [true] },
+                    message: { type: 'string', example: '비밀번호가 변경되었습니다.' },
+                    data: { nullable: true, example: null },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '현재 비밀번호 불일치 또는 요청 값 검증 실패',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+                examples: {
+                  invalidCurrentPassword: {
+                    summary: '현재 비밀번호 불일치',
+                    value: {
+                      success: false,
+                      code: 'USER4001',
+                      message: '현재 비밀번호가 올바르지 않습니다.',
+                    },
+                  },
+                  validationFailed: {
+                    summary: '요청 값 검증 실패',
+                    value: {
+                      success: false,
+                      code: 'COMMON4001',
+                      message: 'Invalid request',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     '/api/v1/users/me/saving-goal': {
       put: {
@@ -2422,7 +2507,6 @@ export const openApiDocument = {
                 productUrl: 'https://example.com/products/americano',
                 reason: '친구와 시간을 보내고 싶어서',
                 riskScore: 3,
-                workHoursNeeded: 0.5,
                 category_code: 'CAFE_DESSERT',
                 interventionAnswers: [
                   {
@@ -2604,7 +2688,7 @@ export const openApiDocument = {
           calculateRiskScoreDto,
         ),
         description:
-          'Q1~Q3 답변을 모두 전달해야 하며 중복 questionId, 누락 질문, 존재하지 않거나 비활성인 질문을 검증합니다. 소비 기록은 생성하거나 수정하지 않습니다.',
+          'Q1~Q3 답변을 모두 전달해야 하며 중복 questionId, 누락 질문, 존재하지 않거나 비활성인 질문을 검증합니다. 상품 가격과 사용자 시급으로 필요 노동시간을 계산하며, 시급 미설정 시 null을 반환합니다. 소비 기록은 생성하거나 수정하지 않습니다.',
         responses: {
           200: {
             description: '소비 위험도 계산 성공',

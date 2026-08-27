@@ -6,6 +6,8 @@ import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { randomInt } from 'node:crypto';
 
+const passwordSaltRounds = 12;
+
 export const getMe = async (userId) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -92,6 +94,43 @@ export const updateMe = async (userId, body) => {
     id: updatedUser.id.toString(),
     birthDate: updatedUser.birthDate?.toISOString().slice(0, 10) ?? null,
   };
+};
+
+export const changePassword = async (userId, currentPassword, newPassword) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true },
+  });
+
+  if (!user) {
+    throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.USER4041,
+    });
+  }
+
+  const isCurrentPasswordMatched =
+    user.passwordHash && (await bcrypt.compare(currentPassword, user.passwordHash));
+
+  if (!isCurrentPasswordMatched) {
+    throw new HttpError(400, '현재 비밀번호가 올바르지 않습니다.', {
+      errorCode: ERROR_CODES.USER4001,
+    });
+  }
+
+  const newPasswordHash = await bcrypt.hash(newPassword, passwordSaltRounds);
+  const updatedUser = await prisma.user.updateMany({
+    where: {
+      id: userId,
+      passwordHash: user.passwordHash,
+    },
+    data: { passwordHash: newPasswordHash },
+  });
+
+  if (updatedUser.count !== 1) {
+    throw new HttpError(400, '현재 비밀번호가 올바르지 않습니다.', {
+      errorCode: ERROR_CODES.USER4001,
+    });
+  }
 };
 
 export const updateSavingGoal = async (userId, body) => {
@@ -346,6 +385,14 @@ export const getBudget = async (userId, yearMonth) => {
     totalMonthlyIncome > 0
       ? Math.min(100, Math.round((totalSpentAmount / totalMonthlyIncome) * 100))
       : 0;
+
+  const hourlyWage = user.hourlyWage !== null ? Number(user.hourlyWage) : null;
+  const workedHours =
+    hourlyWage && hourlyWage > 0 && budget.monthlyIncome !== null
+      ? Math.round(totalMonthlyIncome / hourlyWage)
+      : null;
+  const spentHours =
+    hourlyWage && hourlyWage > 0 ? Math.round((totalSpentAmount / hourlyWage) * 10) / 10 : null;
   return {
     yearMonth: budget.yearMonth,
     monthlyIncome: budget.monthlyIncome !== null ? budget.monthlyIncome.toString() : null,
@@ -354,6 +401,9 @@ export const getBudget = async (userId, yearMonth) => {
     remainingAmount: totalRemainingAmount.toString(),
     usageRate: totalUsageRate,
     categoryBudgets: categoryBudgetsResult,
+    hourlyWage: hourlyWage !== null ? hourlyWage.toString() : null,
+    workedHours,
+    spentHours,
   };
 };
 
@@ -369,7 +419,7 @@ export const setBudget = async (userId, body) => {
       errorCode: ERROR_CODES.USER4041,
     });
   }
-  const { yearMonth, monthlyIncome, monthlyBudget, categoryBudgets } = body;
+  const { yearMonth, monthlyIncome, monthlyBudget, categoryBudgets, hourlyWage } = body;
   const normalizedCategoryBudgets = categoryBudgets?.map((item) => ({
     ...item,
     budgetAmount: item.budgetAmount.toString(),
@@ -402,6 +452,12 @@ export const setBudget = async (userId, body) => {
             categoryBudgets: mergedCategoryBudgets,
           },
         });
+        if (hourlyWage !== undefined) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { hourlyWage },
+          });
+        }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

@@ -39,12 +39,14 @@ const createTestUser = async ({
   email = testEmail,
   loginId = testLoginId,
   nickname = 'consumption-test-user',
+  hourlyWage = 10000,
 } = {}) => {
   return prisma.user.create({
     data: {
       email,
       loginId,
       nickname,
+      hourlyWage,
     },
   });
 };
@@ -169,6 +171,7 @@ test('POST /api/v1/consumption-records creates a consumption record', async () =
       type: 'CONSUMED',
       productName: '아이스 아메리카노',
       price: 4500,
+      workHoursNeeded: 99,
       occurredAt: '2026-07-09T12:30:00+09:00',
       category_code: categoryCode,
       interventionAnswers: [
@@ -185,6 +188,7 @@ test('POST /api/v1/consumption-records creates a consumption record', async () =
   assert.equal(response.body.data.price, 4500);
   assert.equal(response.body.data.categoryCode, categoryCode);
   assert.equal(response.body.data.categoryLabel, CATEGORY_MAP[categoryCode]);
+  assert.equal(response.body.data.workHoursNeeded, 0.45);
   const record = await prisma.consumptionRecord.findUnique({
     where: { id: BigInt(response.body.data.id) },
     include: {
@@ -196,10 +200,22 @@ test('POST /api/v1/consumption-records creates a consumption record', async () =
   assert.equal(record.userId, user.id);
   assert.equal(record.categoryCode, categoryCode);
   assert.equal(record.categoryLabel, CATEGORY_MAP[categoryCode]);
+  assert.equal(Number(record.workHoursNeeded), 0.45);
   assert.equal(record.interventionAnswers.length, 1);
   assert.equal(record.interventionAnswers[0].recordId, record.id);
   assert.equal(record.interventionAnswers[0].questionId, question.id);
   assert.equal(record.interventionAnswers[0].answerValue, true);
+});
+
+test('POST /api/v1/consumption-records stores null work hours without an hourly wage', async () => {
+  const user = await createTestUser({ hourlyWage: null });
+  const response = await request(app)
+    .post('/api/v1/consumption-records')
+    .set('Authorization', `Bearer ${createAccessToken(user)}`)
+    .send({ type: 'CONSUMED', productName: '간식', price: 3000 });
+
+  assert.equal(response.status, 201);
+  assert.equal(response.body.data.workHoursNeeded, null);
 });
 
 test('POST /api/v1/consumption-records rejects empty occurredAt', async () => {
@@ -918,6 +934,7 @@ test('PUT /api/v1/consumption-records/:id updates a record owned by the user', a
       occurredAt: '2026-07-10T12:30:00+09:00',
       category_code: CATEGORY_CODES[2],
       riskScore: 4,
+      workHoursNeeded: 99,
       interventionAnswers: [{ questionId: question.id.toString(), answerValue: false }],
     });
 
@@ -928,6 +945,7 @@ test('PUT /api/v1/consumption-records/:id updates a record owned by the user', a
   assert.equal(response.body.data.price, 9900);
   assert.equal(response.body.data.categoryCode, CATEGORY_CODES[2]);
   assert.equal(response.body.data.categoryLabel, CATEGORY_MAP[CATEGORY_CODES[2]]);
+  assert.equal(response.body.data.workHoursNeeded, 0.99);
   assert.equal(response.body.data.interventionAnswers.length, 1);
   assert.equal(response.body.data.interventionAnswers[0].questionId, question.id.toString());
   assert.equal(response.body.data.interventionAnswers[0].answerValue, false);
@@ -939,6 +957,7 @@ test('PUT /api/v1/consumption-records/:id updates a record owned by the user', a
 
   assert.equal(updatedRecord.productName, 'after update');
   assert.equal(updatedRecord.categoryCode, CATEGORY_CODES[2]);
+  assert.equal(Number(updatedRecord.workHoursNeeded), 0.99);
   assert.equal(updatedRecord.interventionAnswers.length, 1);
   assert.equal(updatedRecord.interventionAnswers[0].questionId, question.id);
   assert.equal(updatedRecord.interventionAnswers[0].answerValue, false);

@@ -2,6 +2,7 @@ import { HttpError } from '../../utils/http-error.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { CATEGORY_CODE_SET, CATEGORY_MAP } from '../../config/categories.js';
 import { prisma } from '../../prisma/client.js';
+import { calculateWorkHoursNeeded } from '../../utils/work-hours.js';
 
 const isValidIsoDatetime = (value) => {
   const match =
@@ -78,7 +79,6 @@ export const createConsumptionRecord = async ({ userId, data }) => {
     reason,
     occurredAt,
     riskScore,
-    workHoursNeeded,
     category_code,
     interventionAnswers,
   } = data;
@@ -122,7 +122,6 @@ export const createConsumptionRecord = async ({ userId, data }) => {
     occurredAt: occurred,
     urlParseSuccess: false,
     riskScore: typeof riskScore === 'number' ? riskScore : null,
-    workHoursNeeded: typeof workHoursNeeded === 'number' ? workHoursNeeded : null,
     categoryCode: category_code ? String(category_code) : null,
     categoryLabel: categoryLabel ?? null,
   };
@@ -130,6 +129,16 @@ export const createConsumptionRecord = async ({ userId, data }) => {
   try {
     const record = await prisma.$transaction(async (tx) => {
       const questionIds = answersData.map((answer) => answer.questionId);
+      const user = await tx.user.findUnique({
+        where: { id: toCreate.userId },
+        select: { hourlyWage: true },
+      });
+      if (!user) {
+        throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+          errorCode: ERROR_CODES.USER4041,
+        });
+      }
+      toCreate.workHoursNeeded = calculateWorkHoursNeeded(price, user.hourlyWage);
 
       if (questionIds.length > 0) {
         const uniqueQuestionIds = [...new Set(questionIds.map((id) => id.toString()))].map((id) =>
@@ -249,7 +258,6 @@ const buildUpdateData = (data) => {
   if (data.reason !== undefined) updateData.reason = data.reason;
   if (data.occurredAt !== undefined) updateData.occurredAt = resolveOccurredAt(data.occurredAt);
   if (data.riskScore !== undefined) updateData.riskScore = data.riskScore;
-  if (data.workHoursNeeded !== undefined) updateData.workHoursNeeded = data.workHoursNeeded;
 
   if (data.category_code !== undefined) {
     if (data.category_code === null) {
@@ -398,6 +406,19 @@ export const updateConsumptionRecord = async ({ userId, consumptionRecordId, dat
 
   return prisma.$transaction(async (tx) => {
     await assertActiveQuestionsExist(tx, answersData);
+
+    if (data.price !== undefined) {
+      const user = await tx.user.findUnique({
+        where: { id: BigInt(userId) },
+        select: { hourlyWage: true },
+      });
+      if (!user) {
+        throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+          errorCode: ERROR_CODES.USER4041,
+        });
+      }
+      updateData.workHoursNeeded = calculateWorkHoursNeeded(data.price, user.hourlyWage);
+    }
 
     let updatedRecord;
     try {
