@@ -30,6 +30,18 @@ const birthDate = z
   )
   .optional();
 
+const email = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email('올바른 이메일 형식이 아닙니다.')
+  .max(255, '이메일은 255자 이하여야 합니다.');
+
+const emailVerificationCode = z
+  .string()
+  .trim()
+  .regex(/^\d{6}$/, '인증 코드는 6자리 숫자여야 합니다.');
+
 export const updateMeDto = z.object({
   body: z
     .object({
@@ -81,6 +93,14 @@ export const changePasswordDto = z.object({
       message: '새 비밀번호가 일치하지 않습니다.',
       path: ['newPasswordConfirm'],
     }),
+});
+
+export const requestEmailChangeVerificationDto = z.object({
+  body: z.object({ newEmail: email }).strict(),
+});
+
+export const changeEmailDto = z.object({
+  body: z.object({ newEmail: email, code: emailVerificationCode }).strict(),
 });
 
 export const savingGoalDto = z.object({

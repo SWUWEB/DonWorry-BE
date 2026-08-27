@@ -14,6 +14,7 @@ enum LoginProvider {
 
 enum TokenType {
   EMAIL_VERIFY
+  EMAIL_CHANGE
   PASSWORD_RESET
   REFRESH_TOKEN
   KAKAO_LINK
