@@ -518,6 +518,23 @@ export const openApiDocument = {
           },
         },
       },
+      GetSavingGoalResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '절약 목적 조회 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              targetSavingAmount: { type: 'string', nullable: true, example: '1000000' },
+              savingGoalText: { type: 'string', nullable: true, example: '목돈 마련' },
+              savedAmount: { type: 'string', nullable: true, example: '600000' },
+              achievementRate: { type: 'integer', nullable: true, example: 60 },
+              savingGoalIsActive: { type: 'boolean', example: true },
+            },
+          },
+        },
+      },
       UpdateSavingGoalResponse: {
         type: 'object',
         properties: {
@@ -526,9 +543,10 @@ export const openApiDocument = {
           data: {
             type: 'object',
             properties: {
-              id: { type: 'string', example: '1' },
-              savingGoalText: { type: 'string', example: '목돈 마련' },
-              targetSavingAmount: { type: 'string', example: '1000000' },
+              targetSavingAmount: { type: 'string', nullable: true, example: '1000000' },
+              savingGoalText: { type: 'string', nullable: true, example: '목돈 마련' },
+              savedAmount: { type: 'string', nullable: true, example: '600000' },
+              achievementRate: { type: 'integer', nullable: true, example: 60 },
               savingGoalIsActive: { type: 'boolean', example: true },
             },
           },
@@ -2109,6 +2127,41 @@ export const openApiDocument = {
       },
     },
     '/api/v1/users/me/saving-goal': {
+      get: {
+        ...securedOperation('Users', '절약 목적 조회'),
+        responses: {
+          200: {
+            description: '절약 목적 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GetSavingGoalResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
       put: {
         ...securedJsonOperation('Users', '절약 목적 설정/수정', savingGoalDto),
         responses: {
