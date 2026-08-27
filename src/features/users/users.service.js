@@ -476,6 +476,50 @@ export const changeEmail = async (userId, newEmail, code) => {
   return { email: newEmail };
 };
 
+export const getSavingGoal = async (userId) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+  if (!user) {
+    throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.USER4041,
+    });
+  }
+  if (user.targetSavingAmount === null) {
+    return {
+      targetSavingAmount: null,
+      savingGoalText: user.savingGoalText,
+      savedAmount: null,
+      achievementRate: null,
+      savingGoalIsActive: user.savingGoalIsActive,
+    };
+  }
+  const { startAt, endAt } = getKstMonthRange(toCurrentYearMonth());
+  const skippedRecords = await prisma.consumptionRecord.aggregate({
+    where: {
+      userId,
+      occurredAt: { gte: startAt, lt: endAt },
+      type: 'SKIPPED',
+      price: { gt: 0 },
+    },
+    _sum: { price: true },
+  });
+  const targetSavingAmount = Number(user.targetSavingAmount);
+  const savedAmount = Number(skippedRecords._sum.price || 0);
+  const achievementRate =
+    targetSavingAmount > 0
+      ? Math.min(100, Math.round((savedAmount / targetSavingAmount) * 100))
+      : 0;
+
+  return {
+    targetSavingAmount: targetSavingAmount.toString(),
+    savingGoalText: user.savingGoalText,
+    savedAmount: savedAmount.toString(),
+    achievementRate,
+    savingGoalIsActive: user.savingGoalIsActive,
+  };
+};
+
 export const updateSavingGoal = async (userId, body) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -485,25 +529,16 @@ export const updateSavingGoal = async (userId, body) => {
       errorCode: ERROR_CODES.USER4041,
     });
   }
-  const updatedUser = await prisma.user.update({
+  await prisma.user.update({
     where: { id: userId },
     data: {
-      savingGoalText: body.savingGoalText,
-      targetSavingAmount: body.targetSavingAmount,
-      savingGoalIsActive: body.savingGoalIsActive ?? true,
-    },
-    select: {
-      id: true,
-      savingGoalText: true,
-      targetSavingAmount: true,
-      savingGoalIsActive: true,
+      ...(body.savingGoalText !== undefined && { savingGoalText: body.savingGoalText }),
+      ...(body.targetSavingAmount !== undefined && { targetSavingAmount: body.targetSavingAmount }),
+      ...(body.savingGoalIsActive !== undefined && { savingGoalIsActive: body.savingGoalIsActive }),
     },
   });
-  return {
-    ...updatedUser,
-    id: updatedUser.id.toString(),
-    targetSavingAmount: updatedUser.targetSavingAmount.toString(),
-  };
+
+  return getSavingGoal(userId);
 };
 
 export const deleteSavingGoal = async (userId) => {

@@ -7,6 +7,7 @@ import {
   changeEmailController,
   getMeController,
   updateMeController,
+  getSavingGoalController,
   updateSavingGoalController,
   deleteSavingGoalController,
   deleteUserController,
@@ -40,6 +41,7 @@ usersRouter.post(
   requestEmailChangeVerificationController,
 );
 usersRouter.patch('/me/email', validate(changeEmailDto), changeEmailController);
+usersRouter.get('/me/saving-goal', getSavingGoalController);
 usersRouter.put('/me/saving-goal', validate(savingGoalDto), updateSavingGoalController);
 usersRouter.delete('/me/saving-goal', deleteSavingGoalController);
 usersRouter.get('/me/notification-settings', getNotificationSettingsController);
