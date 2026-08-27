@@ -33,6 +33,8 @@ import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
 import { createWishlistDecisionDto } from '../features/temptations/temptations.dto.js';
 import {
   changePasswordDto,
+  requestEmailChangeVerificationDto,
+  changeEmailDto,
   notificationSettingsDto,
   savingGoalDto,
   updateMeDto,
@@ -406,6 +408,43 @@ export const openApiDocument = {
                 type: 'string',
                 example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
               },
+            },
+          },
+        },
+      },
+      EmailChangeVerificationResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '이메일 변경 인증번호가 발송되었습니다.' },
+          data: {
+            type: 'object',
+            required: ['newEmail', 'codeTtlSeconds', 'resendCooldownSeconds'],
+            properties: {
+              newEmail: { type: 'string', format: 'email', example: 'new@example.com' },
+              codeTtlSeconds: { type: 'integer', minimum: 1, example: 600 },
+              resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
+              debugCode: {
+                type: 'string',
+                example: '123456',
+                description: 'Development only. Returned when SMTP delivery is skipped or fails.',
+              },
+            },
+          },
+        },
+      },
+      ChangeEmailResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '이메일이 변경되었습니다.' },
+          data: {
+            type: 'object',
+            required: ['email'],
+            properties: {
+              email: { type: 'string', format: 'email', example: 'new@example.com' },
             },
           },
         },
@@ -2120,6 +2159,116 @@ export const openApiDocument = {
                   code: 'USER4041',
                   message: '사용자를 찾을 수 없습니다.',
                 },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/users/me/email-verifications': {
+      post: {
+        ...securedJsonOperation(
+          'Users',
+          '이메일 변경 인증번호 발송',
+          requestEmailChangeVerificationDto,
+        ),
+        responses: {
+          200: {
+            description: '이메일 변경 인증번호 발송 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/EmailChangeVerificationResponse' },
+              },
+            },
+          },
+          400: {
+            description: '요청 값 검증 실패',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          409: {
+            description: '이미 가입된 이메일',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH4091',
+                  message: '이미 가입된 이메일입니다.',
+                },
+              },
+            },
+          },
+          429: {
+            description: '이메일 인증 요청 제한',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/users/me/email': {
+      patch: {
+        ...securedJsonOperation('Users', '인증된 이메일로 변경', changeEmailDto),
+        responses: {
+          200: {
+            description: '이메일 변경 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ChangeEmailResponse' },
+              },
+            },
+          },
+          400: {
+            description: '인증 코드 오류 또는 요청 값 검증 실패',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          409: {
+            description: '이미 가입된 이메일',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: '이메일 인증 확인 시도 제한',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
               },
             },
           },

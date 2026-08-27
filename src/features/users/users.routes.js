@@ -3,6 +3,8 @@ import { requireAuth } from '../../middlewares/auth.js';
 import { validate } from '../../middlewares/validate.js';
 import {
   changePasswordController,
+  requestEmailChangeVerificationController,
+  changeEmailController,
   getMeController,
   updateMeController,
   getSavingGoalController,
@@ -16,6 +18,8 @@ import {
 } from './users.controller.js';
 import {
   changePasswordDto,
+  requestEmailChangeVerificationDto,
+  changeEmailDto,
   notificationSettingsDto,
   savingGoalDto,
   updateMeDto,
@@ -31,6 +35,12 @@ usersRouter.get('/me', getMeController);
 usersRouter.patch('/me', validate(updateMeDto), updateMeController);
 usersRouter.delete('/me', validate(deleteUserDto), deleteUserController);
 usersRouter.patch('/me/password', validate(changePasswordDto), changePasswordController);
+usersRouter.post(
+  '/me/email-verifications',
+  validate(requestEmailChangeVerificationDto),
+  requestEmailChangeVerificationController,
+);
+usersRouter.patch('/me/email', validate(changeEmailDto), changeEmailController);
 usersRouter.get('/me/saving-goal', getSavingGoalController);
 usersRouter.put('/me/saving-goal', validate(savingGoalDto), updateSavingGoalController);
 usersRouter.delete('/me/saving-goal', deleteSavingGoalController);

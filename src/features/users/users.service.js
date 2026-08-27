@@ -5,8 +5,200 @@ import { createHmac } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { randomInt } from 'node:crypto';
+import { env } from '../../config/env.js';
+import { sendEmailChangeVerificationCode } from '../auth/auth.mailer.js';
 
 const passwordSaltRounds = 12;
+const emailChangeTokenType = 'EMAIL_CHANGE';
+const emailChangeRateLimitTypes = {
+  RESEND_COOLDOWN: 'RESEND_COOLDOWN',
+  SEND_LIMIT: 'SEND_LIMIT',
+  CONFIRM_LOCK: 'CONFIRM_LOCK',
+};
+
+const createEmailChangeCode = () => randomInt(0, 1_000_000).toString().padStart(6, '0');
+
+const createRateLimitMetadata = (retryAt, now, rateLimitType) => ({
+  retryAfterSeconds: Math.max(1, Math.ceil((retryAt.getTime() - now.getTime()) / 1000)),
+  retryAt: retryAt.toISOString(),
+  rateLimitType,
+});
+
+const throwDuplicatedEmailError = () => {
+  throw new HttpError(409, '이미 가입된 이메일입니다.', {
+    errorCode: ERROR_CODES.AUTH4091,
+  });
+};
+
+const throwEmailChangeRequestRateLimitedError = (retryAt, now, rateLimitType) => {
+  throw new HttpError(429, '이메일 인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
+    errorCode: ERROR_CODES.AUTH4291,
+    ...createRateLimitMetadata(retryAt, now, rateLimitType),
+  });
+};
+
+const throwEmailChangeConfirmError = (message = '이메일 변경 인증 코드가 올바르지 않습니다.') => {
+  throw new HttpError(400, message, {
+    errorCode: ERROR_CODES.AUTH4001,
+  });
+};
+
+const throwEmailChangeConfirmRateLimitedError = (retryAt, now) => {
+  throw new HttpError(429, '이메일 인증 확인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
+    errorCode: ERROR_CODES.AUTH4291,
+    ...createRateLimitMetadata(retryAt, now, emailChangeRateLimitTypes.CONFIRM_LOCK),
+  });
+};
+
+const getEmailChangeUserAndAssertTarget = async (userId, newEmail, prismaClient = prisma) => {
+  const [user, existingUser] = await Promise.all([
+    prismaClient.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true },
+    }),
+    prismaClient.user.findUnique({
+      where: { email: newEmail },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!user) {
+    throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+      errorCode: ERROR_CODES.USER4041,
+    });
+  }
+
+  if (existingUser) {
+    throwDuplicatedEmailError();
+  }
+
+  return user;
+};
+
+const assertEmailChangeRequestAllowed = async (userId, now, prismaClient = prisma) => {
+  const cooldownStartedAt = new Date(now.getTime() - env.AUTH_EMAIL_RESEND_COOLDOWN_SECONDS * 1000);
+  const limitWindowStartedAt = new Date(
+    now.getTime() - env.AUTH_EMAIL_SEND_LIMIT_WINDOW_SECONDS * 1000,
+  );
+  const [recentRequest, requestsInWindow] = await Promise.all([
+    prismaClient.authToken.findFirst({
+      where: {
+        userId,
+        tokenType: emailChangeTokenType,
+        createdAt: { gt: cooldownStartedAt },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    }),
+    prismaClient.authToken.findMany({
+      where: {
+        userId,
+        tokenType: emailChangeTokenType,
+        createdAt: { gt: limitWindowStartedAt },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    }),
+  ]);
+  const activeLimits = [];
+
+  if (recentRequest) {
+    activeLimits.push({
+      retryAt: new Date(
+        recentRequest.createdAt.getTime() + env.AUTH_EMAIL_RESEND_COOLDOWN_SECONDS * 1000,
+      ),
+      rateLimitType: emailChangeRateLimitTypes.RESEND_COOLDOWN,
+    });
+  }
+
+  if (requestsInWindow.length >= env.AUTH_EMAIL_SEND_LIMIT) {
+    const releaseRequestIndex = requestsInWindow.length - env.AUTH_EMAIL_SEND_LIMIT;
+    activeLimits.push({
+      retryAt: new Date(
+        requestsInWindow[releaseRequestIndex].createdAt.getTime() +
+          env.AUTH_EMAIL_SEND_LIMIT_WINDOW_SECONDS * 1000,
+      ),
+      rateLimitType: emailChangeRateLimitTypes.SEND_LIMIT,
+    });
+  }
+
+  if (activeLimits.length > 0) {
+    const effectiveLimit = activeLimits.reduce((latest, current) =>
+      current.retryAt > latest.retryAt ? current : latest,
+    );
+    throwEmailChangeRequestRateLimitedError(
+      effectiveLimit.retryAt,
+      now,
+      effectiveLimit.rateLimitType,
+    );
+  }
+};
+
+const recordEmailChangeFailedAttempt = async (authToken, now) => {
+  const lockUntil = new Date(now.getTime() + env.AUTH_EMAIL_CONFIRM_LOCK_SECONDS * 1000);
+
+  if (authToken.blockedUntil && authToken.blockedUntil <= now) {
+    await prisma.authToken.updateMany({
+      where: {
+        id: authToken.id,
+        usedAt: null,
+        failedAttemptCount: authToken.failedAttemptCount,
+        blockedUntil: authToken.blockedUntil,
+      },
+      data: { failedAttemptCount: 0, blockedUntil: null },
+    });
+  }
+
+  const updateResult = await prisma.authToken.updateMany({
+    where: {
+      id: authToken.id,
+      usedAt: null,
+      failedAttemptCount: { lt: env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS },
+      OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
+    },
+    data: { failedAttemptCount: { increment: 1 }, blockedUntil: null },
+  });
+  const updatedToken = await prisma.authToken.findUnique({
+    where: { id: authToken.id },
+    select: { failedAttemptCount: true, blockedUntil: true, usedAt: true },
+  });
+
+  if (!updatedToken || updatedToken.usedAt) {
+    throwEmailChangeConfirmError();
+  }
+  if (updatedToken.blockedUntil && updatedToken.blockedUntil > now) {
+    throwEmailChangeConfirmRateLimitedError(updatedToken.blockedUntil, now);
+  }
+
+  if (updatedToken.failedAttemptCount >= env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS) {
+    const lockResult = await prisma.authToken.updateMany({
+      where: {
+        id: authToken.id,
+        usedAt: null,
+        failedAttemptCount: { gte: env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS },
+        OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
+      },
+      data: { blockedUntil: lockUntil },
+    });
+    if (lockResult.count === 1) {
+      throwEmailChangeConfirmRateLimitedError(lockUntil, now);
+    }
+
+    const lockedToken = await prisma.authToken.findUnique({
+      where: { id: authToken.id },
+      select: { blockedUntil: true },
+    });
+    if (lockedToken?.blockedUntil && lockedToken.blockedUntil > now) {
+      throwEmailChangeConfirmRateLimitedError(lockedToken.blockedUntil, now);
+    }
+
+    throwEmailChangeConfirmError();
+  }
+
+  if (updateResult.count !== 1) {
+    throwEmailChangeConfirmError();
+  }
+};
 
 export const getMe = async (userId) => {
   const user = await prisma.user.findUnique({
@@ -131,6 +323,172 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
       errorCode: ERROR_CODES.USER4001,
     });
   }
+};
+
+export const requestEmailChangeVerification = async (userId, newEmail) => {
+  const code = createEmailChangeCode();
+  const codeHash = await bcrypt.hash(code, passwordSaltRounds);
+  const authToken = await prisma.$transaction(
+    async (tx) => {
+      const lockedUsers = await tx.$queryRaw`
+        SELECT id
+        FROM users
+        WHERE id = ${userId}
+        FOR UPDATE
+      `;
+      if (lockedUsers.length === 0) {
+        throw new HttpError(404, '사용자를 찾을 수 없습니다.', {
+          errorCode: ERROR_CODES.USER4041,
+        });
+      }
+
+      await getEmailChangeUserAndAssertTarget(userId, newEmail, tx);
+
+      const now = new Date();
+      await assertEmailChangeRequestAllowed(userId, now, tx);
+
+      await tx.authToken.updateMany({
+        where: {
+          userId,
+          tokenType: emailChangeTokenType,
+          usedAt: null,
+        },
+        data: { usedAt: now, failedAttemptCount: 0, blockedUntil: null },
+      });
+
+      return tx.authToken.create({
+        data: {
+          userId,
+          emailSnapshot: newEmail,
+          tokenType: emailChangeTokenType,
+          tokenHash: codeHash,
+          expiresAt: new Date(now.getTime() + env.AUTH_EMAIL_CODE_TTL_SECONDS * 1000),
+        },
+        select: { id: true },
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+  );
+
+  let emailDelivery;
+  try {
+    emailDelivery = await sendEmailChangeVerificationCode({
+      email: newEmail,
+      code,
+      codeTtlSeconds: env.AUTH_EMAIL_CODE_TTL_SECONDS,
+    });
+  } catch (error) {
+    if (env.NODE_ENV !== 'production') {
+      emailDelivery = { delivered: false, skipped: true };
+    } else {
+      await prisma.authToken.delete({ where: { id: authToken.id } });
+      throw error;
+    }
+  }
+
+  if (env.NODE_ENV === 'production' && !emailDelivery?.delivered) {
+    await prisma.authToken.delete({ where: { id: authToken.id } });
+    throw new Error('Email change verification code was not delivered.');
+  }
+
+  return {
+    newEmail,
+    codeTtlSeconds: env.AUTH_EMAIL_CODE_TTL_SECONDS,
+    resendCooldownSeconds: env.AUTH_EMAIL_RESEND_COOLDOWN_SECONDS,
+    ...(env.NODE_ENV === 'development' && !emailDelivery?.delivered ? { debugCode: code } : {}),
+  };
+};
+
+export const changeEmail = async (userId, newEmail, code) => {
+  const user = await getEmailChangeUserAndAssertTarget(userId, newEmail);
+  const now = new Date();
+  const authToken = await prisma.authToken.findFirst({
+    where: {
+      userId,
+      emailSnapshot: newEmail,
+      tokenType: emailChangeTokenType,
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: {
+      id: true,
+      tokenHash: true,
+      expiresAt: true,
+      usedAt: true,
+      failedAttemptCount: true,
+      blockedUntil: true,
+    },
+  });
+
+  if (!authToken) {
+    throwEmailChangeConfirmError();
+  }
+  if (authToken.usedAt) {
+    throwEmailChangeConfirmError('이미 사용된 이메일 변경 인증 코드입니다.');
+  }
+  if (authToken.expiresAt <= now) {
+    throwEmailChangeConfirmError('이메일 변경 인증 코드가 만료되었습니다.');
+  }
+  if (authToken.blockedUntil && authToken.blockedUntil > now) {
+    throwEmailChangeConfirmRateLimitedError(authToken.blockedUntil, now);
+  }
+
+  const isCodeMatched = await bcrypt.compare(code, authToken.tokenHash);
+  if (!isCodeMatched) {
+    await recordEmailChangeFailedAttempt(authToken, now);
+    throwEmailChangeConfirmError();
+  }
+
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        const consumeResult = await tx.authToken.updateMany({
+          where: {
+            id: authToken.id,
+            userId,
+            emailSnapshot: newEmail,
+            tokenType: emailChangeTokenType,
+            usedAt: null,
+            expiresAt: { gt: now },
+            OR: [{ blockedUntil: null }, { blockedUntil: { lte: now } }],
+          },
+          data: { usedAt: now, failedAttemptCount: 0, blockedUntil: null },
+        });
+
+        if (consumeResult.count !== 1) {
+          throwEmailChangeConfirmError('이미 사용된 이메일 변경 인증 코드입니다.');
+        }
+
+        const updateResult = await tx.user.updateMany({
+          where: { id: userId, email: user.email },
+          data: { email: newEmail, emailVerifiedAt: now },
+        });
+        if (updateResult.count !== 1) {
+          throwEmailChangeConfirmError('이메일 변경 요청 상태가 올바르지 않습니다.');
+        }
+
+        await tx.authToken.updateMany({
+          where: {
+            id: { not: authToken.id },
+            userId,
+            tokenType: emailChangeTokenType,
+            usedAt: null,
+          },
+          data: { usedAt: now, failedAttemptCount: 0, blockedUntil: null },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throwDuplicatedEmailError();
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+      throwEmailChangeConfirmError('이메일 변경 요청이 충돌했습니다. 다시 시도해 주세요.');
+    }
+    throw error;
+  }
+
+  return { email: newEmail };
 };
 
 export const getSavingGoal = async (userId) => {
