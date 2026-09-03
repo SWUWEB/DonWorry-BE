@@ -549,6 +549,24 @@ const logAccountRecoveryEmailFailure = (emailType, error) => {
   });
 };
 
+const dispatchLoginIdRecoveryEmail = ({ email, user }) => {
+  let sendGuide;
+
+  if (user?.loginId && (user.passwordHash || user.loginProvider === 'LOCAL')) {
+    sendGuide = () => sendLoginIdRecoveryGuide({ email, loginId: user.loginId });
+  } else if (user?.kakaoUserId && !user.passwordHash) {
+    sendGuide = () => sendKakaoLoginGuide({ email });
+  } else {
+    return;
+  }
+
+  setImmediate(() => {
+    void sendGuide().catch((error) => {
+      logAccountRecoveryEmailFailure('login ID recovery', error);
+    });
+  });
+};
+
 const issuePasswordResetCode = async ({ userId, email, code, codeHash, now, expiresAt }) => {
   const authToken = await prisma.authToken.create({
     data: {
@@ -655,16 +673,8 @@ export const requestLoginIdRecovery = async ({ email }) => {
       },
     });
 
-    try {
-      if (user?.loginId && (user.passwordHash || user.loginProvider === 'LOCAL')) {
-        await sendLoginIdRecoveryGuide({ email, loginId: user.loginId });
-      } else if (user?.kakaoUserId && !user.passwordHash) {
-        await sendKakaoLoginGuide({ email });
-      }
-    } catch (error) {
-      logAccountRecoveryEmailFailure('login ID recovery', error);
-      // 계정 존재 여부와 로그인 유형을 외부에 노출하지 않도록 메일 실패도 성공으로 처리한다.
-    }
+    // SMTP 처리 시간으로 계정 존재 여부를 추측할 수 없도록 HTTP 응답과 발송을 분리한다.
+    dispatchLoginIdRecoveryEmail({ email, user });
 
     return {
       resendCooldownSeconds: emailVerificationResendCooldownSeconds,

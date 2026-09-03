@@ -236,6 +236,7 @@ const sendMail = async ({ email, subject, text, html, productionErrorMessage }) 
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_SECURE,
+    requireTLS: !env.SMTP_SECURE,
     ...smtpTimeouts,
     auth: {
       user: env.SMTP_USER,
