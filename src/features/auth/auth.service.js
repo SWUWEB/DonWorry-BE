@@ -9,6 +9,7 @@ import { HttpError } from '../../utils/http-error.js';
 import {
   sendEmailVerificationCode,
   sendKakaoLoginGuide,
+  sendLoginIdRecoveryGuide,
   sendPasswordResetCode,
 } from './auth.mailer.js';
 import { getKakaoUser } from './kakao.client.js';
@@ -22,6 +23,7 @@ const emailVerificationSendLimit = env.AUTH_EMAIL_SEND_LIMIT;
 const emailVerificationConfirmMaxAttempts = env.AUTH_EMAIL_CONFIRM_MAX_ATTEMPTS;
 const emailVerificationConfirmLockSeconds = env.AUTH_EMAIL_CONFIRM_LOCK_SECONDS;
 const passwordResetMinResponseMs = env.AUTH_PASSWORD_RESET_MIN_RESPONSE_MS;
+const loginIdRecoveryMinResponseMs = env.AUTH_LOGIN_ID_RECOVERY_MIN_RESPONSE_MS;
 const dummyPasswordHash = '$2b$12$nDS70w.TSxO.D2NgJnu9Ke6MCDX7bMWto3SoH4nXS9tmaTL06Okhu';
 const emailVerificationRateLimitTypes = {
   RESEND_COOLDOWN: 'RESEND_COOLDOWN',
@@ -208,14 +210,12 @@ const createEmailVerificationCode = () => {
   return randomInt(0, 1_000_000).toString().padStart(6, '0');
 };
 
-const createPasswordResetRequestKeyHash = (email) => {
-  return createHash('sha256')
-    .update(`${env.JWT_REFRESH_SECRET}:password-reset:${email}`)
-    .digest('hex');
+const createRecoveryRequestKeyHash = (scope, email) => {
+  return createHash('sha256').update(`${env.JWT_REFRESH_SECRET}:${scope}:${email}`).digest('hex');
 };
 
-const throwPasswordResetRateLimitedError = (retryAt, now, rateLimitType) => {
-  throw new HttpError(429, '비밀번호 재설정 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', {
+const throwRecoveryRequestRateLimitedError = (message, retryAt, now, rateLimitType) => {
+  throw new HttpError(429, message, {
     errorCode: ERROR_CODES.AUTH4291,
     ...createRateLimitMetadata(retryAt, now, rateLimitType),
   });
@@ -224,8 +224,14 @@ const throwPasswordResetRateLimitedError = (retryAt, now, rateLimitType) => {
 const isPrismaTransactionConflictError = (error) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
 
-const recordPasswordResetRequest = async (email, now) => {
-  const requestKeyHash = createPasswordResetRequestKeyHash(email);
+const recordRecoveryRequest = async ({
+  email,
+  now,
+  requestType,
+  requestKeyScope,
+  rateLimitMessage,
+}) => {
+  const requestKeyHash = createRecoveryRequestKeyHash(requestKeyScope, email);
   const cooldownStartedAt = new Date(now.getTime() - emailVerificationResendCooldownSeconds * 1000);
   const limitWindowStartedAt = new Date(
     now.getTime() - emailVerificationSendLimitWindowSeconds * 1000,
@@ -237,7 +243,7 @@ const recordPasswordResetRequest = async (email, now) => {
         await tx.authRequestLog.deleteMany({
           where: {
             requestKeyHash,
-            requestType: 'PASSWORD_RESET',
+            requestType,
             createdAt: { lte: limitWindowStartedAt },
           },
         });
@@ -245,7 +251,7 @@ const recordPasswordResetRequest = async (email, now) => {
         const recentRequest = await tx.authRequestLog.findFirst({
           where: {
             requestKeyHash,
-            requestType: 'PASSWORD_RESET',
+            requestType,
             createdAt: { gt: cooldownStartedAt },
           },
           orderBy: { createdAt: 'desc' },
@@ -254,7 +260,7 @@ const recordPasswordResetRequest = async (email, now) => {
         const requestsInWindow = await tx.authRequestLog.findMany({
           where: {
             requestKeyHash,
-            requestType: 'PASSWORD_RESET',
+            requestType,
             createdAt: { gt: limitWindowStartedAt },
           },
           orderBy: { createdAt: 'asc' },
@@ -286,7 +292,8 @@ const recordPasswordResetRequest = async (email, now) => {
           const effectiveLimit = activeLimits.reduce((latestLimit, currentLimit) =>
             currentLimit.retryAt > latestLimit.retryAt ? currentLimit : latestLimit,
           );
-          throwPasswordResetRateLimitedError(
+          throwRecoveryRequestRateLimitedError(
+            rateLimitMessage,
             effectiveLimit.retryAt,
             now,
             effectiveLimit.rateLimitType,
@@ -296,7 +303,7 @@ const recordPasswordResetRequest = async (email, now) => {
         await tx.authRequestLog.create({
           data: {
             requestKeyHash,
-            requestType: 'PASSWORD_RESET',
+            requestType,
             createdAt: now,
           },
         });
@@ -320,6 +327,24 @@ const recordPasswordResetRequest = async (email, now) => {
     }
   }
 };
+
+const recordPasswordResetRequest = (email, now) =>
+  recordRecoveryRequest({
+    email,
+    now,
+    requestType: 'PASSWORD_RESET',
+    requestKeyScope: 'password-reset',
+    rateLimitMessage: '비밀번호 재설정 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  });
+
+const recordLoginIdRecoveryRequest = (email, now) =>
+  recordRecoveryRequest({
+    email,
+    now,
+    requestType: 'LOGIN_ID_RECOVERY',
+    requestKeyScope: 'login-id-recovery',
+    rateLimitMessage: '아이디 찾기 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  });
 
 const assertEmailVerificationRequestAllowed = async (email, now) => {
   const cooldownStartedAt = new Date(now.getTime() - emailVerificationResendCooldownSeconds * 1000);
@@ -510,15 +535,15 @@ export const requestEmailVerification = async ({ email }) => {
   };
 };
 
-const createMinimumResponseDelay = () => {
-  if (env.NODE_ENV === 'test' || passwordResetMinResponseMs === 0) {
+const createMinimumResponseDelay = (minimumResponseMs) => {
+  if (env.NODE_ENV === 'test' || minimumResponseMs === 0) {
     return Promise.resolve();
   }
 
-  return new Promise((resolve) => setTimeout(resolve, passwordResetMinResponseMs));
+  return new Promise((resolve) => setTimeout(resolve, minimumResponseMs));
 };
 
-const logPasswordRecoveryEmailFailure = (emailType, error) => {
+const logAccountRecoveryEmailFailure = (emailType, error) => {
   console.error(`[auth] ${emailType} email delivery failed.`, {
     errorName: error instanceof Error ? error.name : 'UnknownError',
   });
@@ -547,7 +572,7 @@ const issuePasswordResetCode = async ({ userId, email, code, codeHash, now, expi
       throw new Error('Password reset code was not delivered.');
     }
   } catch (error) {
-    logPasswordRecoveryEmailFailure('password reset', error);
+    logAccountRecoveryEmailFailure('password reset', error);
     await prisma.authToken.deleteMany({ where: { id: authToken.id } });
     return;
   }
@@ -571,7 +596,7 @@ export const requestPasswordReset = async ({ email }) => {
   const now = new Date();
   await recordPasswordResetRequest(email, now);
 
-  const minimumResponseDelay = createMinimumResponseDelay();
+  const minimumResponseDelay = createMinimumResponseDelay(passwordResetMinResponseMs);
 
   try {
     const user = await prisma.user.findUnique({
@@ -599,13 +624,49 @@ export const requestPasswordReset = async ({ email }) => {
       try {
         await sendKakaoLoginGuide({ email });
       } catch (error) {
-        logPasswordRecoveryEmailFailure('Kakao login guide', error);
+        logAccountRecoveryEmailFailure('Kakao login guide', error);
         // 계정 유형을 외부에 노출하지 않도록 메일 발송 실패도 공통 성공 응답으로 처리한다.
       }
     }
 
     return {
       codeTtlSeconds: emailVerificationCodeTtlSeconds,
+      resendCooldownSeconds: emailVerificationResendCooldownSeconds,
+    };
+  } finally {
+    await minimumResponseDelay;
+  }
+};
+
+export const requestLoginIdRecovery = async ({ email }) => {
+  const now = new Date();
+  await recordLoginIdRecoveryRequest(email, now);
+
+  const minimumResponseDelay = createMinimumResponseDelay(loginIdRecoveryMinResponseMs);
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        loginId: true,
+        loginProvider: true,
+        passwordHash: true,
+        kakaoUserId: true,
+      },
+    });
+
+    try {
+      if (user?.loginId && (user.passwordHash || user.loginProvider === 'LOCAL')) {
+        await sendLoginIdRecoveryGuide({ email, loginId: user.loginId });
+      } else if (user?.kakaoUserId && !user.passwordHash) {
+        await sendKakaoLoginGuide({ email });
+      }
+    } catch (error) {
+      logAccountRecoveryEmailFailure('login ID recovery', error);
+      // 계정 존재 여부와 로그인 유형을 외부에 노출하지 않도록 메일 실패도 성공으로 처리한다.
+    }
+
+    return {
       resendCooldownSeconds: emailVerificationResendCooldownSeconds,
     };
   } finally {

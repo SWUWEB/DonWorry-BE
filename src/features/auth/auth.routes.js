@@ -15,6 +15,7 @@ import {
   requestKakaoLinkEmailController,
   requestEmailVerificationController,
   requestPasswordResetController,
+  requestLoginIdRecoveryController,
   signupController,
 } from './auth.controller.js';
 import {
@@ -30,6 +31,7 @@ import {
   logoutDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
+  loginIdRecoveryRequestDto,
   refreshTokenDto,
   signupDto,
 } from './auth.dto.js';
@@ -56,6 +58,11 @@ authRouter.post(
   '/password-reset/request',
   validate(passwordResetRequestDto),
   requestPasswordResetController,
+);
+authRouter.post(
+  '/login-id-recovery/request',
+  validate(loginIdRecoveryRequestDto),
+  requestLoginIdRecoveryController,
 );
 authRouter.patch(
   '/password-reset/confirm',

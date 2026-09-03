@@ -23,6 +23,7 @@ enum TokenType {
 
 enum AuthRequestType {
   PASSWORD_RESET
+  LOGIN_ID_RECOVERY
 }
 
 enum ReportType {
