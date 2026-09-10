@@ -109,6 +109,10 @@ export const passwordResetRequestDto = z.object({
   body: z.object({ email }).strict(),
 });
 
+export const loginIdRecoveryRequestDto = z.object({
+  body: z.object({ email }).strict(),
+});
+
 export const passwordResetConfirmDto = z.object({
   body: z
     .object({

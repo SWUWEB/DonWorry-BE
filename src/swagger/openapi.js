@@ -11,6 +11,7 @@ import {
   logoutDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
+  loginIdRecoveryRequestDto,
   refreshTokenDto,
   signupDto,
 } from '../features/auth/auth.dto.js';
@@ -381,6 +382,24 @@ export const openApiDocument = {
             required: ['codeTtlSeconds', 'resendCooldownSeconds'],
             properties: {
               codeTtlSeconds: { type: 'integer', minimum: 1, example: 600 },
+              resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
+            },
+          },
+        },
+      },
+      LoginIdRecoveryRequestResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: {
+            type: 'string',
+            example: '입력한 이메일로 아이디 안내를 전송했습니다.',
+          },
+          data: {
+            type: 'object',
+            required: ['resendCooldownSeconds'],
+            properties: {
               resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
             },
           },
@@ -1768,6 +1787,49 @@ export const openApiDocument = {
           },
           429: {
             description: 'Password reset request rate limited',
+            headers: {
+              'Retry-After': {
+                description: '요청을 다시 시도할 수 있을 때까지 남은 초',
+                schema: { type: 'integer', minimum: 1, example: 42 },
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/auth/login-id-recovery/request': {
+      post: {
+        ...publicJsonOperation(
+          'Auth',
+          '가입 이메일 기반 아이디 찾기 요청',
+          loginIdRecoveryRequestDto,
+        ),
+        description:
+          '가입 여부와 로그인 방식을 노출하지 않고 항상 동일한 성공 응답을 반환합니다. 일반 로그인 계정에는 로그인 아이디를, 카카오 전용 계정에는 카카오 로그인 안내를 발송합니다.',
+        responses: {
+          200: {
+            description: 'Login ID recovery guidance accepted',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/LoginIdRecoveryRequestResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: 'Login ID recovery request rate limited',
             headers: {
               'Retry-After': {
                 description: '요청을 다시 시도할 수 있을 때까지 남은 초',
