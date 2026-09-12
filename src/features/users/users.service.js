@@ -773,10 +773,11 @@ export const getBudget = async (userId, yearMonth) => {
     });
   }
   const totalMonthlyIncome = Number(budget.monthlyIncome || 0);
-  const totalRemainingAmount = totalMonthlyIncome - totalSpentAmount;
+  const totalMonthlyBudget = Number(budget.monthlyBudget || 0);
+  const totalRemainingAmount = totalMonthlyBudget - totalSpentAmount;
   const totalUsageRate =
-    totalMonthlyIncome > 0
-      ? Math.min(100, Math.round((totalSpentAmount / totalMonthlyIncome) * 100))
+    totalMonthlyBudget > 0
+      ? Math.min(100, Math.round((totalSpentAmount / totalMonthlyBudget) * 100))
       : 0;
 
   const hourlyWage = user.hourlyWage !== null ? Number(user.hourlyWage) : null;
