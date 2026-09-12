@@ -910,6 +910,8 @@ export const openApiDocument = {
           },
           usageRate: {
             type: 'integer',
+            minimum: 0,
+            maximum: 100,
             example: 60,
             description: '예산 대비 총 사용률(%)',
           },

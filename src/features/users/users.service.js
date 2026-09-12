@@ -762,7 +762,9 @@ export const getBudget = async (userId, yearMonth) => {
       const spentAmount = spentMap[categoryKey] || 0;
       const remainingAmount = budgetAmount - spentAmount;
       const usageRate =
-        budgetAmount > 0 ? Math.min(100, Math.round((spentAmount / budgetAmount) * 100)) : 0;
+        budgetAmount > 0
+          ? Math.max(0, Math.min(100, Math.round((spentAmount / budgetAmount) * 100)))
+          : 0;
       return {
         ...item,
         budgetAmount: budgetAmount.toString(),
@@ -777,7 +779,7 @@ export const getBudget = async (userId, yearMonth) => {
   const totalRemainingAmount = totalMonthlyBudget - totalSpentAmount;
   const totalUsageRate =
     totalMonthlyBudget > 0
-      ? Math.min(100, Math.round((totalSpentAmount / totalMonthlyBudget) * 100))
+      ? Math.max(0, Math.min(100, Math.round((totalSpentAmount / totalMonthlyBudget) * 100)))
       : 0;
 
   const hourlyWage = user.hourlyWage !== null ? Number(user.hourlyWage) : null;
