@@ -924,7 +924,7 @@ export const openApiDocument = {
                 budgetAmount: { type: 'string', example: '400000' },
                 spentAmount: { type: 'string', example: '287000' },
                 remainingAmount: { type: 'string', example: '113000' },
-                usageRate: { type: 'integer', example: 72 },
+                usageRate: { type: 'integer', minimum: 0, maximum: 100, example: 72 },
               },
             },
             description: '카테고리별 예산 상세 목록',
