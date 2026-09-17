@@ -3096,9 +3096,6 @@ export const openApiDocument = {
         },
       },
     },
-    '/api/v1/reports/consumption/summary': {
-      get: securedOperation('Reports', '간단 소비 분석 리포트 조회'),
-    },
     '/api/v1/reports/consumption/detail': {
       get: {
         ...withZodDto(
