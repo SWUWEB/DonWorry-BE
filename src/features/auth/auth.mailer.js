@@ -82,6 +82,44 @@ const createEmailVerificationHtml = ({ code, codeTtlSeconds }) => {
 </html>`;
 };
 
+const createEmailChangeVerificationHtml = ({ code, codeTtlSeconds }) => {
+  const codeCells = createVerificationCodeCells(code);
+  const expiresIn = formatTtlDuration(codeTtlSeconds);
+
+  return `<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>이메일 변경 인증 코드</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f5f6f6;font-family:Pretendard,Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:${brand.textPrimary};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6f6;padding:44px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="padding:38px 40px 28px;text-align:center;">
+                <div style="font-size:22px;line-height:28px;font-weight:700;color:${brand.main};">DonWorry</div>
+                <div style="height:1px;background:#e8ecec;margin:28px 0 54px;"></div>
+                <h1 style="margin:0;font-size:22px;line-height:28px;font-weight:700;color:${brand.textPrimary};">이메일 변경 인증 코드</h1>
+                <p style="margin:18px auto 44px;max-width:360px;font-size:14px;line-height:22px;font-weight:500;color:${brand.textSecondary};word-break:keep-all;">회원 이메일 변경을 완료하려면 아래 인증 코드를 입력해주세요.</p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:320px;margin:0 auto;table-layout:fixed;">
+                  <tr>${codeCells}</tr>
+                </table>
+                <p style="margin:38px 0 0;font-size:14px;line-height:22px;font-weight:500;color:${brand.textSecondary};">이 코드는 <strong style="font-weight:600;color:${brand.textPrimary};">${expiresIn}</strong> 뒤에 만료됩니다.</p>
+                <div style="height:1px;background:#e8ecec;margin:54px 0 28px;"></div>
+                <p style="margin:0 auto;font-size:12px;line-height:18px;font-weight:500;color:${brand.textSecondary};word-break:keep-all;">직접 요청하신 경우가 아니라면 이 메일을 무시하셔도 됩니다.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+};
+
 const createPasswordResetHtml = ({ code, codeTtlSeconds }) => {
   const codeCells = createVerificationCodeCells(code);
   const expiresIn = formatTtlDuration(codeTtlSeconds);
@@ -109,6 +147,38 @@ const createPasswordResetHtml = ({ code, codeTtlSeconds }) => {
                 </table>
                 <p style="margin:38px 0 0;font-size:14px;line-height:22px;font-weight:500;color:${brand.textSecondary};">이 코드는 <strong style="font-weight:600;color:${brand.textPrimary};">${expiresIn}</strong> 뒤에 만료됩니다.</p>
                 <div style="height:1px;background:#e8ecec;margin:54px 0 28px;"></div>
+                <p style="margin:0 auto;font-size:12px;line-height:18px;font-weight:500;color:${brand.textSecondary};word-break:keep-all;">직접 요청하신 경우가 아니라면 이 메일을 무시하셔도 됩니다.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+};
+
+const createLoginIdRecoveryHtml = ({ loginId }) => {
+  return `<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>로그인 아이디 안내</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f5f6f6;font-family:Pretendard,Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:${brand.textPrimary};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6f6;padding:44px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="padding:38px 40px;text-align:center;">
+                <div style="font-size:22px;line-height:28px;font-weight:700;color:${brand.main};">DonWorry</div>
+                <div style="height:1px;background:#e8ecec;margin:28px 0 54px;"></div>
+                <h1 style="margin:0;font-size:22px;line-height:28px;font-weight:700;color:${brand.textPrimary};">로그인 아이디 안내</h1>
+                <p style="margin:18px auto 30px;max-width:380px;font-size:14px;line-height:22px;font-weight:500;color:${brand.textSecondary};word-break:keep-all;">요청하신 이메일로 가입된 DonWorry 로그인 아이디입니다.</p>
+                <div style="padding:18px 20px;border-radius:12px;background:#f1f7f7;font-size:20px;line-height:28px;font-weight:700;color:${brand.main};word-break:break-all;">${loginId}</div>
+                <div style="height:1px;background:#e8ecec;margin:44px 0 28px;"></div>
                 <p style="margin:0 auto;font-size:12px;line-height:18px;font-weight:500;color:${brand.textSecondary};word-break:keep-all;">직접 요청하신 경우가 아니라면 이 메일을 무시하셔도 됩니다.</p>
               </td>
             </tr>
@@ -166,6 +236,7 @@ const sendMail = async ({ email, subject, text, html, productionErrorMessage }) 
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_SECURE,
+    requireTLS: !env.SMTP_SECURE,
     ...smtpTimeouts,
     auth: {
       user: env.SMTP_USER,
@@ -204,6 +275,24 @@ export const sendEmailVerificationCode = async ({ email, code, codeTtlSeconds })
   });
 };
 
+export const sendEmailChangeVerificationCode = async ({ email, code, codeTtlSeconds }) => {
+  return sendMail({
+    email,
+    subject: 'DonWorry 이메일 변경 인증 코드',
+    text: [
+      'DonWorry',
+      '이메일 변경 인증 코드',
+      '회원 이메일 변경을 완료하려면 아래 인증 코드를 입력해주세요.',
+      code,
+      `이 코드는 ${formatTtlDuration(codeTtlSeconds)} 뒤에 만료됩니다.`,
+      '직접 요청하신 경우가 아니라면 이 메일을 무시하셔도 됩니다.',
+    ].join('\n'),
+    html: createEmailChangeVerificationHtml({ code, codeTtlSeconds }),
+    productionErrorMessage:
+      'SMTP configuration is required to send email change verification code.',
+  });
+};
+
 export const sendPasswordResetCode = async ({ email, code, codeTtlSeconds }) => {
   return sendMail({
     email,
@@ -218,6 +307,21 @@ export const sendPasswordResetCode = async ({ email, code, codeTtlSeconds }) => 
     ].join('\n'),
     html: createPasswordResetHtml({ code, codeTtlSeconds }),
     productionErrorMessage: 'SMTP configuration is required to send password reset code.',
+  });
+};
+
+export const sendLoginIdRecoveryGuide = async ({ email, loginId }) => {
+  return sendMail({
+    email,
+    subject: 'DonWorry 로그인 아이디 안내',
+    text: [
+      'DonWorry 로그인 아이디 안내',
+      '요청하신 이메일로 가입된 로그인 아이디입니다.',
+      loginId,
+      '직접 요청하신 경우가 아니라면 이 메일을 무시하셔도 됩니다.',
+    ].join('\n'),
+    html: createLoginIdRecoveryHtml({ loginId }),
+    productionErrorMessage: 'SMTP configuration is required to send login ID recovery guide.',
   });
 };
 

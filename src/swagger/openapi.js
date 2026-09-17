@@ -11,6 +11,7 @@ import {
   logoutDto,
   passwordResetConfirmDto,
   passwordResetRequestDto,
+  loginIdRecoveryRequestDto,
   refreshTokenDto,
   signupDto,
 } from '../features/auth/auth.dto.js';
@@ -33,6 +34,8 @@ import { parseProductUrlDto } from '../features/product-url/product-url.dto.js';
 import { createWishlistDecisionDto } from '../features/temptations/temptations.dto.js';
 import {
   changePasswordDto,
+  requestEmailChangeVerificationDto,
+  changeEmailDto,
   notificationSettingsDto,
   savingGoalDto,
   updateMeDto,
@@ -384,6 +387,24 @@ export const openApiDocument = {
           },
         },
       },
+      LoginIdRecoveryRequestResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: {
+            type: 'string',
+            example: '입력한 이메일로 아이디 안내를 전송했습니다.',
+          },
+          data: {
+            type: 'object',
+            required: ['resendCooldownSeconds'],
+            properties: {
+              resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
+            },
+          },
+        },
+      },
       PasswordResetConfirmResponse: {
         type: 'object',
         required: ['success', 'message', 'data'],
@@ -406,6 +427,43 @@ export const openApiDocument = {
                 type: 'string',
                 example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
               },
+            },
+          },
+        },
+      },
+      EmailChangeVerificationResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '이메일 변경 인증번호가 발송되었습니다.' },
+          data: {
+            type: 'object',
+            required: ['newEmail', 'codeTtlSeconds', 'resendCooldownSeconds'],
+            properties: {
+              newEmail: { type: 'string', format: 'email', example: 'new@example.com' },
+              codeTtlSeconds: { type: 'integer', minimum: 1, example: 600 },
+              resendCooldownSeconds: { type: 'integer', minimum: 1, example: 60 },
+              debugCode: {
+                type: 'string',
+                example: '123456',
+                description: 'Development only. Returned when SMTP delivery is skipped or fails.',
+              },
+            },
+          },
+        },
+      },
+      ChangeEmailResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: { type: 'boolean', enum: [true] },
+          message: { type: 'string', example: '이메일이 변경되었습니다.' },
+          data: {
+            type: 'object',
+            required: ['email'],
+            properties: {
+              email: { type: 'string', format: 'email', example: 'new@example.com' },
             },
           },
         },
@@ -518,6 +576,23 @@ export const openApiDocument = {
           },
         },
       },
+      GetSavingGoalResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: '절약 목적 조회 성공' },
+          data: {
+            type: 'object',
+            properties: {
+              targetSavingAmount: { type: 'string', nullable: true, example: '1000000' },
+              savingGoalText: { type: 'string', nullable: true, example: '목돈 마련' },
+              savedAmount: { type: 'string', nullable: true, example: '600000' },
+              achievementRate: { type: 'integer', nullable: true, example: 60 },
+              savingGoalIsActive: { type: 'boolean', example: true },
+            },
+          },
+        },
+      },
       UpdateSavingGoalResponse: {
         type: 'object',
         properties: {
@@ -526,9 +601,10 @@ export const openApiDocument = {
           data: {
             type: 'object',
             properties: {
-              id: { type: 'string', example: '1' },
-              savingGoalText: { type: 'string', example: '목돈 마련' },
-              targetSavingAmount: { type: 'string', example: '1000000' },
+              targetSavingAmount: { type: 'string', nullable: true, example: '1000000' },
+              savingGoalText: { type: 'string', nullable: true, example: '목돈 마련' },
+              savedAmount: { type: 'string', nullable: true, example: '600000' },
+              achievementRate: { type: 'integer', nullable: true, example: 60 },
               savingGoalIsActive: { type: 'boolean', example: true },
             },
           },
@@ -1726,6 +1802,49 @@ export const openApiDocument = {
         },
       },
     },
+    '/api/v1/auth/login-id-recovery/request': {
+      post: {
+        ...publicJsonOperation(
+          'Auth',
+          '가입 이메일 기반 아이디 찾기 요청',
+          loginIdRecoveryRequestDto,
+        ),
+        description:
+          '가입 여부와 로그인 방식을 노출하지 않고 항상 동일한 성공 응답을 반환합니다. 일반 로그인 계정에는 로그인 아이디를, 카카오 전용 계정에는 카카오 로그인 안내를 발송합니다.',
+        responses: {
+          200: {
+            description: 'Login ID recovery guidance accepted',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/LoginIdRecoveryRequestResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Invalid request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: 'Login ID recovery request rate limited',
+            headers: {
+              'Retry-After': {
+                description: '요청을 다시 시도할 수 있을 때까지 남은 초',
+                schema: { type: 'integer', minimum: 1, example: 42 },
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/v1/auth/password-reset/confirm': {
       patch: {
         ...publicJsonOperation('Auth', '비밀번호 재설정 완료', passwordResetConfirmDto),
@@ -2108,7 +2227,152 @@ export const openApiDocument = {
         },
       },
     },
+    '/api/v1/users/me/email-verifications': {
+      post: {
+        ...securedJsonOperation(
+          'Users',
+          '이메일 변경 인증번호 발송',
+          requestEmailChangeVerificationDto,
+        ),
+        responses: {
+          200: {
+            description: '이메일 변경 인증번호 발송 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/EmailChangeVerificationResponse' },
+              },
+            },
+          },
+          400: {
+            description: '요청 값 검증 실패',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          409: {
+            description: '이미 가입된 이메일',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH4091',
+                  message: '이미 가입된 이메일입니다.',
+                },
+              },
+            },
+          },
+          429: {
+            description: '이메일 인증 요청 제한',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/users/me/email': {
+      patch: {
+        ...securedJsonOperation('Users', '인증된 이메일로 변경', changeEmailDto),
+        responses: {
+          200: {
+            description: '이메일 변경 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ChangeEmailResponse' },
+              },
+            },
+          },
+          400: {
+            description: '인증 코드 오류 또는 요청 값 검증 실패',
+            content: {
+              'application/json': {
+                schema: {
+                  anyOf: [
+                    { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    { $ref: '#/components/schemas/ErrorResponse' },
+                  ],
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          409: {
+            description: '이미 가입된 이메일',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
+          429: {
+            description: '이메일 인증 확인 시도 제한',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RateLimitErrorResponse' },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/v1/users/me/saving-goal': {
+      get: {
+        ...securedOperation('Users', '절약 목적 조회'),
+        responses: {
+          200: {
+            description: '절약 목적 조회 성공',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GetSavingGoalResponse' },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없습니다.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
       put: {
         ...securedJsonOperation('Users', '절약 목적 설정/수정', savingGoalDto),
         responses: {

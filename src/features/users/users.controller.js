@@ -3,6 +3,9 @@ import {
   getMe,
   updateMe,
   changePassword,
+  requestEmailChangeVerification,
+  changeEmail,
+  getSavingGoal,
   updateSavingGoal,
   deleteSavingGoal,
   deleteUser,
@@ -27,6 +30,28 @@ export const changePasswordController = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.validated.body;
   await changePassword(BigInt(req.user.userId), currentPassword, newPassword);
   return ok(res, null, '비밀번호가 변경되었습니다.');
+});
+
+export const requestEmailChangeVerificationController = asyncHandler(async (req, res) => {
+  const result = await requestEmailChangeVerification(
+    BigInt(req.user.userId),
+    req.validated.body.newEmail,
+  );
+  return ok(res, result, '이메일 변경 인증번호가 발송되었습니다.');
+});
+
+export const changeEmailController = asyncHandler(async (req, res) => {
+  const result = await changeEmail(
+    BigInt(req.user.userId),
+    req.validated.body.newEmail,
+    req.validated.body.code,
+  );
+  return ok(res, result, '이메일이 변경되었습니다.');
+});
+
+export const getSavingGoalController = asyncHandler(async (req, res) => {
+  const result = await getSavingGoal(BigInt(req.user.userId));
+  return ok(res, result, '절약 목적 조회 성공');
 });
 
 export const updateSavingGoalController = asyncHandler(async (req, res) => {

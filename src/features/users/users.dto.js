@@ -30,6 +30,18 @@ const birthDate = z
   )
   .optional();
 
+const email = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email('올바른 이메일 형식이 아닙니다.')
+  .max(255, '이메일은 255자 이하여야 합니다.');
+
+const emailVerificationCode = z
+  .string()
+  .trim()
+  .regex(/^\d{6}$/, '인증 코드는 6자리 숫자여야 합니다.');
+
 export const updateMeDto = z.object({
   body: z
     .object({
@@ -83,12 +95,32 @@ export const changePasswordDto = z.object({
     }),
 });
 
+export const requestEmailChangeVerificationDto = z.object({
+  body: z.object({ newEmail: email }).strict(),
+});
+
+export const changeEmailDto = z.object({
+  body: z.object({ newEmail: email, code: emailVerificationCode }).strict(),
+});
+
 export const savingGoalDto = z.object({
-  body: z.object({
-    savingGoalText: z.string().min(1).max(255),
-    targetSavingAmount: z.coerce.bigint().positive(),
-    savingGoalIsActive: z.boolean().optional(),
-  }),
+  body: z
+    .object({
+      savingGoalText: z.string().min(1).max(255).optional(),
+      targetSavingAmount: z.coerce
+        .bigint()
+        .min(1000n, '목표 금액은 1,000원 이상이어야 합니다.')
+        .max(1000000000n, '목표 금액은 10억원 이하여야 합니다.')
+        .optional(),
+      savingGoalIsActive: z.boolean().optional(),
+    })
+    .refine(
+      (body) =>
+        body.savingGoalText !== undefined ||
+        body.targetSavingAmount !== undefined ||
+        body.savingGoalIsActive !== undefined,
+      { message: '최소 하나 이상의 수정 필드를 입력해야 합니다.' },
+    ),
 });
 
 export const notificationSettingsDto = z.object({
