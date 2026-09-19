@@ -125,22 +125,23 @@ test('getCheerMessage reads the goal and sums positive SKIPPED records', async (
   assert.equal(result.achievementRate, 50);
   assert.equal(result.messageLevel, 'LEVEL_3');
   assert.equal(typeof result.message, 'string');
-  assert.deepEqual(calls, [
-    [
-      'findUnique',
-      {
-        where: { id: 3n },
-        select: { targetSavingAmount: true },
-      },
-    ],
-    [
-      'aggregate',
-      {
-        where: { userId: 3n, type: 'SKIPPED', price: { gt: 0 } },
-        _sum: { price: true },
-      },
-    ],
-  ]);
+  // validate calls and that aggregation is filtered by month range (KST)
+  assert.equal(calls.length, 2);
+  const findCall = calls[0];
+  const aggCall = calls[1];
+  assert.equal(findCall[0], 'findUnique');
+  assert.deepEqual(findCall[1], { where: { id: 3n }, select: { targetSavingAmount: true } });
+  assert.equal(aggCall[0], 'aggregate');
+  const where = aggCall[1].where;
+  assert.equal(where.userId, 3n);
+  assert.equal(where.type, 'SKIPPED');
+  assert.deepEqual(where.price, { gt: 0 });
+  assert.ok(
+    where.occurredAt && where.occurredAt.gte instanceof Date && where.occurredAt.lt instanceof Date,
+  );
+  // expected month range for 2026-08-13T03:00:00Z is 2026-07-31T15:00:00Z .. 2026-08-31T15:00:00Z
+  assert.equal(where.occurredAt.gte.getTime(), new Date('2026-07-31T15:00:00Z').getTime());
+  assert.equal(where.occurredAt.lt.getTime(), new Date('2026-08-31T15:00:00Z').getTime());
 });
 
 test('getCheerMessage returns GOAL4041 when a goal is not set', async () => {
@@ -161,6 +162,12 @@ test('GET /api/v1/home/cheer-message requires authentication', async () => {
 });
 
 test('GET /api/v1/home/cheer-message sums only SKIPPED records and does not mutate data', async () => {
+  const now = new Date();
+  const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
+  const previousMonthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1, 0, 0, 0),
+  );
+
   const user = await prisma.user.create({
     data: {
       email: testEmail,
@@ -177,21 +184,21 @@ test('GET /api/v1/home/cheer-message sums only SKIPPED records and does not muta
         type: 'SKIPPED',
         productName: '참은 소비 1',
         price: 20000,
-        occurredAt: new Date('2026-01-01T00:00:00Z'),
+        occurredAt: previousMonthStart,
       },
       {
         userId: user.id,
         type: 'SKIPPED',
         productName: '참은 소비 2',
         price: 30000,
-        occurredAt: new Date('2026-08-01T00:00:00Z'),
+        occurredAt: currentMonthStart,
       },
       {
         userId: user.id,
         type: 'CONSUMED',
         productName: '소비',
         price: 80000,
-        occurredAt: new Date('2026-08-01T00:00:00Z'),
+        occurredAt: currentMonthStart,
       },
     ],
   });
@@ -211,8 +218,8 @@ test('GET /api/v1/home/cheer-message sums only SKIPPED records and does not muta
 
   assert.equal(first.status, 200);
   assert.deepEqual(first.body, second.body);
-  assert.equal(first.body.data.achievementRate, 50);
-  assert.equal(first.body.data.messageLevel, 'LEVEL_3');
+  assert.equal(first.body.data.achievementRate, 30);
+  assert.equal(first.body.data.messageLevel, 'LEVEL_2');
   const afterUser = await prisma.user.findUnique({ where: { id: user.id } });
   const afterRecords = await prisma.consumptionRecord.findMany({
     where: { userId: user.id },

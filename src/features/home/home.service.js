@@ -267,8 +267,9 @@ export const getCheerMessage = async (userId, now = new Date(), prismaClient = p
     });
   }
 
+  const { startAt, endAt } = getMonthRange(now);
   const skipped = await prismaClient.consumptionRecord.aggregate({
-    where: { userId, type: 'SKIPPED', price: { gt: 0 } },
+    where: { userId, type: 'SKIPPED', price: { gt: 0 }, occurredAt: { gte: startAt, lt: endAt } },
     _sum: { price: true },
   });
 

@@ -2683,7 +2683,7 @@ export const openApiDocument = {
       get: {
         ...securedOperation('Home', '응원 메시지 조회'),
         description:
-          '누적 참은 소비 금액으로 목표 달성률을 계산하고, 동일 사용자·동일 날짜에 동일한 메시지를 반환합니다. 날짜 기준은 KST입니다.',
+          '이번 달(월간, KST 기준) 참은 소비 금액으로 목표 달성률을 계산하고, 동일 사용자·동일 날짜에 동일한 메시지를 반환합니다. 월 경계는 KST를 기준으로 산정됩니다.',
         responses: {
           200: {
             description: '응원 메시지 조회 성공',
