@@ -905,13 +905,15 @@ export const openApiDocument = {
           },
           remainingAmount: {
             type: 'string',
-            example: '700000',
-            description: '수입 기준 잔액',
+            example: '200000',
+            description: '예산 기준 잔액',
           },
           usageRate: {
             type: 'integer',
-            example: 30,
-            description: '수입 대비 총 사용률(%)',
+            minimum: 0,
+            maximum: 100,
+            example: 60,
+            description: '예산 대비 총 사용률(%)',
           },
           categoryBudgets: {
             type: 'array',
@@ -922,7 +924,7 @@ export const openApiDocument = {
                 budgetAmount: { type: 'string', example: '400000' },
                 spentAmount: { type: 'string', example: '287000' },
                 remainingAmount: { type: 'string', example: '113000' },
-                usageRate: { type: 'integer', example: 72 },
+                usageRate: { type: 'integer', minimum: 0, maximum: 100, example: 72 },
               },
             },
             description: '카테고리별 예산 상세 목록',
