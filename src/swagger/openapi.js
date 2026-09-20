@@ -47,6 +47,7 @@ import {
   createWishlistItemDto,
   updateWishlistItemDto,
   wishlistItemIdDto,
+  getWishlistItemsQueryDto,
 } from '../features/wishlist-items/wishlist-items.dto.js';
 import { consumptionReportDetailDto } from '../features/reports/reports.dto.js';
 import { withZodDto, zodToOpenApiSchema } from './zod-openapi.js';
@@ -3267,7 +3268,10 @@ export const openApiDocument = {
     },
     '/api/v1/wishlist-items': {
       get: {
-        ...securedOperation('WishlistItems', '위시리스트 목록 조회'),
+        ...withZodDto(
+          securedOperation('WishlistItems', '위시리스트 목록 조회'),
+          getWishlistItemsQueryDto,
+        ),
         responses: {
           401: { $ref: '#/components/responses/Unauthorized' },
           200: {
@@ -3278,6 +3282,7 @@ export const openApiDocument = {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean', example: true },
+                    totalCount: { type: 'integer', example: 6, description: '전체 유혹 개수' },
                     data: {
                       type: 'array',
                       items: {
