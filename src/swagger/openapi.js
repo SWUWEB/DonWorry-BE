@@ -3273,6 +3273,21 @@ export const openApiDocument = {
           getWishlistItemsQueryDto,
         ),
         responses: {
+          400: {
+            description: '잘못된 쿼리 스트링 요청 (검증 실패)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'COMMON4001',
+                  message: '유효한 카테고리 코드가 아닙니다.',
+                },
+              },
+            },
+          },
           401: { $ref: '#/components/responses/Unauthorized' },
           200: {
             description: '위시리스트 목록 조회 성공',
