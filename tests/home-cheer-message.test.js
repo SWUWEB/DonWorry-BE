@@ -162,11 +162,20 @@ test('GET /api/v1/home/cheer-message requires authentication', async () => {
 });
 
 test('GET /api/v1/home/cheer-message sums only SKIPPED records and does not mutate data', async () => {
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const getKstMonthRange = (date, offset = 0) => {
+    const kst = new Date(date.getTime() + KST_OFFSET_MS);
+    const year = kst.getUTCFullYear();
+    const month = kst.getUTCMonth() + offset;
+    return {
+      startAt: new Date(Date.UTC(year, month, 1) - KST_OFFSET_MS),
+      endAt: new Date(Date.UTC(year, month + 1, 1) - KST_OFFSET_MS),
+    };
+  };
+
   const now = new Date();
-  const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
-  const previousMonthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1, 0, 0, 0),
-  );
+  const currentMonthStart = getKstMonthRange(now, 0).startAt;
+  const previousMonthStart = getKstMonthRange(now, -1).startAt;
 
   const user = await prisma.user.create({
     data: {
