@@ -5,6 +5,9 @@ import { getBudget } from '../users/users.service.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { CHEER_MESSAGES } from '../../config/cheer-messages.js';
+import { calculateAchievementRate } from '../../utils/achievement-rate.js';
+
+export { calculateAchievementRate } from '../../utils/achievement-rate.js';
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const getKst = (date = new Date()) => new Date(date.getTime() + KST_OFFSET_MS);
@@ -40,28 +43,6 @@ export const getMessageLevel = (achievementRate) => {
   if (achievementRate >= 50) return 'LEVEL_3';
   if (achievementRate >= 20) return 'LEVEL_2';
   return 'LEVEL_1';
-};
-
-const parseDecimal = (value) => {
-  const match = /^(\d+)(?:\.(\d+))?$/.exec(value.toString());
-  if (!match) throw new TypeError('금액은 0 이상의 숫자여야 합니다.');
-  const fraction = match[2] ?? '';
-  return {
-    unscaled: BigInt(`${match[1]}${fraction}`),
-    scale: fraction.length,
-  };
-};
-
-export const calculateAchievementRate = (skippedAmount, targetAmount) => {
-  const skipped = parseDecimal(skippedAmount);
-  const target = parseDecimal(targetAmount);
-  const scale = Math.max(skipped.scale, target.scale);
-  const skippedScaled = skipped.unscaled * 10n ** BigInt(scale - skipped.scale);
-  const targetScaled = target.unscaled * 10n ** BigInt(scale - target.scale);
-
-  if (targetScaled <= 0n) return 0;
-  const rate = (skippedScaled * 100n) / targetScaled;
-  return Number(rate > 100n ? 100n : rate);
 };
 
 const selectDailyMessage = (userId, dateKey, messageLevel) => {
@@ -100,7 +81,7 @@ const buildGoalAchievement = (skippedAmount, targetAmount) => {
     };
   }
   const target = Number(targetAmount);
-  const rate = Math.min(100, calculateRatio(skippedAmount, target));
+  const rate = calculateAchievementRate(skippedAmount, targetAmount);
   if (skippedAmount >= target) {
     return {
       status: 'ACHIEVED',

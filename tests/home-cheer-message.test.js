@@ -57,7 +57,7 @@ test('achievement rate boundaries select the correct message level', () => {
   for (const [rate, expected] of cases) assert.equal(getMessageLevel(rate), expected);
 });
 
-test('achievement rate is floored and capped at 100', () => {
+test('achievement rate is rounded and capped at 100', () => {
   assert.equal(
     buildCheerMessage({
       userId: 1n,
@@ -65,7 +65,7 @@ test('achievement rate is floored and capped at 100', () => {
       skippedAmount: 149,
       now: new Date('2026-08-13T03:00:00Z'),
     }).achievementRate,
-    49,
+    50,
   );
   assert.equal(
     buildCheerMessage({ userId: 1n, targetAmount: 100, skippedAmount: 130 }).achievementRate,
@@ -75,8 +75,43 @@ test('achievement rate is floored and capped at 100', () => {
 
 test('achievement rate preserves BigInt and decimal precision', () => {
   assert.equal(calculateAchievementRate('4503599627370496.50', 9007199254740993n), 50);
-  assert.equal(calculateAchievementRate('8999999999999999.99', 9000000000000000n), 99);
+  assert.equal(calculateAchievementRate('8999999999999999.99', 9000000000000000n), 100);
   assert.equal(calculateAchievementRate('100.99', 100n), 100);
+});
+
+test('saving goal, home summary, and cheer message use the same rounded achievement rate', async () => {
+  const user = await prisma.user.create({
+    data: {
+      email: testEmail,
+      loginId: testLoginId,
+      nickname: 'home-cheer-test',
+      targetSavingAmount: 300,
+    },
+  });
+  await prisma.consumptionRecord.create({
+    data: {
+      userId: user.id,
+      type: 'SKIPPED',
+      productName: '참은 소비',
+      price: 149,
+      occurredAt: new Date(),
+    },
+  });
+  const token = createAccessToken(user);
+  const authorization = { Authorization: `Bearer ${token}` };
+
+  const [savingGoal, homeSummary, cheerMessage] = await Promise.all([
+    request(app).get('/api/v1/users/me/saving-goal').set(authorization),
+    request(app).get('/api/v1/home/summary').set(authorization),
+    request(app).get('/api/v1/home/cheer-message').set(authorization),
+  ]);
+
+  assert.equal(savingGoal.status, 200);
+  assert.equal(homeSummary.status, 200);
+  assert.equal(cheerMessage.status, 200);
+  assert.equal(savingGoal.body.data.achievementRate, 50);
+  assert.equal(homeSummary.body.data.goalAchievement.rate, 50);
+  assert.equal(cheerMessage.body.data.achievementRate, 50);
 });
 
 test('same user, KST date, and level always select the same message', () => {

@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { randomInt } from 'node:crypto';
 import { env } from '../../config/env.js';
 import { sendEmailChangeVerificationCode } from '../auth/auth.mailer.js';
+import { calculateAchievementRate } from '../../utils/achievement-rate.js';
 
 const passwordSaltRounds = 12;
 const emailChangeTokenType = 'EMAIL_CHANGE';
@@ -521,10 +522,10 @@ export const getSavingGoal = async (userId) => {
   });
   const targetSavingAmount = Number(user.targetSavingAmount);
   const savedAmount = Number(skippedRecords._sum.price || 0);
-  const achievementRate =
-    targetSavingAmount > 0
-      ? Math.min(100, Math.round((savedAmount / targetSavingAmount) * 100))
-      : 0;
+  const achievementRate = calculateAchievementRate(
+    skippedRecords._sum.price ?? 0,
+    user.targetSavingAmount,
+  );
 
   return {
     targetSavingAmount: targetSavingAmount.toString(),

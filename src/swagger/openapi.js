@@ -2773,7 +2773,7 @@ export const openApiDocument = {
                 productUrl: 'https://example.com/products/americano',
                 reason: '친구와 시간을 보내고 싶어서',
                 riskScore: 3,
-                category_code: 'CAFE_DESSERT',
+                categoryCode: 'CAFE_DESSERT',
                 interventionAnswers: [
                   {
                     questionId: 1,

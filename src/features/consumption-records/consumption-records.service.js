@@ -79,13 +79,13 @@ export const createConsumptionRecord = async ({ userId, data }) => {
     reason,
     occurredAt,
     riskScore,
-    category_code,
+    categoryCode,
     interventionAnswers,
   } = data;
 
-  const categoryLabel = category_code ? CATEGORY_MAP[category_code] : undefined;
+  const categoryLabel = categoryCode ? CATEGORY_MAP[categoryCode] : undefined;
 
-  if (category_code && !CATEGORY_CODE_SET.has(category_code)) {
+  if (categoryCode && !CATEGORY_CODE_SET.has(categoryCode)) {
     throw new HttpError(400, '허용되지 않은 카테고리 코드입니다.', {
       errorCode: ERROR_CODES.CONSUMPTION_RECORD4002,
     });
@@ -122,7 +122,7 @@ export const createConsumptionRecord = async ({ userId, data }) => {
     occurredAt: occurred,
     urlParseSuccess: false,
     riskScore: typeof riskScore === 'number' ? riskScore : null,
-    categoryCode: category_code ? String(category_code) : null,
+    categoryCode: categoryCode ? String(categoryCode) : null,
     categoryLabel: categoryLabel ?? null,
   };
 
@@ -259,19 +259,19 @@ const buildUpdateData = (data) => {
   if (data.occurredAt !== undefined) updateData.occurredAt = resolveOccurredAt(data.occurredAt);
   if (data.riskScore !== undefined) updateData.riskScore = data.riskScore;
 
-  if (data.category_code !== undefined) {
-    if (data.category_code === null) {
+  if (data.categoryCode !== undefined) {
+    if (data.categoryCode === null) {
       updateData.categoryCode = null;
       updateData.categoryLabel = null;
       return updateData;
     }
-    if (!CATEGORY_CODE_SET.has(data.category_code)) {
+    if (!CATEGORY_CODE_SET.has(data.categoryCode)) {
       throw new HttpError(400, '허용되지 않은 카테고리 코드입니다.', {
         errorCode: ERROR_CODES.CONSUMPTION_RECORD4002,
       });
     }
-    updateData.categoryCode = String(data.category_code);
-    updateData.categoryLabel = CATEGORY_MAP[data.category_code];
+    updateData.categoryCode = String(data.categoryCode);
+    updateData.categoryLabel = CATEGORY_MAP[data.categoryCode];
   }
 
   return updateData;
