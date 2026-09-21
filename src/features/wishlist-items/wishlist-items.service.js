@@ -88,7 +88,7 @@ export const getWishlistItems = async (userId, queryParams = {}) => {
   };
 
   if (query) {
-    where.productName = { contains: query, mode: 'insensitive' };
+    where.productName = { contains: query };
   }
 
   if (categoryCode && categoryCode !== 'ALL') {

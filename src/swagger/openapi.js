@@ -3278,12 +3278,18 @@ export const openApiDocument = {
             content: {
               'application/json': {
                 schema: {
-                  $ref: '#/components/schemas/ErrorResponse',
+                  $ref: '#/components/schemas/ValidationErrorResponse',
                 },
                 example: {
                   success: false,
                   code: 'COMMON4001',
-                  message: '유효한 카테고리 코드가 아닙니다.',
+                  message: 'Invalid request',
+                  errors: {
+                    formErrors: [],
+                    fieldErrors: {
+                      categoryCode: ['유효한 카테고리 코드가 아닙니다.'],
+                    },
+                  },
                 },
               },
             },

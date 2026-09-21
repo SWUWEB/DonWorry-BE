@@ -27,7 +27,7 @@ export const getWishlistItemsQueryDto = z.object({
     categoryCode: z
       .string()
       .optional()
-      .refine((val) => val === undefined || CATEGORY_CODE_SET.has(val), {
+      .refine((val) => val === undefined || val === 'ALL' || CATEGORY_CODE_SET.has(val), {
         message: '유효한 카테고리 코드가 아닙니다.',
       }),
     sort: z.enum(['CREATED_DESC', 'NAME_ASC', 'DEADLINE_ASC']).default('CREATED_DESC'),
