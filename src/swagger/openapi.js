@@ -47,6 +47,7 @@ import {
   createWishlistItemDto,
   updateWishlistItemDto,
   wishlistItemIdDto,
+  getWishlistItemsQueryDto,
 } from '../features/wishlist-items/wishlist-items.dto.js';
 import { consumptionReportDetailDto } from '../features/reports/reports.dto.js';
 import { withZodDto, zodToOpenApiSchema } from './zod-openapi.js';
@@ -3267,8 +3268,32 @@ export const openApiDocument = {
     },
     '/api/v1/wishlist-items': {
       get: {
-        ...securedOperation('WishlistItems', '위시리스트 목록 조회'),
+        ...withZodDto(
+          securedOperation('WishlistItems', '위시리스트 목록 조회'),
+          getWishlistItemsQueryDto,
+        ),
         responses: {
+          400: {
+            description: '잘못된 쿼리 스트링 요청 (검증 실패)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ValidationErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'COMMON4001',
+                  message: 'Invalid request',
+                  errors: {
+                    formErrors: [],
+                    fieldErrors: {
+                      query: ['유효한 카테고리 코드가 아닙니다.'],
+                    },
+                  },
+                },
+              },
+            },
+          },
           401: { $ref: '#/components/responses/Unauthorized' },
           200: {
             description: '위시리스트 목록 조회 성공',
@@ -3278,6 +3303,7 @@ export const openApiDocument = {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean', example: true },
+                    totalCount: { type: 'integer', example: 6, description: '전체 유혹 개수' },
                     data: {
                       type: 'array',
                       items: {
