@@ -18,6 +18,19 @@ const { prisma } = await import('../src/prisma/client.js');
 const app = createApp();
 const testEmail = 'home-cheer-message-test@example.com';
 const testLoginId = 'homecheer1';
+const RealDate = Date;
+const fixedNow = new RealDate('2026-08-13T03:00:00.000Z');
+
+class FixedDate extends RealDate {
+  constructor(...args) {
+    if (args.length === 0) super(fixedNow.getTime());
+    else super(...args);
+  }
+
+  static now() {
+    return fixedNow.getTime();
+  }
+}
 
 const createAccessToken = (user) =>
   jwt.sign({ purpose: 'access', userId: user.id.toString() }, process.env.JWT_ACCESS_SECRET, {
@@ -35,7 +48,13 @@ const deleteTestData = async () => {
   });
 };
 
-test.beforeEach(deleteTestData);
+test.beforeEach(async () => {
+  globalThis.Date = FixedDate;
+  await deleteTestData();
+});
+test.afterEach(() => {
+  globalThis.Date = RealDate;
+});
 test.after(async () => {
   await deleteTestData();
   await prisma.$disconnect();
@@ -209,6 +228,7 @@ test('GET /api/v1/home/cheer-message sums only SKIPPED records and does not muta
   };
 
   const now = new Date();
+  assert.equal(now.toISOString(), '2026-08-13T03:00:00.000Z');
   const currentMonthStart = getKstMonthRange(now, 0).startAt;
   const previousMonthStart = getKstMonthRange(now, -1).startAt;
 
@@ -287,6 +307,11 @@ test('GET /api/v1/home/cheer-message returns GOAL4041 when goal is absent', asyn
 test('Swagger documents cheer message success, auth, and goal errors', async () => {
   const response = await request(app).get('/api-docs.json');
   const operation = response.body.paths['/api/v1/home/cheer-message'].get;
+  const rateSchema =
+    response.body.components.schemas.CheerMessageResponse.properties.data.properties
+      .achievementRate;
+  assert.match(rateSchema.description, /KST 기준 이번 달.*소수점 반올림/);
+  assert.equal(rateSchema.maximum, 100);
   assert.equal(
     operation.responses['200'].content['application/json'].schema.$ref,
     '#/components/schemas/CheerMessageResponse',

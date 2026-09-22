@@ -1065,7 +1065,7 @@ export const openApiDocument = {
                 maximum: 100,
                 example: 72,
                 description:
-                  '목표 금액 대비 누적 참은 소비 금액의 달성률(소수점 이하 버림, 최대 100)',
+                  '목표 금액 대비 KST 기준 이번 달 참은 소비 금액의 달성률(소수점 반올림, 최대 100)',
               },
               message: { type: 'string', example: '목표가 바로 앞이에요! 조금만 더 힘내요.' },
               messageLevel: {

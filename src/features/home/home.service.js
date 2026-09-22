@@ -71,7 +71,7 @@ const calculateRatio = (amount, total) => {
   return Math.round((amount / total) * 100);
 };
 
-const buildGoalAchievement = (skippedAmount, targetAmount) => {
+const buildGoalAchievement = (skippedAmountRaw, targetAmount) => {
   if (!targetAmount) {
     return {
       status: 'NOT_SET',
@@ -80,8 +80,9 @@ const buildGoalAchievement = (skippedAmount, targetAmount) => {
       message: '이번 달 절약 목표를 설정해보세요.',
     };
   }
+  const skippedAmount = Number(skippedAmountRaw);
   const target = Number(targetAmount);
-  const rate = calculateAchievementRate(skippedAmount, targetAmount);
+  const rate = calculateAchievementRate(skippedAmountRaw, targetAmount);
   if (skippedAmount >= target) {
     return {
       status: 'ACHIEVED',
@@ -212,10 +213,9 @@ export const getHomeSummary = async (userId, now = new Date()) => {
 
   const thisAmount = thisMonthRecords.reduce((sum, record) => sum + Number(record.price ?? 0), 0);
   const lastAmount = Number(lastMonthAgg._sum.price ?? 0);
-  const skippedAmount = Number(skippedAgg._sum.price ?? 0);
 
   return {
-    goalAchievement: buildGoalAchievement(skippedAmount, user.targetSavingAmount),
+    goalAchievement: buildGoalAchievement(skippedAgg._sum.price ?? 0, user.targetSavingAmount),
     consumptionChart: buildConsumptionChart(thisMonthRecords),
     thisMonthSpending: buildThisMonthSpending(thisAmount, lastAmount),
     remainingBudget: buildRemainingBudget(budget, thisAmount),
