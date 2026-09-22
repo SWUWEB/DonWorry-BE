@@ -3287,7 +3287,7 @@ export const openApiDocument = {
                   errors: {
                     formErrors: [],
                     fieldErrors: {
-                      categoryCode: ['유효한 카테고리 코드가 아닙니다.'],
+                      query: ['유효한 카테고리 코드가 아닙니다.'],
                     },
                   },
                 },
