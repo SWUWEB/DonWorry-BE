@@ -1,9 +1,4 @@
-import { notImplemented } from '../../utils/api-response.js';
 import * as wishlistItemsService from './wishlist-items.service.js';
-
-export const createNotImplementedController = (featureName) => (_req, res) => {
-  return notImplemented(res, featureName);
-};
 
 /**
  * Prisma 모델의 BigInt 필드를 JSON 직렬화가 가능한 문자열로 변환하는 유틸 함수
@@ -41,10 +36,15 @@ export const createItem = async (req, res, next) => {
 export const getItems = async (req, res, next) => {
   try {
     const loggedInUserId = BigInt(req.user.userId);
-    const items = await wishlistItemsService.getWishlistItems(loggedInUserId);
+    const queryParams = req.validated?.query || req.query;
+    const { items, totalCount } = await wishlistItemsService.getWishlistItems(
+      loggedInUserId,
+      queryParams,
+    );
 
     return res.status(200).json({
       success: true,
+      totalCount,
       data: items.map(serializeWishlistItem),
     });
   } catch (error) {
