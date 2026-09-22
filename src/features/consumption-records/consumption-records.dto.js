@@ -78,14 +78,6 @@ export const createConsumptionRecordDto = z.object({
         },
       ),
     riskScore: z.number().int().min(0).max(5).optional(),
-    categoryCode: z
-      .string()
-      .max(50)
-      .optional()
-      .refine((v) => v === undefined || CATEGORY_CODE_SET.has(v), {
-        message: 'Invalid category code',
-      }),
-    // 이전 클라이언트 호환용 alias. 검증 후 categoryCode로 정규화한다.
     category_code: z
       .string()
       .max(50)
@@ -122,12 +114,6 @@ export const validateConsumptionRecord = (dto) => (req, res, next) => {
     params: req.params,
   });
   if (result.success) {
-    if (result.data.body && result.data.body.category_code !== undefined) {
-      if (result.data.body.categoryCode === undefined) {
-        result.data.body.categoryCode = result.data.body.category_code;
-      }
-      delete result.data.body.category_code;
-    }
     req.validated = result.data;
     return next();
   }
@@ -140,14 +126,7 @@ export const validateConsumptionRecord = (dto) => (req, res, next) => {
   if (issues.some((i) => i.path && i.path[0] === 'body' && i.path[1] === 'occurredAt')) {
     code = ERROR_CODES.CONSUMPTION_RECORD4001;
     message = 'occurredAt은 유효한 ISO 8601 날짜/시간 문자열이어야 합니다.';
-  } else if (
-    issues.some(
-      (i) =>
-        i.path &&
-        i.path[0] === 'body' &&
-        (i.path[1] === 'categoryCode' || i.path[1] === 'category_code'),
-    )
-  ) {
+  } else if (issues.some((i) => i.path && i.path[0] === 'body' && i.path[1] === 'category_code')) {
     code = ERROR_CODES.CONSUMPTION_RECORD4002;
     message = '허용되지 않은 카테고리 코드입니다.';
   } else if (issues.some((i) => i.message && i.message.includes('Duplicate questionId'))) {
@@ -174,7 +153,6 @@ const updateConsumptionRecordBodyDto = createConsumptionRecordDto.shape.body
     productUrl: createConsumptionRecordDto.shape.body.shape.productUrl.optional().nullable(),
     reason: createConsumptionRecordDto.shape.body.shape.reason.optional().nullable(),
     riskScore: createConsumptionRecordDto.shape.body.shape.riskScore.optional().nullable(),
-    categoryCode: createConsumptionRecordDto.shape.body.shape.categoryCode.optional().nullable(),
     category_code: createConsumptionRecordDto.shape.body.shape.category_code.optional().nullable(),
   })
   .refine((data) => Object.keys(data).length > 0, {
