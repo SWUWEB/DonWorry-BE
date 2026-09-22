@@ -6,13 +6,14 @@ import {
   createWishlistItemDto,
   updateWishlistItemDto,
   wishlistItemIdDto,
+  getWishlistItemsQueryDto,
 } from './wishlist-items.dto.js';
 
 export const wishlistItemsRouter = Router();
 
 wishlistItemsRouter.use(requireAuth);
 
-wishlistItemsRouter.get('/', wishlistItemsController.getItems);
+wishlistItemsRouter.get('/', validate(getWishlistItemsQueryDto), wishlistItemsController.getItems);
 wishlistItemsRouter.post('/', validate(createWishlistItemDto), wishlistItemsController.createItem);
 wishlistItemsRouter.get(
   '/:wishlistId',
