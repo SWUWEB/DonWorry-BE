@@ -5,6 +5,9 @@ import { getBudget } from '../users/users.service.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { CHEER_MESSAGES } from '../../config/cheer-messages.js';
+import { calculateAchievementRate } from '../../utils/achievement-rate.js';
+
+export { calculateAchievementRate } from '../../utils/achievement-rate.js';
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const getKst = (date = new Date()) => new Date(date.getTime() + KST_OFFSET_MS);
@@ -42,28 +45,6 @@ export const getMessageLevel = (achievementRate) => {
   return 'LEVEL_1';
 };
 
-const parseDecimal = (value) => {
-  const match = /^(\d+)(?:\.(\d+))?$/.exec(value.toString());
-  if (!match) throw new TypeError('금액은 0 이상의 숫자여야 합니다.');
-  const fraction = match[2] ?? '';
-  return {
-    unscaled: BigInt(`${match[1]}${fraction}`),
-    scale: fraction.length,
-  };
-};
-
-export const calculateAchievementRate = (skippedAmount, targetAmount) => {
-  const skipped = parseDecimal(skippedAmount);
-  const target = parseDecimal(targetAmount);
-  const scale = Math.max(skipped.scale, target.scale);
-  const skippedScaled = skipped.unscaled * 10n ** BigInt(scale - skipped.scale);
-  const targetScaled = target.unscaled * 10n ** BigInt(scale - target.scale);
-
-  if (targetScaled <= 0n) return 0;
-  const rate = (skippedScaled * 100n) / targetScaled;
-  return Number(rate > 100n ? 100n : rate);
-};
-
 const selectDailyMessage = (userId, dateKey, messageLevel) => {
   const messages = CHEER_MESSAGES[messageLevel];
   const seed = `${userId}:${dateKey}:${messageLevel}`;
@@ -90,7 +71,7 @@ const calculateRatio = (amount, total) => {
   return Math.round((amount / total) * 100);
 };
 
-const buildGoalAchievement = (skippedAmount, targetAmount) => {
+const buildGoalAchievement = (skippedAmountRaw, targetAmount) => {
   if (!targetAmount) {
     return {
       status: 'NOT_SET',
@@ -99,8 +80,9 @@ const buildGoalAchievement = (skippedAmount, targetAmount) => {
       message: '이번 달 절약 목표를 설정해보세요.',
     };
   }
+  const skippedAmount = Number(skippedAmountRaw);
   const target = Number(targetAmount);
-  const rate = Math.min(100, calculateRatio(skippedAmount, target));
+  const rate = calculateAchievementRate(skippedAmountRaw, targetAmount);
   if (skippedAmount >= target) {
     return {
       status: 'ACHIEVED',
@@ -231,10 +213,9 @@ export const getHomeSummary = async (userId, now = new Date()) => {
 
   const thisAmount = thisMonthRecords.reduce((sum, record) => sum + Number(record.price ?? 0), 0);
   const lastAmount = Number(lastMonthAgg._sum.price ?? 0);
-  const skippedAmount = Number(skippedAgg._sum.price ?? 0);
 
   return {
-    goalAchievement: buildGoalAchievement(skippedAmount, user.targetSavingAmount),
+    goalAchievement: buildGoalAchievement(skippedAgg._sum.price ?? 0, user.targetSavingAmount),
     consumptionChart: buildConsumptionChart(thisMonthRecords),
     thisMonthSpending: buildThisMonthSpending(thisAmount, lastAmount),
     remainingBudget: buildRemainingBudget(budget, thisAmount),
@@ -267,8 +248,9 @@ export const getCheerMessage = async (userId, now = new Date(), prismaClient = p
     });
   }
 
+  const { startAt, endAt } = getMonthRange(now);
   const skipped = await prismaClient.consumptionRecord.aggregate({
-    where: { userId, type: 'SKIPPED', price: { gt: 0 } },
+    where: { userId, type: 'SKIPPED', price: { gt: 0 }, occurredAt: { gte: startAt, lt: endAt } },
     _sum: { price: true },
   });
 
