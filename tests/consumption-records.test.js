@@ -173,7 +173,7 @@ test('POST /api/v1/consumption-records creates a consumption record', async () =
       price: 4500,
       workHoursNeeded: 99,
       occurredAt: '2026-07-09T12:30:00+09:00',
-      category_code: categoryCode,
+      categoryCode,
       interventionAnswers: [
         {
           questionId: question.id.toString(),
@@ -258,7 +258,7 @@ test('POST /api/v1/consumption-records rejects invalid calendar date occurredAt'
   assert.ok(response.body.errors);
 });
 
-test('POST /api/v1/consumption-records rejects unsupported category_code', async () => {
+test('POST /api/v1/consumption-records rejects unsupported categoryCode', async () => {
   const user = await createTestUser();
   const accessToken = createAccessToken(user);
 
@@ -269,13 +269,33 @@ test('POST /api/v1/consumption-records rejects unsupported category_code', async
       type: 'CONSUMED',
       productName: '간식',
       price: 3000,
-      category_code: 'NOT_ALLOWED_CATEGORY',
+      categoryCode: 'NOT_ALLOWED_CATEGORY',
     });
 
   assert.equal(response.status, 400);
   assert.equal(response.body.success, false);
   assert.equal(response.body.code, 'CONSUMPTION_RECORD4002');
   assert.ok(response.body.errors);
+});
+
+test('POST /api/v1/consumption-records accepts legacy category_code alias for compatibility', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const categoryCode = CATEGORY_CODES[1];
+
+  const response = await request(app)
+    .post('/api/v1/consumption-records')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({
+      type: 'CONSUMED',
+      productName: '호환용 소비기록',
+      price: 3000,
+      category_code: categoryCode,
+    });
+
+  assert.equal(response.status, 201);
+  assert.equal(response.body.data.categoryCode, categoryCode);
+  assert.equal(response.body.data.categoryLabel, CATEGORY_MAP[categoryCode]);
 });
 
 test('POST /api/v1/consumption-records rejects duplicate intervention question ids', async () => {
@@ -932,7 +952,7 @@ test('PUT /api/v1/consumption-records/:id updates a record owned by the user', a
       productName: 'after update',
       price: 9900,
       occurredAt: '2026-07-10T12:30:00+09:00',
-      category_code: CATEGORY_CODES[2],
+      categoryCode: CATEGORY_CODES[2],
       riskScore: 4,
       workHoursNeeded: 99,
       interventionAnswers: [{ questionId: question.id.toString(), answerValue: false }],
@@ -1034,7 +1054,7 @@ test('PUT /api/v1/consumption-records/:id rejects duplicate intervention questio
   assert.equal(response.body.code, 'CONSUMPTION_RECORD4003');
   assert.ok(response.body.errors);
 });
-test('PUT /api/v1/consumption-records/:id returns 400 for unsupported category_code', async () => {
+test('PUT /api/v1/consumption-records/:id returns 400 for unsupported categoryCode', async () => {
   const user = await createTestUser();
   const accessToken = createAccessToken(user);
   const record = await createTestRecord(user);
@@ -1043,7 +1063,7 @@ test('PUT /api/v1/consumption-records/:id returns 400 for unsupported category_c
     .put(`/api/v1/consumption-records/${record.id}`)
     .set('Authorization', `Bearer ${accessToken}`)
     .send({
-      category_code: 'NOT_ALLOWED_CATEGORY',
+      categoryCode: 'NOT_ALLOWED_CATEGORY',
     });
 
   assert.equal(response.status, 400);
