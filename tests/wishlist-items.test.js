@@ -170,3 +170,25 @@ test('GET /api/v1/wishlist-items - 대기시간 마감임박순(DEADLINE_ASC) �
   assert.equal(items[1].productName, '나이키 운동화');
   assert.equal(items[2].productName, '맥북 프로 M3');
 });
+
+test('GET /api/v1/wishlist-items - 검색, 카테고리, 정렬, 페이징(2페이지) 조합 조건 시 올바른 totalCount와 목록을 반환한다', async () => {
+  const response = await request(app)
+    .get('/api/v1/wishlist-items')
+    .query({
+      query: '맥북',
+      categoryCode: 'ELECTRONICS',
+      sort: 'NAME_ASC',
+      page: 2,
+      limit: 1,
+    })
+    .set('Authorization', `Bearer ${accessToken}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.totalCount, 2);
+
+  const items = response.body.data;
+  assert.ok(Array.isArray(items));
+  assert.equal(items.length, 1);
+  assert.equal(items[0].productName, '맥북 프로 M3');
+});
