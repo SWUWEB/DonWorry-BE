@@ -1,7 +1,7 @@
 ﻿import { ERROR_CODES } from '../../config/error-codes.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { HttpError } from '../../utils/http-error.js';
-import { created, notImplemented, ok } from '../../utils/api-response.js';
+import { created, ok } from '../../utils/api-response.js';
 import {
   createConsumptionRecord,
   deleteConsumptionRecord,
@@ -10,10 +10,6 @@ import {
   listConsumptionRecords,
   updateConsumptionRecord,
 } from './consumption-records.service.js';
-
-export const createNotImplementedController = (featureName) => (_req, res) => {
-  return notImplemented(res, featureName);
-};
 
 const getAuthenticatedUserId = (req) => {
   const userId = req.user?.userId ?? req.user?.id ?? req.user?.user_id;
