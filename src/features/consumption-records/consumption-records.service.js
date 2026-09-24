@@ -261,7 +261,7 @@ const buildUpdateData = (data) => {
   if (data.occurredAt !== undefined) updateData.occurredAt = resolveOccurredAt(data.occurredAt);
   if (data.riskScore !== undefined) updateData.riskScore = data.riskScore;
 
-  const categoryValue = data.categoryCode ?? data.category_code;
+  const categoryValue = data.categoryCode !== undefined ? data.categoryCode : data.category_code;
 
   if (categoryValue !== undefined) {
     if (categoryValue === null) {

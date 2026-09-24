@@ -1054,6 +1054,33 @@ test('PUT /api/v1/consumption-records/:id rejects duplicate intervention questio
   assert.equal(response.body.code, 'CONSUMPTION_RECORD4003');
   assert.ok(response.body.errors);
 });
+test('PUT /api/v1/consumption-records/:id clears categoryCode and categoryLabel when set to null', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const record = await createTestRecord(user, {
+    categoryCode: CATEGORY_CODES[1],
+    categoryLabel: CATEGORY_MAP[CATEGORY_CODES[1]],
+  });
+
+  const response = await request(app)
+    .put(`/api/v1/consumption-records/${record.id}`)
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({
+      categoryCode: null,
+    });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.categoryCode, null);
+  assert.equal(response.body.data.categoryLabel, null);
+
+  const updatedRecord = await prisma.consumptionRecord.findUnique({
+    where: { id: record.id },
+  });
+
+  assert.equal(updatedRecord.categoryCode, null);
+  assert.equal(updatedRecord.categoryLabel, null);
+});
+
 test('PUT /api/v1/consumption-records/:id returns 400 for unsupported categoryCode', async () => {
   const user = await createTestUser();
   const accessToken = createAccessToken(user);
