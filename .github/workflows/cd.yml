@@ -106,9 +106,11 @@ jobs:
           fi
 
           health_url="${service_url%/}/health"
+          auth_header=()
           for attempt in {1..12}; do
             status="$(curl --silent --show-error --output /dev/null \
               --write-out '%{http_code}' --connect-timeout 5 --max-time 10 \
+              "${auth_header[@]}" \
               "${health_url}")" || status="000"
 
             if [[ "${status}" == "200" ]]; then
@@ -117,6 +119,14 @@ jobs:
             fi
 
             echo "Health check attempt ${attempt}/12 returned HTTP ${status}."
+            if [[ "${status}" == "401" || "${status}" == "403" ]] && [[ "${#auth_header[@]}" -eq 0 ]]; then
+              id_token="$(gcloud auth print-identity-token --audiences="${service_url}")" || {
+                echo "::error::Could not obtain an ID token for the private Cloud Run service."
+                exit 1
+              }
+              auth_header=(--header "Authorization: Bearer ${id_token}")
+              echo "Retrying health check with a Cloud Run ID token."
+            fi
             if [[ "${attempt}" -lt 12 ]]; then
               sleep 5
             fi
