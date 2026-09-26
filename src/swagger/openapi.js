@@ -3729,10 +3729,14 @@ export const openApiDocument = {
     },
     '/api/v1/temptations/{temptationId}/decisions': {
       post: {
-        ...securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+        ...securedJsonOperation(
+          'Temptations',
+          '재판단 기록 추가 및 최종 결정',
+          createWishlistDecisionDto,
+        ),
         responses: {
-          201: {
-            description: '재판단 기록 추가 성공',
+          200: {
+            description: '재판단 기록 추가 또는 기존 완료 기록 반환 성공 (멱등성 보장)',
             content: {
               'application/json': {
                 schema: {
@@ -3744,18 +3748,60 @@ export const openApiDocument = {
                       properties: {
                         id: { type: 'string', example: '6' },
                         wishlistItemId: { type: 'string', example: '2' },
-                        decisionType: { type: 'string', example: 'DELAY' },
-                        selectedWaitType: { type: 'string', example: 'ONE_DAY' },
+                        decisionType: {
+                          type: 'string',
+                          enum: ['BUY', 'SKIP', 'DELAY'],
+                          example: 'BUY',
+                          description: '최종 선택 유형 (BUY: 구매, SKIP: 포기, DELAY: 연장)',
+                        },
+                        selectedWaitType: {
+                          type: 'string',
+                          nullable: true,
+                          example: null,
+                          description:
+                            'DELAY인 경우 대기 시간 (ONE_HOUR, ONE_DAY, THREE_DAYS, ONE_WEEK)',
+                        },
                         selectedWaitUntil: {
                           type: 'string',
                           format: 'date-time',
-                          example: '2026-08-01T14:37:35.850Z',
+                          nullable: true,
+                          example: null,
                         },
                         decidedAt: {
                           type: 'string',
                           format: 'date-time',
-                          example: '2026-07-31T14:37:35.857Z',
+                          example: '2026-09-17T14:37:35.857Z',
                         },
+                      },
+                    },
+                  },
+                },
+                examples: {
+                  BUY_DECISION: {
+                    summary: 'BUY 선택 시 (백엔드에서 CONSUMED 기록 자동 생성)',
+                    value: {
+                      success: true,
+                      data: {
+                        id: '12',
+                        wishlistItemId: '2',
+                        decisionType: 'BUY',
+                        selectedWaitType: null,
+                        selectedWaitUntil: null,
+                        decidedAt: '2026-09-17T14:37:35.857Z',
+                      },
+                    },
+                  },
+                  DELAY_DECISION: {
+                    summary: 'DELAY 선택 시 (대기시간 연장)',
+                    value: {
+                      success: true,
+                      data: {
+                        id: '13',
+                        wishlistItemId: '2',
+                        decisionType: 'DELAY',
+                        selectedWaitType: 'ONE_DAY',
+                        selectedWaitUntil: '2026-09-18T14:37:35.850Z',
+                        decidedAt: '2026-09-17T14:37:35.857Z',
                       },
                     },
                   },
@@ -3764,7 +3810,7 @@ export const openApiDocument = {
             },
           },
           400: {
-            description: '유효하지 않은 요청 데이터',
+            description: '유효하지 않은 요청 데이터 또는 대기 미충족',
             content: {
               'application/json': {
                 schema: {
@@ -3780,11 +3826,11 @@ export const openApiDocument = {
                     },
                   },
                   NOT_YET_REDECISION_TIME: {
-                    summary: '아직 재판단 시간이 지나지 않음 (WISH4003)',
+                    summary: '아직 대기 시간이 끝나지 않음 (WISH4003)',
                     value: {
                       success: false,
                       code: 'WISH4003',
-                      message: '아직 고민 시간이 끝나지 않아 추가 연장을 할 수 없습니다.',
+                      message: '아직 재판단 시간이 되지 않았습니다.',
                     },
                   },
                 },
@@ -3823,7 +3869,7 @@ export const openApiDocument = {
             },
           },
           409: {
-            description: '이미 처리가 완료되었거나 대기 상태가 아닌 항목',
+            description: '처리할 수 없는 중복 또는 알 수 없는 상태 변경 요청',
             content: {
               'application/json': {
                 schema: {
@@ -3832,7 +3878,7 @@ export const openApiDocument = {
                 example: {
                   success: false,
                   code: 'WISH4091',
-                  message: '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.',
+                  message: '이미 처리가 완료되었거나 중복된 요청입니다.',
                 },
               },
             },

@@ -62,131 +62,152 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
     mappedWaitType = WAIT_TYPE_MAP[selectedWaitType];
   }
 
-  return await prisma.$transaction(async (tx) => {
-    const temptation = await tx.wishlistItem.findUnique({
-      where: { id: temptationId },
-    });
-
-    if (!temptation) {
-      throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
-        errorCode: ERROR_CODES.WISH4041,
-      });
-    }
-
-    if (temptation.userId !== userId) {
-      throw new HttpError(403, '접근 권한이 없습니다.', {
-        errorCode: ERROR_CODES.WISH4031,
-      });
-    }
-
-    const now = new Date();
-    const whereCondition = {
-      id: temptationId,
-      userId,
-      status: 'WAITING',
-    };
-
-    if (decisionType === 'DELAY') {
-      whereCondition.OR = [{ waitUntil: null }, { waitUntil: { lte: now } }];
-    }
-
-    const nextStatus = STATUS_MAP[decisionType];
-    const updateData = { status: nextStatus };
-
-    if (decisionType === 'DELAY') {
-      updateData.waitType = mappedWaitType;
-      updateData.waitUntil = selectedWaitUntil;
-    }
-
-    const updateResult = await tx.wishlistItem.updateMany({
-      where: whereCondition,
-      data: updateData,
-    });
-
-    if (updateResult.count === 0) {
-      const latestItem = await tx.wishlistItem.findUnique({
+  return await prisma.$transaction(
+    async (tx) => {
+      const temptation = await tx.wishlistItem.findUnique({
         where: { id: temptationId },
       });
 
-      if (!latestItem || latestItem.status !== 'WAITING') {
-        throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
+      if (!temptation) {
+        throw new HttpError(404, '해당 위시리스트 항목을 찾을 수 없습니다.', {
+          errorCode: ERROR_CODES.WISH4041,
+        });
+      }
+
+      if (temptation.userId !== userId) {
+        throw new HttpError(403, '접근 권한이 없습니다.', {
+          errorCode: ERROR_CODES.WISH4031,
+        });
+      }
+
+      const now = new Date();
+      const whereCondition = {
+        id: temptationId,
+        userId,
+        status: 'WAITING',
+      };
+
+      if (decisionType === 'DELAY') {
+        whereCondition.OR = [{ waitUntil: null }, { waitUntil: { lte: now } }];
+      }
+
+      const nextStatus = STATUS_MAP[decisionType];
+      const updateData = { status: nextStatus };
+
+      if (decisionType === 'DELAY') {
+        updateData.waitType = mappedWaitType;
+        updateData.waitUntil = selectedWaitUntil;
+      }
+
+      const updateResult = await tx.wishlistItem.updateMany({
+        where: whereCondition,
+        data: updateData,
+      });
+
+      if (updateResult.count === 0) {
+        const latestItem = await tx.wishlistItem.findUnique({
+          where: { id: temptationId },
+        });
+
+        if (
+          decisionType === 'DELAY' &&
+          latestItem?.status === 'WAITING' &&
+          latestItem?.waitUntil &&
+          now < new Date(latestItem.waitUntil)
+        ) {
+          throw new HttpError(400, '아직 재판단 시간이 되지 않았습니다.', {
+            errorCode: ERROR_CODES.WISH4003,
+          });
+        }
+
+        if (
+          (decisionType === 'BUY' || decisionType === 'SKIP') &&
+          latestItem &&
+          latestItem.status === 'DECIDED'
+        ) {
+          const existingDecision = await tx.wishlistDecision.findFirst({
+            where: {
+              wishlistItemId: temptationId,
+              decisionType,
+            },
+            orderBy: { decidedAt: 'desc' },
+          });
+
+          if (existingDecision) {
+            return existingDecision;
+          }
+        }
+
+        throw new HttpError(409, '이미 처리가 완료되었거나 중복된 요청입니다.', {
           errorCode: ERROR_CODES.WISH4091,
         });
       }
 
-      if (
-        decisionType === 'DELAY' &&
-        latestItem.waitUntil &&
-        now < new Date(latestItem.waitUntil)
-      ) {
-        throw new HttpError(400, '아직 재판단 시간이 되지 않았습니다.', {
-          errorCode: ERROR_CODES.WISH4003,
+      const decision = await tx.wishlistDecision.create({
+        data: {
+          wishlistItemId: temptation.id,
+          decisionType,
+          selectedWaitType: mappedWaitType,
+          selectedWaitUntil,
+          decidedAt: now,
+        },
+      });
+
+      if (decisionType === 'BUY' || decisionType === 'SKIP') {
+        const recordType = decisionType === 'BUY' ? 'CONSUMED' : 'SKIPPED';
+
+        await tx.consumptionRecord.create({
+          data: {
+            userId,
+            productName: temptation.productName,
+            price: temptation.price?.toString() ?? null,
+            categoryCode: temptation.categoryCode ?? null,
+            productUrl: temptation.productUrl ?? null,
+            reason: temptation.reason ?? null,
+            type: recordType,
+            occurredAt: now,
+          },
         });
       }
 
-      throw new HttpError(409, '이미 처리가 완료되었거나 중복된 요청입니다.', {
-        errorCode: ERROR_CODES.WISH4091,
-      });
-    }
+      if (decisionType === 'DELAY') {
+        const updatedCount = await tx.notification.updateMany({
+          where: {
+            wishlistItemId: temptation.id,
+            notificationType: 'TEMPTATION',
+            notifyAt: { gt: now },
+          },
+          data: {
+            title: '결단의 시간이 왔어요!',
+            notifyAt: selectedWaitUntil,
+            body: `'${temptation.productName}' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?`,
+          },
+        });
 
-    const decision = await tx.wishlistDecision.create({
-      data: {
-        wishlistItemId: temptation.id,
-        decisionType,
-        selectedWaitType: mappedWaitType,
-        selectedWaitUntil,
-        decidedAt: now,
-      },
-    });
-
-    if (decisionType === 'SKIP') {
-      await tx.consumptionRecord.create({
-        data: {
-          userId,
-          productName: temptation.productName,
-          price: temptation.price?.toString() ?? null,
-          categoryCode: temptation.categoryCode ?? null,
-          productUrl: temptation.productUrl ?? null,
-          reason: temptation.reason ?? null,
-          type: 'SKIPPED',
-          occurredAt: now,
-        },
-      });
-    }
-    if (decisionType === 'DELAY') {
-      const updatedCount = await tx.notification.updateMany({
-        where: {
-          wishlistItemId: temptation.id,
-          notificationType: 'TEMPTATION',
-          notifyAt: { gt: now },
-        },
-        data: {
-          title: '결단의 시간이 왔어요!',
-          notifyAt: selectedWaitUntil,
-          body: `'${temptation.productName}' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?`,
-        },
-      });
-
-      if (updatedCount.count === 0) {
-        await createNotificationInTx(tx, {
-          userId,
-          notificationType: 'TEMPTATION',
-          title: '결단의 시간이 왔어요!',
-          body: `'${temptation.productName}' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?`,
-          wishlistItemId: temptation.id,
-          notifyAt: selectedWaitUntil,
+        if (updatedCount.count === 0) {
+          await createNotificationInTx(tx, {
+            userId,
+            notificationType: 'TEMPTATION',
+            title: '결단의 시간이 왔어요!',
+            body: `'${temptation.productName}' 대기 시간이 끝났어요. 아직도 사고 싶으신가요?`,
+            wishlistItemId: temptation.id,
+            notifyAt: selectedWaitUntil,
+          });
+        }
+      } else {
+        await tx.notification.deleteMany({
+          where: {
+            wishlistItemId: temptation.id,
+            notificationType: 'TEMPTATION',
+            notifyAt: { gt: now },
+          },
         });
       }
-    } else {
-      await tx.notification.deleteMany({
-        where: {
-          wishlistItemId: temptation.id,
-          notificationType: 'TEMPTATION',
-          notifyAt: { gt: now },
-        },
-      });
-    }
 
-    return decision;
-  });
+      return decision;
+    },
+    {
+      isolationLevel: 'ReadCommitted',
+    },
+  );
 };
