@@ -2,7 +2,7 @@
 name: 'Release'
 about: 'develop → main 릴리즈 체크리스트'
 title: '[TASK] 릴리즈 배포: develop → main'
-labels: ['task']
+labels: ['release']
 ---
 
 ## 🎯 목적
@@ -29,6 +29,4 @@ develop 브랜치에 누적된 변경사항을 main으로 릴리즈 배포합니
 - [ ] release PR 생성 (develop → main)
 - [ ] 리뷰/체크 통과
 - [ ] main 머지
-- [ ] GitHub Actions `CD` 실행 성공 확인 (`main` push 또는 `workflow_dispatch`, ref: `main`)
-- [ ] Cloud Run migration Job (`donworry-migrate`) 성공 확인
-- [ ] Cloud Run 서비스 (`donworry-api`) 새 리비전 배포 및 정상 응답 확인
+- [ ] GitHub Actions `CD` 성공 확인 (마이그레이션, Cloud Run 배포, `/health` 응답 검사 포함)
