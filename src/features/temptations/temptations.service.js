@@ -111,6 +111,7 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
 
         if (
           decisionType === 'DELAY' &&
+          latestItem?.status === 'WAITING' &&
           latestItem?.waitUntil &&
           now < new Date(latestItem.waitUntil)
         ) {
