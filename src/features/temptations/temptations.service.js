@@ -108,20 +108,28 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
         where: { id: temptationId },
       });
 
-      if (!latestItem || latestItem.status !== 'WAITING') {
-        throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
-          errorCode: ERROR_CODES.WISH4091,
-        });
-      }
-
       if (
         decisionType === 'DELAY' &&
-        latestItem.waitUntil &&
+        latestItem?.waitUntil &&
         now < new Date(latestItem.waitUntil)
       ) {
         throw new HttpError(400, '아직 재판단 시간이 되지 않았습니다.', {
           errorCode: ERROR_CODES.WISH4003,
         });
+      }
+
+      if (latestItem && latestItem.status === 'DECIDED') {
+        const existingDecision = await tx.wishlistDecision.findFirst({
+          where: {
+            wishlistItemId: temptationId,
+            decisionType,
+          },
+          orderBy: { decidedAt: 'desc' },
+        });
+
+        if (existingDecision) {
+          return existingDecision;
+        }
       }
 
       throw new HttpError(409, '이미 처리가 완료되었거나 중복된 요청입니다.', {
@@ -139,7 +147,9 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
       },
     });
 
-    if (decisionType === 'SKIP') {
+    if (decisionType === 'BUY' || decisionType === 'SKIP') {
+      const recordType = decisionType === 'BUY' ? 'CONSUMED' : 'SKIPPED';
+
       await tx.consumptionRecord.create({
         data: {
           userId,
@@ -148,11 +158,12 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
           categoryCode: temptation.categoryCode ?? null,
           productUrl: temptation.productUrl ?? null,
           reason: temptation.reason ?? null,
-          type: 'SKIPPED',
+          type: recordType,
           occurredAt: now,
         },
       });
     }
+
     if (decisionType === 'DELAY') {
       const updatedCount = await tx.notification.updateMany({
         where: {
