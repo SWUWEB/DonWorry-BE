@@ -253,6 +253,7 @@ test('POST /api/v1/temptations/:temptationId/decisions - 대기 시간이 지난
       decisionType: 'DELAY',
       selectedWaitType: '1D',
     });
+  const afterFirstReq = Date.now();
 
   assert.equal(firstResponse.status, 201);
 
@@ -260,13 +261,16 @@ test('POST /api/v1/temptations/:temptationId/decisions - 대기 시간이 지난
   assert.equal(updatedItem.waitType, 'ONE_DAY');
 
   const firstWaitUntil = new Date(updatedItem.waitUntil).getTime();
-  assert.ok(firstWaitUntil >= beforeFirstReq + 1000 * 60 * 60 * 24 - 5000);
+  const firstExpectedMin = beforeFirstReq + 1000 * 60 * 60 * 24 - 5000;
+  const firstExpectedMax = afterFirstReq + 1000 * 60 * 60 * 24 + 5000;
+  assert.ok(firstWaitUntil >= firstExpectedMin && firstWaitUntil <= firstExpectedMax);
 
   await prisma.wishlistItem.update({
     where: { id: item.id },
     data: { waitUntil: new Date(Date.now() - 1000 * 60) },
   });
 
+  const beforeSecondReq = Date.now();
   const secondResponse = await request(app)
     .post(`/api/v1/temptations/${item.id}/decisions`)
     .set('Authorization', `Bearer ${accessToken}`)
@@ -274,11 +278,17 @@ test('POST /api/v1/temptations/:temptationId/decisions - 대기 시간이 지난
       decisionType: 'DELAY',
       selectedWaitType: '1H',
     });
+  const afterSecondReq = Date.now();
 
   assert.equal(secondResponse.status, 201);
 
   updatedItem = await prisma.wishlistItem.findUnique({ where: { id: item.id } });
   assert.equal(updatedItem.waitType, 'ONE_HOUR');
+
+  const secondWaitUntil = new Date(updatedItem.waitUntil).getTime();
+  const secondExpectedMin = beforeSecondReq + 1000 * 60 * 60 - 5000;
+  const secondExpectedMax = afterSecondReq + 1000 * 60 * 60 + 5000;
+  assert.ok(secondWaitUntil >= secondExpectedMin && secondWaitUntil <= secondExpectedMax);
 });
 
 test('POST /api/v1/temptations/:temptationId/decisions - DELAY 요청 시 selectedWaitType 누락 시 400 에러를 반환한다', async () => {
