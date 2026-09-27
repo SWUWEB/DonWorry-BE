@@ -79,13 +79,15 @@ export const createConsumptionRecord = async ({ userId, data }) => {
     reason,
     occurredAt,
     riskScore,
+    categoryCode,
     category_code,
     interventionAnswers,
   } = data;
 
-  const categoryLabel = category_code ? CATEGORY_MAP[category_code] : undefined;
+  const resolvedCategoryCode = categoryCode ?? category_code;
+  const categoryLabel = resolvedCategoryCode ? CATEGORY_MAP[resolvedCategoryCode] : undefined;
 
-  if (category_code && !CATEGORY_CODE_SET.has(category_code)) {
+  if (resolvedCategoryCode && !CATEGORY_CODE_SET.has(resolvedCategoryCode)) {
     throw new HttpError(400, '허용되지 않은 카테고리 코드입니다.', {
       errorCode: ERROR_CODES.CONSUMPTION_RECORD4002,
     });
@@ -122,7 +124,7 @@ export const createConsumptionRecord = async ({ userId, data }) => {
     occurredAt: occurred,
     urlParseSuccess: false,
     riskScore: typeof riskScore === 'number' ? riskScore : null,
-    categoryCode: category_code ? String(category_code) : null,
+    categoryCode: resolvedCategoryCode ? String(resolvedCategoryCode) : null,
     categoryLabel: categoryLabel ?? null,
   };
 
@@ -259,19 +261,21 @@ const buildUpdateData = (data) => {
   if (data.occurredAt !== undefined) updateData.occurredAt = resolveOccurredAt(data.occurredAt);
   if (data.riskScore !== undefined) updateData.riskScore = data.riskScore;
 
-  if (data.category_code !== undefined) {
-    if (data.category_code === null) {
+  const categoryValue = data.categoryCode !== undefined ? data.categoryCode : data.category_code;
+
+  if (categoryValue !== undefined) {
+    if (categoryValue === null) {
       updateData.categoryCode = null;
       updateData.categoryLabel = null;
       return updateData;
     }
-    if (!CATEGORY_CODE_SET.has(data.category_code)) {
+    if (!CATEGORY_CODE_SET.has(categoryValue)) {
       throw new HttpError(400, '허용되지 않은 카테고리 코드입니다.', {
         errorCode: ERROR_CODES.CONSUMPTION_RECORD4002,
       });
     }
-    updateData.categoryCode = String(data.category_code);
-    updateData.categoryLabel = CATEGORY_MAP[data.category_code];
+    updateData.categoryCode = String(categoryValue);
+    updateData.categoryLabel = CATEGORY_MAP[categoryValue];
   }
 
   return updateData;

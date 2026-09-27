@@ -60,51 +60,55 @@ const isValidIsoDatetime = (value) => {
   return true;
 };
 
+const categoryCodeSchema = z
+  .string()
+  .max(50)
+  .optional()
+  .refine((v) => v === undefined || CATEGORY_CODE_SET.has(v), {
+    message: 'Invalid category code',
+  });
+
+const createConsumptionRecordBodySchema = z.object({
+  type: z.enum(['CONSUMED', 'SKIPPED']),
+  productName: z.string().min(1).max(255),
+  price: z.coerce.number().min(0),
+  productUrl: z.string().url().optional(),
+  reason: z.string().max(255).optional(),
+  occurredAt: z
+    .string()
+    .optional()
+    .refine(
+      (v) => v === undefined || (typeof v === 'string' && v.trim() !== '' && isValidIsoDatetime(v)),
+      {
+        message: 'occurredAt must be a non-empty ISO datetime string',
+      },
+    ),
+  riskScore: z.number().int().min(0).max(5).optional(),
+  categoryCode: categoryCodeSchema.optional(),
+  category_code: categoryCodeSchema.optional().describe('Deprecated alias for categoryCode'),
+  interventionAnswers: z
+    .array(z.object({ questionId: z.coerce.bigint().positive(), answerValue: z.boolean() }))
+    .optional()
+    .superRefine((answers, ctx) => {
+      if (!answers) return;
+      const seen = new Set();
+      answers.forEach((answer, index) => {
+        const key = answer.questionId.toString();
+        if (seen.has(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Duplicate questionId in interventionAnswers is not allowed.',
+            path: [index, 'questionId'],
+          });
+        } else {
+          seen.add(key);
+        }
+      });
+    }),
+});
+
 export const createConsumptionRecordDto = z.object({
-  body: z.object({
-    type: z.enum(['CONSUMED', 'SKIPPED']),
-    productName: z.string().min(1).max(255),
-    price: z.coerce.number().min(0),
-    productUrl: z.string().url().optional(),
-    reason: z.string().max(255).optional(),
-    occurredAt: z
-      .string()
-      .optional()
-      .refine(
-        (v) =>
-          v === undefined || (typeof v === 'string' && v.trim() !== '' && isValidIsoDatetime(v)),
-        {
-          message: 'occurredAt must be a non-empty ISO datetime string',
-        },
-      ),
-    riskScore: z.number().int().min(0).max(5).optional(),
-    category_code: z
-      .string()
-      .max(50)
-      .optional()
-      .refine((v) => v === undefined || CATEGORY_CODE_SET.has(v), {
-        message: 'Invalid category code',
-      }),
-    interventionAnswers: z
-      .array(z.object({ questionId: z.coerce.bigint().positive(), answerValue: z.boolean() }))
-      .optional()
-      .superRefine((answers, ctx) => {
-        if (!answers) return;
-        const seen = new Set();
-        answers.forEach((answer, index) => {
-          const key = answer.questionId.toString();
-          if (seen.has(key)) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: 'Duplicate questionId in interventionAnswers is not allowed.',
-              path: [index, 'questionId'],
-            });
-          } else {
-            seen.add(key);
-          }
-        });
-      }),
-  }),
+  body: createConsumptionRecordBodySchema,
 });
 
 export const validateConsumptionRecord = (dto) => (req, res, next) => {
@@ -114,6 +118,10 @@ export const validateConsumptionRecord = (dto) => (req, res, next) => {
     params: req.params,
   });
   if (result.success) {
+    const body = result.data.body ?? result.data;
+    if (body && body.categoryCode === undefined && body.category_code !== undefined) {
+      body.categoryCode = body.category_code;
+    }
     req.validated = result.data;
     return next();
   }
@@ -126,7 +134,14 @@ export const validateConsumptionRecord = (dto) => (req, res, next) => {
   if (issues.some((i) => i.path && i.path[0] === 'body' && i.path[1] === 'occurredAt')) {
     code = ERROR_CODES.CONSUMPTION_RECORD4001;
     message = 'occurredAt은 유효한 ISO 8601 날짜/시간 문자열이어야 합니다.';
-  } else if (issues.some((i) => i.path && i.path[0] === 'body' && i.path[1] === 'category_code')) {
+  } else if (
+    issues.some(
+      (i) =>
+        i.path &&
+        i.path[0] === 'body' &&
+        (i.path[1] === 'categoryCode' || i.path[1] === 'category_code'),
+    )
+  ) {
     code = ERROR_CODES.CONSUMPTION_RECORD4002;
     message = '허용되지 않은 카테고리 코드입니다.';
   } else if (issues.some((i) => i.message && i.message.includes('Duplicate questionId'))) {
@@ -147,13 +162,14 @@ export const validateConsumptionRecord = (dto) => (req, res, next) => {
   });
 };
 
-const updateConsumptionRecordBodyDto = createConsumptionRecordDto.shape.body
+const updateConsumptionRecordBodyDto = createConsumptionRecordBodySchema
   .partial()
   .extend({
-    productUrl: createConsumptionRecordDto.shape.body.shape.productUrl.optional().nullable(),
-    reason: createConsumptionRecordDto.shape.body.shape.reason.optional().nullable(),
-    riskScore: createConsumptionRecordDto.shape.body.shape.riskScore.optional().nullable(),
-    category_code: createConsumptionRecordDto.shape.body.shape.category_code.optional().nullable(),
+    productUrl: createConsumptionRecordBodySchema.shape.productUrl.optional().nullable(),
+    reason: createConsumptionRecordBodySchema.shape.reason.optional().nullable(),
+    riskScore: createConsumptionRecordBodySchema.shape.riskScore.optional().nullable(),
+    categoryCode: createConsumptionRecordBodySchema.shape.categoryCode.optional().nullable(),
+    category_code: createConsumptionRecordBodySchema.shape.category_code.optional().nullable(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: '수정할 필드가 최소 1개 이상 필요합니다.',
