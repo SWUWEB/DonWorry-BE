@@ -52,6 +52,25 @@ test('새 비밀번호 정책은 ASCII와 멀티바이트 입력의 72바이트 
   }
 });
 
+test('특수문자 정책은 공백과 일반 문자를 제외하고 Unicode 문장부호·기호를 허용한다', () => {
+  const scenarios = [
+    [signupDto, signupBody],
+    [passwordResetConfirmDto, resetBody],
+    [changePasswordDto, changeBody],
+  ];
+
+  for (const [dto, body] of scenarios) {
+    for (const password of ['Password1 ', 'Password1\t', 'Password1가']) {
+      const result = dto.safeParse({ body: body(password) });
+      assert.equal(result.success, false);
+      assert.match(result.error.message, /특수문자가 1개 이상 포함되어야 합니다/);
+    }
+    for (const password of ['Password1!', 'Password1！', 'Password1🔒']) {
+      assert.equal(dto.safeParse({ body: body(password) }).success, true);
+    }
+  }
+});
+
 test('회원가입, 재설정, 변경은 같은 새 비밀번호 정책을 사용한다', () => {
   const scenarios = [
     [signupDto, signupBody],
