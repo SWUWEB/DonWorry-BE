@@ -3293,7 +3293,7 @@ export const openApiDocument = {
                   errors: {
                     formErrors: [],
                     fieldErrors: {
-                      categoryCode: ['유효한 카테고리 코드가 아닙니다.'],
+                      query: ['유효한 카테고리 코드가 아닙니다.'],
                     },
                   },
                 },
@@ -3309,7 +3309,7 @@ export const openApiDocument = {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean', example: true },
-                    totalCount: { type: 'integer', example: 6, description: '전체 항목 개수' },
+                    totalCount: { type: 'integer', example: 6, description: '전체 유혹 개수' },
                     data: {
                       type: 'array',
                       items: {
@@ -3361,11 +3361,7 @@ export const openApiDocument = {
                             nullable: true,
                             example: '2026-07-23T18:00:00.000Z',
                           },
-                          status: {
-                            type: 'string',
-                            enum: ['WAITING', 'DECIDED_BUY', 'DECIDED_CANCEL', 'EXPIRED'],
-                            example: 'WAITING',
-                          },
+                          status: { type: 'string', example: 'WAITING' },
                           createdAt: {
                             type: 'string',
                             format: 'date-time',
@@ -3782,15 +3778,10 @@ export const openApiDocument = {
                       properties: {
                         id: { type: 'string', example: '6' },
                         wishlistItemId: { type: 'string', example: '2' },
-                        decisionType: {
-                          type: 'string',
-                          enum: ['BUY', 'CANCEL', 'DELAY'],
-                          example: 'DELAY',
-                          description: '재판단 결과 (BUY: 구매, CANCEL: 포기, DELAY: 연장)',
-                        },
+                        decisionType: { type: 'string', example: 'DELAY' },
                         selectedWaitType: {
                           type: 'string',
-                          enum: ['1H', '1D', '3D', '1W'],
+                          enum: ['1H', '1D', '3D', '1W', null],
                           nullable: true,
                           example: '1D',
                           description:
