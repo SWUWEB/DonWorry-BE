@@ -1470,7 +1470,7 @@ export const openApiDocument = {
       post: {
         ...publicJsonOperation('Auth', '회원가입', signupDto),
         description:
-          '새 비밀번호는 8자 이상, 영문·숫자·특수문자를 포함하고 UTF-8 기준 72바이트 이하여야 합니다.',
+          '새 비밀번호는 8~100자이며 영문·숫자·문장부호 또는 기호를 포함하고, UTF-8 기준 72바이트 이하여야 합니다.',
         responses: {
           201: {
             description: 'Signup completed',
@@ -1856,7 +1856,7 @@ export const openApiDocument = {
       patch: {
         ...publicJsonOperation('Auth', '비밀번호 재설정 완료', passwordResetConfirmDto),
         description:
-          '이메일로 발급된 인증 코드를 확인해 비밀번호를 변경하고, 해당 사용자의 기존 리프레시 토큰을 모두 폐기합니다. 새 비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.',
+          '이메일로 발급된 인증 코드를 확인해 비밀번호를 변경하고, 해당 사용자의 기존 리프레시 토큰을 모두 폐기합니다. 새 비밀번호는 8~100자이며 영문·숫자·문장부호 또는 기호를 포함하고, UTF-8 기준 72바이트 이하여야 합니다.',
         responses: {
           200: {
             description: 'Password reset completed',
@@ -2170,7 +2170,7 @@ export const openApiDocument = {
       patch: {
         ...securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),
         description:
-          '현재 비밀번호와 새 비밀번호는 UTF-8 기준 72바이트 이하여야 합니다. 기존에 더 긴 비밀번호를 설정했다면 이메일로 비밀번호를 재설정해야 합니다.',
+          '현재 비밀번호는 UTF-8 기준 72바이트 이하여야 합니다. 새 비밀번호는 8~100자이며 영문·숫자·문장부호 또는 기호를 포함하고, UTF-8 기준 72바이트 이하여야 합니다. 기존에 더 긴 비밀번호를 설정했다면 이메일로 비밀번호를 재설정해야 합니다.',
         responses: {
           200: {
             description: '비밀번호가 변경되었습니다.',
