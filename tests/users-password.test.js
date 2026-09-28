@@ -137,7 +137,7 @@ test('PATCH /api/v1/users/me/password validates the new password policy', async 
   assert.equal(response.body.code, 'COMMON4001');
   assert.match(
     JSON.stringify(response.body.errors),
-    /8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요\./,
+    /비밀번호에는 숫자가 1개 이상 포함되어야 합니다\./,
   );
 });
 
