@@ -3349,11 +3349,11 @@ export const openApiDocument = {
                             nullable: true,
                             example: '개발 작업용 스펙 업그레이드',
                           },
-                          waitType: { 
-                            type: 'string', 
+                          waitType: {
+                            type: 'string',
                             enum: ['1H', '1D', '3D', '1W'],
                             example: '1W',
-                            description: '대기 기간 옵션 (1H: 1시간, 1D: 1일, 3D: 3일, 1W: 1주일)'
+                            description: '대기 기간 옵션 (1H: 1시간, 1D: 1일, 3D: 3일, 1W: 1주일)',
                           },
                           waitUntil: {
                             type: 'string',
@@ -3361,10 +3361,10 @@ export const openApiDocument = {
                             nullable: true,
                             example: '2026-07-23T18:00:00.000Z',
                           },
-                          status: { 
-                            type: 'string', 
+                          status: {
+                            type: 'string',
                             enum: ['WAITING', 'DECIDED_BUY', 'DECIDED_CANCEL', 'EXPIRED'],
-                            example: 'WAITING' 
+                            example: 'WAITING',
                           },
                           createdAt: {
                             type: 'string',
@@ -3445,10 +3445,10 @@ export const openApiDocument = {
                           nullable: true,
                           example: '개발 작업용 스펙 업그레이드',
                         },
-                        waitType: { 
-                          type: 'string', 
+                        waitType: {
+                          type: 'string',
                           enum: ['1H', '1D', '3D', '1W'],
-                          example: '1W' 
+                          example: '1W',
                         },
                         waitUntil: {
                           type: 'string',
@@ -3527,10 +3527,10 @@ export const openApiDocument = {
                           nullable: true,
                           example: '개발 작업용 스펙 업그레이드',
                         },
-                        waitType: { 
-                          type: 'string', 
+                        waitType: {
+                          type: 'string',
                           enum: ['1H', '1D', '3D', '1W'],
-                          example: '1W' 
+                          example: '1W',
                         },
                         waitUntil: {
                           type: 'string',
@@ -3637,10 +3637,10 @@ export const openApiDocument = {
                           nullable: true,
                           example: '필기 및 드로잉용',
                         },
-                        waitType: { 
-                          type: 'string', 
+                        waitType: {
+                          type: 'string',
                           enum: ['1H', '1D', '3D', '1W'],
-                          example: '1D' 
+                          example: '1D',
                         },
                         waitUntil: {
                           type: 'string',
@@ -3778,34 +3778,31 @@ export const openApiDocument = {
                     success: { type: 'boolean', example: true },
                     data: {
                       type: 'object',
-                      required: [
-                        'id',
-                        'wishlistItemId',
-                        'decisionType',
-                        'decidedAt',
-                      ],
+                      required: ['id', 'wishlistItemId', 'decisionType', 'decidedAt'],
                       properties: {
                         id: { type: 'string', example: '6' },
                         wishlistItemId: { type: 'string', example: '2' },
-                        decisionType: { 
-                          type: 'string', 
+                        decisionType: {
+                          type: 'string',
                           enum: ['BUY', 'CANCEL', 'DELAY'],
                           example: 'DELAY',
-                          description: '재판단 결과 (BUY: 구매, CANCEL: 포기, DELAY: 연장)'
+                          description: '재판단 결과 (BUY: 구매, CANCEL: 포기, DELAY: 연장)',
                         },
-                        selectedWaitType: { 
-                          type: 'string', 
+                        selectedWaitType: {
+                          type: 'string',
                           enum: ['1H', '1D', '3D', '1W'],
                           nullable: true,
                           example: '1D',
-                          description: '연장 시 선택한 대기 기간 옵션 (DELAY일 때 필수, 그 외 null)'
+                          description:
+                            '연장 시 선택한 대기 기간 옵션 (DELAY일 때 필수, 그 외 null)',
                         },
                         selectedWaitUntil: {
                           type: 'string',
                           format: 'date-time',
                           nullable: true,
                           example: '2026-08-01T14:37:35.850Z',
-                          description: '연장 시 변경된 대기 완료 일시 (DELAY일 때 필수, 그 외 null)'
+                          description:
+                            '연장 시 변경된 대기 완료 일시 (DELAY일 때 필수, 그 외 null)',
                         },
                         decidedAt: {
                           type: 'string',

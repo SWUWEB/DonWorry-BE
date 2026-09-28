@@ -20,7 +20,9 @@ const serializeWishlistItem = (item) => {
     id: item.id.toString(),
     userId: item.userId.toString(),
     price: item.price ? item.price.toString() : null,
-    waitType: item.waitType ? (PRISMA_TO_API_WAIT_TYPE_MAP[item.waitType] || item.waitType) : item.waitType,
+    waitType: item.waitType
+      ? PRISMA_TO_API_WAIT_TYPE_MAP[item.waitType] || item.waitType
+      : item.waitType,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };

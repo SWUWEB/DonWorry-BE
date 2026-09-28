@@ -197,7 +197,7 @@ test('POST /api/v1/temptations/:temptationId/decisions - 최초 DELAY 시 status
 
   const updatedItem = await prisma.wishlistItem.findUnique({ where: { id: item.id } });
   assert.equal(updatedItem.status, 'WAITING');
-  assert.equal(updatedItem.waitType, '1H');
+  assert.equal(updatedItem.waitType, 'ONE_HOUR');
 
   const waitUntilTime = new Date(updatedItem.waitUntil).getTime();
   const expectedMin = beforeReq + 1000 * 60 * 60 - 5000;
@@ -214,7 +214,7 @@ test('POST /api/v1/temptations/:temptationId/decisions - 아직 대기 시간이
       price: 150000,
       categoryCode: 'ELECTRONICS',
       status: 'WAITING',
-      waitType: '1H',
+      waitType: 'ONE_HOUR',
       waitUntil: futureTime,
     },
   });
@@ -240,7 +240,7 @@ test('POST /api/v1/temptations/:temptationId/decisions - 대기 시간이 지난
       price: 300000,
       categoryCode: 'ELECTRONICS',
       status: 'WAITING',
-      waitType: '1H',
+      waitType: 'ONE_HOUR',
       waitUntil: pastTime,
     },
   });
@@ -258,7 +258,7 @@ test('POST /api/v1/temptations/:temptationId/decisions - 대기 시간이 지난
   assert.equal(firstResponse.status, 201);
 
   let updatedItem = await prisma.wishlistItem.findUnique({ where: { id: item.id } });
-  assert.equal(updatedItem.waitType, '1D');
+  assert.equal(updatedItem.waitType, 'ONE_DAY');
 
   const firstWaitUntil = new Date(updatedItem.waitUntil).getTime();
   const firstExpectedMin = beforeFirstReq + 1000 * 60 * 60 * 24 - 5000;
@@ -283,7 +283,7 @@ test('POST /api/v1/temptations/:temptationId/decisions - 대기 시간이 지난
   assert.equal(secondResponse.status, 201);
 
   updatedItem = await prisma.wishlistItem.findUnique({ where: { id: item.id } });
-  assert.equal(updatedItem.waitType, '1H');
+  assert.equal(updatedItem.waitType, 'ONE_HOUR');
 
   const secondWaitUntil = new Date(updatedItem.waitUntil).getTime();
   const secondExpectedMin = beforeSecondReq + 1000 * 60 * 60 - 5000;

@@ -20,7 +20,7 @@ const serializeWishlistDecision = (decision) => {
     id: decision.id.toString(),
     wishlistItemId: decision.wishlistItemId.toString(),
     selectedWaitType: decision.selectedWaitType
-      ? (PRISMA_TO_API_WAIT_TYPE_MAP[decision.selectedWaitType] || decision.selectedWaitType)
+      ? PRISMA_TO_API_WAIT_TYPE_MAP[decision.selectedWaitType] || decision.selectedWaitType
       : decision.selectedWaitType,
     selectedWaitUntil: decision.selectedWaitUntil ? decision.selectedWaitUntil.toISOString() : null,
     decidedAt: decision.decidedAt ? decision.decidedAt.toISOString() : null,
