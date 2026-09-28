@@ -66,6 +66,7 @@ test.before(async () => {
         price: 2500000,
         categoryCode: 'ELECTRONICS',
         status: 'WAITING',
+        waitType: 'ONE_DAY',
         waitUntil: new Date(now.getTime() + 1000 * 60 * 60 * 24),
       },
       {
@@ -74,6 +75,7 @@ test.before(async () => {
         price: 1500000,
         categoryCode: 'ELECTRONICS',
         status: 'WAITING',
+        waitType: 'ONE_HOUR',
         waitUntil: new Date(now.getTime() + 1000 * 60 * 60),
       },
       {
@@ -82,6 +84,7 @@ test.before(async () => {
         price: 120000,
         categoryCode: 'FASHION',
         status: 'WAITING',
+        waitType: 'ONE_HOUR',
         waitUntil: new Date(now.getTime() + 1000 * 60 * 60 * 2),
       },
     ],
@@ -107,6 +110,7 @@ test('GET /api/v1/wishlist-items - 검색어(query) 조건으로 항목을 필�
   assert.ok(Array.isArray(items));
   assert.equal(items.length, 2);
   assert.ok(items.every((item) => item.productName.includes('맥북')));
+  assert.ok(items.every((item) => item.waitType === '1D' || item.waitType === '1H'));
 });
 
 test('GET /api/v1/wishlist-items - 카테고리(categoryCode) 조건으로 항목을 필터링하여 조회한다', async () => {
@@ -169,6 +173,7 @@ test('GET /api/v1/wishlist-items - 대기시간 마감임박순(DEADLINE_ASC) �
   assert.equal(items[0].productName, '맥북 에어 M2');
   assert.equal(items[1].productName, '나이키 운동화');
   assert.equal(items[2].productName, '맥북 프로 M3');
+  assert.equal(items[0].waitType, '1H');
 });
 
 test('GET /api/v1/wishlist-items - 검색, 카테고리, 정렬, 페이징(2페이지) 조합 조건 시 올바른 totalCount와 목록을 반환한다', async () => {
@@ -191,4 +196,5 @@ test('GET /api/v1/wishlist-items - 검색, 카테고리, 정렬, 페이징(2페�
   assert.ok(Array.isArray(items));
   assert.equal(items.length, 1);
   assert.equal(items[0].productName, '맥북 프로 M3');
+  assert.equal(items[0].waitType, '1D');
 });

@@ -194,6 +194,7 @@ test('POST /api/v1/temptations/:temptationId/decisions - 최초 DELAY 시 status
 
   assert.equal(response.status, 201);
   assert.equal(response.body.success, true);
+  assert.equal(response.body.data.selectedWaitType, '1H');
 
   const updatedItem = await prisma.wishlistItem.findUnique({ where: { id: item.id } });
   assert.equal(updatedItem.status, 'WAITING');
@@ -256,6 +257,7 @@ test('POST /api/v1/temptations/:temptationId/decisions - 대기 시간이 지난
   const afterFirstReq = Date.now();
 
   assert.equal(firstResponse.status, 201);
+  assert.equal(firstResponse.body.data.selectedWaitType, '1D');
 
   let updatedItem = await prisma.wishlistItem.findUnique({ where: { id: item.id } });
   assert.equal(updatedItem.waitType, 'ONE_DAY');
@@ -281,6 +283,7 @@ test('POST /api/v1/temptations/:temptationId/decisions - 대기 시간이 지난
   const afterSecondReq = Date.now();
 
   assert.equal(secondResponse.status, 201);
+  assert.equal(secondResponse.body.data.selectedWaitType, '1H');
 
   updatedItem = await prisma.wishlistItem.findUnique({ where: { id: item.id } });
   assert.equal(updatedItem.waitType, 'ONE_HOUR');
