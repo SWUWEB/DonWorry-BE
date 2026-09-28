@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CATEGORY_CODES } from '../../config/categories.js';
+import { newPasswordSchema, passwordCredentialSchema } from '../auth/password.schema.js';
 
 const name = z
   .string()
@@ -67,19 +68,8 @@ export const updateMeDto = z.object({
 export const changePasswordDto = z.object({
   body: z
     .object({
-      currentPassword: z
-        .string({ error: '현재 비밀번호를 입력해주세요.' })
-        .min(1, '현재 비밀번호를 입력해주세요.'),
-      newPassword: z
-        .string({ error: '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.' })
-        .min(8, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .max(100, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .regex(/[A-Za-z]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .regex(/[0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .regex(/[^A-Za-z0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .refine((value) => Buffer.byteLength(value, 'utf8') <= 72, {
-          message: '비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.',
-        }),
+      currentPassword: passwordCredentialSchema('현재 비밀번호를 입력해주세요.'),
+      newPassword: newPasswordSchema,
       newPasswordConfirm: z
         .string({ error: '새 비밀번호를 다시 입력해주세요.' })
         .min(1, '새 비밀번호를 다시 입력해주세요.'),
@@ -151,7 +141,7 @@ export const notificationSettingsDto = z.object({
 
 export const deleteUserDto = z.object({
   body: z.object({
-    password: z.string().min(1, '비밀번호를 입력해주세요.'),
+    password: passwordCredentialSchema('비밀번호를 입력해주세요.'),
     reasonType: z
       .enum([
         'LOW_FREQUENCY',

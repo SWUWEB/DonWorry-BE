@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { newPasswordSchema, passwordCredentialSchema } from './password.schema.js';
 
 const email = z
   .string()
@@ -10,13 +11,6 @@ const loginId = z
   .string()
   .trim()
   .regex(/^[A-Za-z0-9]{6,12}$/, '아이디는 영문, 숫자 조합 6~12자여야 합니다.');
-const password = z
-  .string()
-  .min(8, '비밀번호는 8자 이상이어야 합니다.')
-  .max(100, '비밀번호는 100자 이하여야 합니다.')
-  .regex(/[A-Za-z]/, '비밀번호에는 영문자가 1개 이상 포함되어야 합니다.')
-  .regex(/[0-9]/, '비밀번호에는 숫자가 1개 이상 포함되어야 합니다.')
-  .regex(/[^A-Za-z0-9]/, '비밀번호에는 특수문자가 1개 이상 포함되어야 합니다.');
 const name = z.string().trim().min(1, '이름은 필수입니다.').max(50, '이름은 50자 이하여야 합니다.');
 const phoneNumber = z
   .string()
@@ -39,7 +33,7 @@ export const signupDto = z.object({
       loginId,
       email,
       emailVerificationToken: z.string().min(1, '이메일 인증이 필요합니다.'),
-      password,
+      password: newPasswordSchema,
       passwordConfirm: z.string().min(1, '비밀번호 확인은 필수입니다.'),
       phoneNumber,
     })
@@ -50,7 +44,7 @@ export const signupDto = z.object({
 });
 
 export const loginDto = z.object({
-  body: z.object({ loginId, password }).strict(),
+  body: z.object({ loginId, password: passwordCredentialSchema() }).strict(),
 });
 
 export const logoutDto = z.object({
@@ -67,7 +61,7 @@ export const kakaoLinkPasswordDto = z.object({
   body: z
     .object({
       linkingToken: z.string().trim().min(1, '계정 연결 토큰은 필수입니다.'),
-      password: z.string().min(1, '비밀번호는 필수입니다.'),
+      password: passwordCredentialSchema(),
     })
     .strict(),
 });
@@ -118,7 +112,7 @@ export const passwordResetConfirmDto = z.object({
     .object({
       email,
       code: emailVerificationCode,
-      newPassword: password,
+      newPassword: newPasswordSchema,
       newPasswordConfirm: z.string().min(1, '비밀번호 확인은 필수입니다.'),
     })
     .strict()
