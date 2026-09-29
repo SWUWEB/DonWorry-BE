@@ -79,6 +79,15 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
       });
     }
 
+    if (
+      (decisionType === 'BUY' || decisionType === 'SKIP') &&
+      (temptation.price === null || temptation.price === undefined)
+    ) {
+      throw new HttpError(400, '가격 정보가 없는 항목은 결정을 진행할 수 없습니다.', {
+        errorCode: ERROR_CODES.WISH4004 || ERROR_CODES.WISH4001,
+      });
+    }
+
     const now = new Date();
     const whereCondition = {
       id: temptationId,

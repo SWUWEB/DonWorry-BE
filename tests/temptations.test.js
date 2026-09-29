@@ -360,3 +360,23 @@ test('POST /api/v1/temptations/:temptationId/decisions - 타인의 위시리스�
   assert.equal(response.status, 403);
   assert.equal(response.body.code, 'WISH4031');
 });
+
+test('POST /api/v1/temptations/:temptationId/decisions - 가격 정보가 없는 항목에 대해 BUY 요청 시 400 에러를 반환한다', async () => {
+  const item = await prisma.wishlistItem.create({
+    data: {
+      userId: testUser.id,
+      productName: '가격 없는 테스트 상품',
+      price: null,
+      categoryCode: 'ELECTRONICS',
+      status: 'WAITING',
+    },
+  });
+
+  const response = await request(app)
+    .post(`/api/v1/temptations/${item.id}/decisions`)
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ decisionType: 'BUY' });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'WISH4004');
+});

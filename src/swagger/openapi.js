@@ -3835,6 +3835,14 @@ export const openApiDocument = {
                       message: '아직 고민 시간이 끝나지 않아 추가 연장을 할 수 없습니다.',
                     },
                   },
+                  MISSING_PRICE: {
+                    summary: '결정 진행 시 가격 정보 없음 (WISH4004)',
+                    value: {
+                      success: false,
+                      code: 'WISH4004',
+                      message: '가격 정보가 없는 항목은 결정을 진행할 수 없습니다.',
+                    },
+                  },
                 },
               },
             },
