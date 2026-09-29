@@ -3762,7 +3762,11 @@ export const openApiDocument = {
     },
     '/api/v1/temptations/{temptationId}/decisions': {
       post: {
-        ...securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+        ...securedJsonOperation(
+          'Temptations',
+          '재판단 기록 추가 (BUY 또는 SKIP 선택 시 소비 기록[CONSUMED/SKIPPED]이 백엔드에서 자동 생성됩니다)',
+          createWishlistDecisionDto,
+        ),
         responses: {
           201: {
             description: '재판단 기록 추가 성공',

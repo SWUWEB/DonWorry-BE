@@ -153,6 +153,22 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
         },
       });
     }
+
+    if (decisionType === 'BUY') {
+      await tx.consumptionRecord.create({
+        data: {
+          userId,
+          productName: temptation.productName,
+          price: temptation.price?.toString() ?? null,
+          categoryCode: temptation.categoryCode ?? null,
+          productUrl: temptation.productUrl ?? null,
+          reason: temptation.reason ?? null,
+          type: 'CONSUMED',
+          occurredAt: now,
+        },
+      });
+    }
+
     if (decisionType === 'DELAY') {
       const updatedCount = await tx.notification.updateMany({
         where: {
