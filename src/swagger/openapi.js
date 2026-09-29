@@ -3349,7 +3349,12 @@ export const openApiDocument = {
                             nullable: true,
                             example: '개발 작업용 스펙 업그레이드',
                           },
-                          waitType: { type: 'string', example: 'ONE_WEEK' },
+                          waitType: {
+                            type: 'string',
+                            enum: ['1H', '1D', '3D', '1W'],
+                            example: '1W',
+                            description: '대기 기간 옵션 (1H: 1시간, 1D: 1일, 3D: 3일, 1W: 1주일)',
+                          },
                           waitUntil: {
                             type: 'string',
                             format: 'date-time',
@@ -3380,6 +3385,16 @@ export const openApiDocument = {
       post: {
         ...securedJsonOperation('WishlistItems', '위시리스트 추가', createWishlistItemDto),
         responses: {
+          400: {
+            description: '유효성 검증 실패 (잘못된 바디 요청)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ValidationErrorResponse',
+                },
+              },
+            },
+          },
           401: { $ref: '#/components/responses/Unauthorized' },
           201: {
             description: '위시리스트 추가 성공',
@@ -3426,7 +3441,11 @@ export const openApiDocument = {
                           nullable: true,
                           example: '개발 작업용 스펙 업그레이드',
                         },
-                        waitType: { type: 'string', example: 'ONE_WEEK' },
+                        waitType: {
+                          type: 'string',
+                          enum: ['1H', '1D', '3D', '1W'],
+                          example: '1W',
+                        },
                         waitUntil: {
                           type: 'string',
                           format: 'date-time',
@@ -3504,7 +3523,11 @@ export const openApiDocument = {
                           nullable: true,
                           example: '개발 작업용 스펙 업그레이드',
                         },
-                        waitType: { type: 'string', example: 'ONE_WEEK' },
+                        waitType: {
+                          type: 'string',
+                          enum: ['1H', '1D', '3D', '1W'],
+                          example: '1W',
+                        },
                         waitUntil: {
                           type: 'string',
                           format: 'date-time',
@@ -3610,7 +3633,11 @@ export const openApiDocument = {
                           nullable: true,
                           example: '필기 및 드로잉용',
                         },
-                        waitType: { type: 'string', example: 'ONE_DAY' },
+                        waitType: {
+                          type: 'string',
+                          enum: ['1H', '1D', '3D', '1W'],
+                          example: '1D',
+                        },
                         waitUntil: {
                           type: 'string',
                           format: 'date-time',
@@ -3747,15 +3774,26 @@ export const openApiDocument = {
                     success: { type: 'boolean', example: true },
                     data: {
                       type: 'object',
+                      required: ['id', 'wishlistItemId', 'decisionType', 'decidedAt'],
                       properties: {
                         id: { type: 'string', example: '6' },
                         wishlistItemId: { type: 'string', example: '2' },
                         decisionType: { type: 'string', example: 'DELAY' },
-                        selectedWaitType: { type: 'string', example: 'ONE_DAY' },
+                        selectedWaitType: {
+                          type: 'string',
+                          enum: ['1H', '1D', '3D', '1W', null],
+                          nullable: true,
+                          example: '1D',
+                          description:
+                            '연장 시 선택한 대기 기간 옵션 (DELAY일 때 필수, 그 외 null)',
+                        },
                         selectedWaitUntil: {
                           type: 'string',
                           format: 'date-time',
+                          nullable: true,
                           example: '2026-08-01T14:37:35.850Z',
+                          description:
+                            '연장 시 변경된 대기 완료 일시 (DELAY일 때 필수, 그 외 null)',
                         },
                         decidedAt: {
                           type: 'string',
