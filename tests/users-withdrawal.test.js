@@ -251,6 +251,33 @@ test('password account linked to Kakao uses the admin key to unlink', async () =
   assert.equal(await prisma.user.count({ where: { id: user.id } }), 0);
 });
 
+test('password rotation blocks recovery of a pending linked-account withdrawal', async () => {
+  const user = await createUser({ password: true, kakao: true });
+  let unlinkCalls = 0;
+  global.fetch = async () => {
+    unlinkCalls += 1;
+    return jsonResponse(503, { msg: 'temporary failure' });
+  };
+
+  const response = await deleteMe(user, { password: 'Password123!' });
+  assert.equal(response.status, 502);
+  assert.equal(unlinkCalls, 1);
+  const attempt = await prisma.withdrawalAttempt.findUnique({ where: { userId: user.id } });
+  assert.equal(attempt.status, 'UNLINK_PENDING');
+  assert.ok(attempt.credentialFingerprint);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await bcrypt.hash('NewPassword123!', 12) },
+  });
+  await assert.rejects(reconcileKakaoWithdrawalAttempt(attempt.id), {
+    statusCode: 409,
+  });
+  assert.equal(unlinkCalls, 1);
+  assert.equal(await prisma.user.count({ where: { id: user.id } }), 1);
+  assert.equal(await prisma.withdrawalAttempt.count({ where: { id: attempt.id } }), 1);
+});
+
 test('withdrawal requires exactly one credential', async () => {
   const user = await createUser({ password: true });
   const noCredential = await deleteMe(user, {});

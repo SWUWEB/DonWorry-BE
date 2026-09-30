@@ -21,6 +21,18 @@ const withdrawalInProgress = () =>
   });
 
 const withdrawalStateHash = (state) => createHash('sha256').update(state).digest('hex');
+const credentialFingerprint = (passwordHash) =>
+  passwordHash
+    ? createHmac('sha256', env.JWT_ACCESS_SECRET).update(passwordHash).digest('hex')
+    : null;
+
+const assertCredentialUnchanged = (attempt, user) => {
+  if (attempt.credentialFingerprint !== credentialFingerprint(user.passwordHash)) {
+    throw new HttpError(409, '탈퇴 요청 후 인증 정보가 변경되어 수동 확인이 필요합니다.', {
+      errorCode: ERROR_CODES.USER4092,
+    });
+  }
+};
 
 const requireKakaoAdminKey = () => {
   if (!env.KAKAO_ADMIN_KEY) {
@@ -130,18 +142,23 @@ export const finalizeKakaoWithdrawalAttempt = async (attemptId) => {
 
     const user = await tx.user.findUnique({
       where: { id: attempt.userId },
-      select: { id: true, email: true, kakaoUserId: true },
+      select: { id: true, email: true, kakaoUserId: true, passwordHash: true },
     });
     if (!user || user.kakaoUserId !== attempt.kakaoUserId) {
       throw new HttpError(409, '탈퇴 대상 계정이 변경되어 수동 확인이 필요합니다.', {
         errorCode: ERROR_CODES.USER4092,
       });
     }
+    assertCredentialUnchanged(attempt, user);
 
     await createWithdrawalAudit(tx, user, attempt.reasonType);
     await tx.authToken.deleteMany({ where: { userId: user.id } });
     const deleted = await tx.user.deleteMany({
-      where: { id: user.id, kakaoUserId: attempt.kakaoUserId },
+      where: {
+        id: user.id,
+        kakaoUserId: attempt.kakaoUserId,
+        passwordHash: user.passwordHash,
+      },
     });
     if (deleted.count !== 1) {
       throw withdrawalInProgress();
@@ -153,6 +170,13 @@ export const finalizeKakaoWithdrawalAttempt = async (attemptId) => {
 export const reconcileKakaoWithdrawalAttempt = async (attemptId) => {
   const attempt = await prisma.withdrawalAttempt.findUnique({ where: { id: attemptId } });
   if (!attempt) return;
+
+  const user = await prisma.user.findUnique({
+    where: { id: attempt.userId },
+    select: { passwordHash: true },
+  });
+  if (!user) throw withdrawalInProgress();
+  assertCredentialUnchanged(attempt, user);
 
   if (attempt.status === 'UNLINK_PENDING') {
     await unlinkKakaoUser({
@@ -218,6 +242,7 @@ export const deleteUser = async (userId, { password, authorizationCode, state, r
       data: {
         userId,
         kakaoUserId: user.kakaoUserId,
+        credentialFingerprint: credentialFingerprint(user.passwordHash),
         reasonType: reasonType ?? null,
       },
     });
@@ -229,6 +254,12 @@ export const deleteUser = async (userId, { password, authorizationCode, state, r
   }
 
   try {
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+    if (!currentUser) throw withdrawalInProgress();
+    assertCredentialUnchanged(attempt, currentUser);
     await unlinkKakaoUser({ accessToken, kakaoUserId: user.kakaoUserId });
     await prisma.withdrawalAttempt.update({
       where: { id: attempt.id },
