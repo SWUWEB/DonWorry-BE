@@ -54,6 +54,13 @@ Node.js Express 기반 DonWorry 백엔드 API 서버입니다.
    npm run dev
    ```
 
+## 카카오 계정 탈퇴 운영 설정
+
+- 카카오 디벨로퍼스의 서비스 앱 Admin Key를 `KAKAO_ADMIN_KEY`로 서버 비밀값에 주입해야 합니다. `.env`나 Git에 실제 키를 기록하지 마세요. 카카오 연결 계정 탈퇴와 장애 복구에 사용됩니다.
+- 프론트엔드는 카카오 전용 계정에서 `POST /api/v1/users/me/withdrawal/kakao/authorization`을 호출하고, 응답의 `authorizationUrl`로 이동합니다. 콜백의 `code`와 `state`를 `DELETE /api/v1/users/me`의 `authorizationCode`, `state`로 보내며 DonWorry access token은 Bearer 헤더에 넣습니다.
+- 카카오톡 인앱 브라우저에서 시작한 사용자는 외부 브라우저에서 DonWorry에 로그인한 뒤 위 탈퇴 절차를 진행해야 합니다. 기존 토큰을 URL로 전달하지 않습니다.
+- 카카오 Unlink와 로컬 DB 삭제 사이에 실패하면 `withdrawal_attempts`에 복구 상태가 남습니다. 운영자가 실패 로그와 대상 건을 확인한 후, DB 및 `KAKAO_ADMIN_KEY`에 접근 가능한 환경에서 `npm run withdrawals:reconcile`을 실행하세요. 실행 중인 요청과 충돌하지 않도록 생성 후 2분이 지난 건만 재시도합니다. 복구 명령은 실제 카카오 연결 해제와 계정 삭제를 수행하므로 실행 전 대상 DB를 확인해야 합니다.
+
 ## Test Setup
 
 로컬 테스트는 `donworry_test` 데이터베이스를 사용합니다.

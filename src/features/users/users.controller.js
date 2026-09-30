@@ -9,6 +9,7 @@ import {
   updateSavingGoal,
   deleteSavingGoal,
   deleteUser,
+  startKakaoWithdrawal,
   updateNotificationSettings,
   getNotificationSettings,
   getBudget,
@@ -65,12 +66,13 @@ export const deleteSavingGoalController = asyncHandler(async (req, res) => {
 });
 
 export const deleteUserController = asyncHandler(async (req, res) => {
-  await deleteUser(
-    BigInt(req.user.userId),
-    req.validated.body.password,
-    req.validated.body.reasonType,
-  );
+  await deleteUser(BigInt(req.user.userId), req.validated.body);
   return ok(res, null, '회원 탈퇴 성공');
+});
+
+export const startKakaoWithdrawalController = asyncHandler(async (req, res) => {
+  const result = await startKakaoWithdrawal(BigInt(req.user.userId));
+  return ok(res, result, '카카오 탈퇴 재인증 URL 발급 성공');
 });
 
 export const updateNotificationSettingsController = asyncHandler(async (req, res) => {

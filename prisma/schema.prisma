@@ -19,6 +19,7 @@ enum TokenType {
   REFRESH_TOKEN
   KAKAO_LINK
   KAKAO_LINK_EMAIL
+  KAKAO_WITHDRAWAL
 }
 
 enum AuthRequestType {
@@ -62,6 +63,11 @@ enum WithdrawalReasonType {
   PRIVACY_CONCERN
   SWITCHING_SERVICE
   OTHER
+}
+
+enum WithdrawalAttemptStatus {
+  UNLINK_PENDING
+  UNLINKED
 }
 
 enum Gender {
@@ -259,6 +265,20 @@ model WithdrawalAudit {
   createdAt     DateTime              @default(now()) @map("created_at")
 
   @@map("withdrawal_audit")
+}
+
+model WithdrawalAttempt {
+  // Deliberately no User foreign key: recovery state must survive a failed deletion step.
+  id          BigInt                  @id @default(autoincrement()) @db.UnsignedBigInt
+  userId      BigInt                  @unique @map("user_id") @db.UnsignedBigInt
+  kakaoUserId String                  @map("kakao_user_id") @db.VarChar(100)
+  reasonType  WithdrawalReasonType?   @map("reason_type")
+  status      WithdrawalAttemptStatus @default(UNLINK_PENDING)
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("withdrawal_attempts")
 }
 
 model MonthlyBudget {

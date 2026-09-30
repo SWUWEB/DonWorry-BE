@@ -11,6 +11,7 @@ import {
   updateSavingGoalController,
   deleteSavingGoalController,
   deleteUserController,
+  startKakaoWithdrawalController,
   getNotificationSettingsController,
   updateNotificationSettingsController,
   getBudgetController,
@@ -34,6 +35,7 @@ usersRouter.use(requireAuth);
 usersRouter.get('/me', getMeController);
 usersRouter.patch('/me', validate(updateMeDto), updateMeController);
 usersRouter.delete('/me', validate(deleteUserDto), deleteUserController);
+usersRouter.post('/me/withdrawal/kakao/authorization', startKakaoWithdrawalController);
 usersRouter.patch('/me/password', validate(changePasswordDto), changePasswordController);
 usersRouter.post(
   '/me/email-verifications',
