@@ -92,7 +92,7 @@ test.afterEach(async () => {
   await prisma.wishlistItem.deleteMany({ where: { userId: { in: userIds } } });
 });
 
-test('POST /api/v1/temptations/:temptationId/decisions - WAITING 상태에서 BUY 시 status가 DECIDED로 변경되고 알림이 삭제된다', async () => {
+test('POST /api/v1/temptations/:temptationId/decisions - WAITING 상태에서 BUY 시 status가 DECIDED로 변경되고 ConsumptionRecord(CONSUMED)가 추가되며 알림이 삭제된다', async () => {
   const item = await prisma.wishlistItem.create({
     data: {
       userId: testUser.id,
@@ -131,6 +131,13 @@ test('POST /api/v1/temptations/:temptationId/decisions - WAITING 상태에서 BU
   });
   assert.ok(decision);
   assert.equal(decision.decisionType, 'BUY');
+
+  const record = await prisma.consumptionRecord.findFirst({
+    where: { userId: testUser.id, productName: '맥북 프로' },
+  });
+  assert.ok(record);
+  assert.equal(record.type, 'CONSUMED');
+  assert.equal(Number(record.price), 3000000);
 
   const remainingNotifications = await prisma.notification.findMany({
     where: { wishlistItemId: item.id },
@@ -352,4 +359,64 @@ test('POST /api/v1/temptations/:temptationId/decisions - 타인의 위시리스�
 
   assert.equal(response.status, 403);
   assert.equal(response.body.code, 'WISH4031');
+});
+
+test('POST /api/v1/temptations/:temptationId/decisions - 가격 정보가 없는 항목에 대해 BUY 요청 시 400 에러를 반환한다', async () => {
+  const item = await prisma.wishlistItem.create({
+    data: {
+      userId: testUser.id,
+      productName: '가격 없는 테스트 상품',
+      price: null,
+      categoryCode: 'ELECTRONICS',
+      status: 'WAITING',
+    },
+  });
+
+  const response = await request(app)
+    .post(`/api/v1/temptations/${item.id}/decisions`)
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ decisionType: 'BUY' });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'WISH4004');
+});
+
+test('POST /api/v1/temptations/:temptationId/decisions - 가격 정보가 없는 항목에 대해 SKIP 요청 시 400 에러를 반환한다', async () => {
+  const item = await prisma.wishlistItem.create({
+    data: {
+      userId: testUser.id,
+      productName: '가격 없는 SKIP 테스트 상품',
+      price: null,
+      categoryCode: 'ELECTRONICS',
+      status: 'WAITING',
+    },
+  });
+
+  const response = await request(app)
+    .post(`/api/v1/temptations/${item.id}/decisions`)
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ decisionType: 'SKIP' });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'WISH4004');
+});
+
+test('POST /api/v1/temptations/:temptationId/decisions - 이미 DECIDED 상태이고 가격이 없는 항목에 대해 요청 시 WISH4004가 아닌 WISH4091(409)을 반환한다', async () => {
+  const item = await prisma.wishlistItem.create({
+    data: {
+      userId: testUser.id,
+      productName: '이미 결정된 가격 없는 상품',
+      price: null,
+      categoryCode: 'ELECTRONICS',
+      status: 'DECIDED',
+    },
+  });
+
+  const response = await request(app)
+    .post(`/api/v1/temptations/${item.id}/decisions`)
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ decisionType: 'BUY' });
+
+  assert.equal(response.status, 409);
+  assert.equal(response.body.code, 'WISH4091');
 });

@@ -3764,7 +3764,11 @@ export const openApiDocument = {
     },
     '/api/v1/temptations/{temptationId}/decisions': {
       post: {
-        ...securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+        ...securedJsonOperation(
+          'Temptations',
+          '재판단 기록 추가 (BUY 또는 SKIP 선택 시 소비 기록[CONSUMED/SKIPPED]이 백엔드에서 자동 생성됩니다)',
+          createWishlistDecisionDto,
+        ),
         responses: {
           201: {
             description: '재판단 기록 추가 성공',
@@ -3831,6 +3835,14 @@ export const openApiDocument = {
                       success: false,
                       code: 'WISH4003',
                       message: '아직 고민 시간이 끝나지 않아 추가 연장을 할 수 없습니다.',
+                    },
+                  },
+                  MISSING_PRICE: {
+                    summary: '결정 진행 시 가격 정보 없음 (WISH4004)',
+                    value: {
+                      success: false,
+                      code: 'WISH4004',
+                      message: '가격 정보가 없는 항목은 결정을 진행할 수 없습니다.',
                     },
                   },
                 },
