@@ -79,6 +79,12 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
       });
     }
 
+    if (temptation.status !== 'WAITING') {
+      throw new HttpError(409, '이미 재판단이 완료되었거나 대기 상태가 아닌 항목입니다.', {
+        errorCode: ERROR_CODES.WISH4091,
+      });
+    }
+
     if (
       (decisionType === 'BUY' || decisionType === 'SKIP') &&
       (temptation.price === null || temptation.price === undefined)
@@ -153,7 +159,7 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
         data: {
           userId,
           productName: temptation.productName,
-          price: temptation.price?.toString() ?? null,
+          price: temptation.price.toString(),
           categoryCode: temptation.categoryCode ?? null,
           productUrl: temptation.productUrl ?? null,
           reason: temptation.reason ?? null,
@@ -168,7 +174,7 @@ export const createWishlistDecision = async (userId, temptationIdParam, bodyData
         data: {
           userId,
           productName: temptation.productName,
-          price: temptation.price?.toString() ?? null,
+          price: temptation.price.toString(),
           categoryCode: temptation.categoryCode ?? null,
           productUrl: temptation.productUrl ?? null,
           reason: temptation.reason ?? null,
