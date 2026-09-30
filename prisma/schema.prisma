@@ -26,11 +26,6 @@ enum AuthRequestType {
   LOGIN_ID_RECOVERY
 }
 
-enum ReportType {
-  MONTHLY_TOTAL
-  CATEGORY
-}
-
 enum NotificationType {
   TEMPTATION
   GOAL
@@ -102,12 +97,11 @@ model User {
   gender                  Gender?
   hourlyWage              BigInt?       @map("hourly_wage") @db.UnsignedBigInt
 
-  authTokens                 AuthToken[]
-  consumptionAnalysisReports ConsumptionAnalysisReport[]
-  consumptionRecords         ConsumptionRecord[]
-  notifications              Notification[]
-  wishlistItems              WishlistItem[]
-  monthlyBudgets             MonthlyBudget[]
+  authTokens         AuthToken[]
+  consumptionRecords ConsumptionRecord[]
+  notifications      Notification[]
+  wishlistItems      WishlistItem[]
+  monthlyBudgets     MonthlyBudget[]
 
   @@map("users")
 }
@@ -141,24 +135,6 @@ model AuthRequestLog {
   @@index([requestKeyHash, requestType, createdAt], map: "auth_request_logs_key_type_created_idx")
   @@index([createdAt], map: "auth_request_logs_created_idx")
   @@map("auth_request_logs")
-}
-
-model ConsumptionAnalysisReport {
-  id            BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
-  userId        BigInt     @map("user_id") @db.UnsignedBigInt
-  reportType    ReportType @map("report_type")
-  reportMonth   String     @map("report_month") @db.Char(7)
-  categoryKey   String     @default("TOTAL") @map("category_key") @db.VarChar(50)
-  consumedCount Int        @map("consumed_count") @db.UnsignedInt
-  skippedCount  Int        @map("skipped_count") @db.UnsignedInt
-  skippedAmount BigInt     @map("skipped_amount") @db.UnsignedBigInt
-  createdAt     DateTime   @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, reportType, reportMonth, categoryKey], map: "reports_user_type_month_category_key")
-  @@index([userId])
-  @@map("consumption_analysis_reports")
 }
 
 model Notification {
