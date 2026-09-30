@@ -141,19 +141,37 @@ export const notificationSettingsDto = z.object({
 });
 
 export const deleteUserDto = z.object({
-  body: z.object({
-    password: passwordCredentialSchema('비밀번호를 입력해주세요.'),
-    reasonType: z
-      .enum([
-        'LOW_FREQUENCY',
-        'MISSING_FEATURE',
-        'INCONVENIENT',
-        'PRIVACY_CONCERN',
-        'SWITCHING_SERVICE',
-        'OTHER',
-      ])
-      .optional(),
-  }),
+  body: z
+    .object({
+      password: passwordCredentialSchema('비밀번호를 입력해주세요.').optional(),
+      authorizationCode: z.string().trim().min(1, '카카오 인가 코드를 입력해주세요.').optional(),
+      state: z.string().trim().min(1, '카카오 재인증 state를 입력해주세요.').optional(),
+      reasonType: z
+        .enum([
+          'LOW_FREQUENCY',
+          'MISSING_FEATURE',
+          'INCONVENIENT',
+          'PRIVACY_CONCERN',
+          'SWITCHING_SERVICE',
+          'OTHER',
+        ])
+        .optional(),
+    })
+    .strict()
+    .superRefine((body, context) => {
+      if (Boolean(body.password) === Boolean(body.authorizationCode)) {
+        context.addIssue({
+          code: 'custom',
+          message: '비밀번호 또는 카카오 인가 코드 중 하나만 입력해주세요.',
+        });
+      }
+      if (Boolean(body.state) !== Boolean(body.authorizationCode)) {
+        context.addIssue({
+          code: 'custom',
+          message: '카카오 인가 코드와 state를 함께 입력해주세요.',
+        });
+      }
+    }),
 });
 
 const YEAR_MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;

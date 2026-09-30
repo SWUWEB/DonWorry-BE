@@ -2110,6 +2110,8 @@ export const openApiDocument = {
       },
       delete: {
         ...securedJsonOperation('Users', '회원 탈퇴', deleteUserDto),
+        description:
+          '비밀번호가 있는 계정은 password를 전달합니다. 카카오 전용 계정은 POST /api/v1/users/me/withdrawal/kakao/authorization에서 받은 URL로 재인증한 후 authorizationCode와 state를 함께 전달합니다. DonWorry access token은 Authorization: Bearer 헤더로 전달합니다. 카카오 연결 계정은 탈퇴 시 앱 연결 해제도 처리합니다.',
         responses: {
           200: {
             description: '회원 탈퇴 성공',
@@ -2130,7 +2132,7 @@ export const openApiDocument = {
             },
           },
           400: {
-            description: '비밀번호 불일치 또는 요청 값 검증 실패',
+            description: '비밀번호 불일치, 카카오 계정 불일치 또는 요청 값 검증 실패',
             content: {
               'application/json': {
                 schema: {
@@ -2148,6 +2150,14 @@ export const openApiDocument = {
                       message: '비밀번호가 올바르지 않습니다.',
                     },
                   },
+                  mismatchedKakaoAccount: {
+                    summary: '다른 카카오 계정으로 재인증',
+                    value: {
+                      success: false,
+                      code: 'USER4002',
+                      message: '현재 계정과 다른 카카오 계정입니다.',
+                    },
+                  },
                   validationFailed: {
                     summary: '요청 값 검증 실패',
                     value: {
@@ -2155,8 +2165,8 @@ export const openApiDocument = {
                       code: 'COMMON4001',
                       message: 'Invalid request',
                       errors: {
-                        formErrors: [],
-                        fieldErrors: { body: ['비밀번호를 입력해주세요.'] },
+                        formErrors: ['비밀번호 또는 카카오 인가 코드 중 하나만 입력해주세요.'],
+                        fieldErrors: {},
                       },
                     },
                   },
@@ -2165,6 +2175,123 @@ export const openApiDocument = {
             },
           },
           401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없음',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          409: {
+            description: '탈퇴 처리 진행 중',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4092',
+                  message: '회원 탈퇴 처리가 진행 중입니다.',
+                },
+              },
+            },
+          },
+          502: {
+            description: '카카오 인증 또는 앱 연결 해제 실패',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH5021',
+                  message: '카카오 로그인 서비스와 통신하지 못했습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/users/me/withdrawal/kakao/authorization': {
+      post: {
+        ...securedOperation('Users', '카카오 탈퇴 재인증 URL 발급'),
+        description:
+          '카카오 전용 계정에서 탈퇴 직전에 호출합니다. 반환된 URL은 prompt=login과 일회용 state를 포함합니다. 카카오톡 인앱 브라우저 사용자는 외부 브라우저에서 DonWorry 로그인 후 이 API를 호출해야 합니다.',
+        responses: {
+          200: {
+            description: '카카오 탈퇴 재인증 URL 발급 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: '카카오 탈퇴 재인증 URL 발급 성공' },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        authorizationUrl: { type: 'string', format: 'uri' },
+                        expiresInSeconds: { type: 'integer', example: 300 },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '카카오 전용 계정이 아님',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4002',
+                  message: '카카오 전용 계정만 재인증 URL을 발급할 수 있습니다.',
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없음',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          409: {
+            description: '탈퇴 처리 진행 중',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4092',
+                  message: '회원 탈퇴 처리가 진행 중입니다.',
+                },
+              },
+            },
+          },
+          502: {
+            description: '카카오 탈퇴 환경 설정 오류',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
         },
       },
     },

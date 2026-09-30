@@ -4,6 +4,7 @@ import { HttpError } from '../../utils/http-error.js';
 
 const tokenEndpoint = 'https://kauth.kakao.com/oauth/token';
 const userInfoEndpoint = 'https://kapi.kakao.com/v2/user/me';
+const unlinkEndpoint = 'https://kapi.kakao.com/v1/user/unlink';
 
 const kakaoAuthError = () =>
   new HttpError(401, '카카오 인증이 만료되었거나 올바르지 않습니다.', {
@@ -46,7 +47,7 @@ const requestKakao = async (url, options, authenticationFailureStatuses = []) =>
   return data;
 };
 
-export const getKakaoUser = async (authorizationCode) => {
+const exchangeKakaoCode = async (authorizationCode) => {
   if (!env.KAKAO_CLIENT_ID || !env.KAKAO_CLIENT_SECRET || !env.KAKAO_REDIRECT_URI) {
     throw kakaoUpstreamError('Kakao OAuth environment variables are not configured.');
   }
@@ -72,14 +73,73 @@ export const getKakaoUser = async (authorizationCode) => {
     throw kakaoUpstreamError('Kakao token response does not contain access_token.');
   }
 
-  const user = await requestKakao(
+  return token.access_token;
+};
+
+const fetchKakaoUser = async (accessToken) =>
+  requestKakao(
     userInfoEndpoint,
     {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token.access_token}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
     },
     [401],
   );
+
+export const getKakaoWithdrawalIdentity = async (authorizationCode) => {
+  const accessToken = await exchangeKakaoCode(authorizationCode);
+  const user = await fetchKakaoUser(accessToken);
+  if (!user.id) {
+    throw kakaoAuthError();
+  }
+
+  return { kakaoUserId: String(user.id), accessToken };
+};
+
+export const unlinkKakaoUser = async ({
+  accessToken,
+  kakaoUserId,
+  allowAlreadyUnlinked = false,
+}) => {
+  const useAdminKey = !accessToken;
+  if (useAdminKey && !env.KAKAO_ADMIN_KEY) {
+    throw kakaoUpstreamError('Kakao Admin Key is not configured.');
+  }
+
+  let response;
+  try {
+    response = await requestKakao(unlinkEndpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: useAdminKey ? `KakaoAK ${env.KAKAO_ADMIN_KEY}` : `Bearer ${accessToken}`,
+        ...(useAdminKey && {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+        }),
+      },
+      ...(useAdminKey && {
+        body: new URLSearchParams({ target_id_type: 'user_id', target_id: kakaoUserId }),
+      }),
+    });
+  } catch (error) {
+    if (
+      allowAlreadyUnlinked &&
+      useAdminKey &&
+      error instanceof HttpError &&
+      error.details?.kakao?.code === -101
+    ) {
+      return;
+    }
+    throw error;
+  }
+
+  if (String(response.id) !== kakaoUserId) {
+    throw kakaoUpstreamError('Kakao unlink returned an unexpected user ID.');
+  }
+};
+
+export const getKakaoUser = async (authorizationCode) => {
+  const accessToken = await exchangeKakaoCode(authorizationCode);
+  const user = await fetchKakaoUser(accessToken);
   const account = user.kakao_account;
   const profile = account?.profile;
   const email = account?.email?.trim().toLowerCase();
