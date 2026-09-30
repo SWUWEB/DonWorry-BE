@@ -523,8 +523,8 @@ const requestHeaders = {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
 };
 
-const requestPinnedAddresses = async (target, addresses, fetchImpl, signal) => {
-  const dispatcher = createPinnedDispatcher(addresses);
+const requestPinnedAddresses = async (target, addresses, fetchImpl, signal, dispatcherFactory) => {
+  const dispatcher = dispatcherFactory(addresses);
   try {
     const response = await fetchImpl(target.url, {
       method: 'GET',
@@ -540,15 +540,19 @@ const requestPinnedAddresses = async (target, addresses, fetchImpl, signal) => {
   }
 };
 
-const requestProductPage = async (target, redirectCount, { fetchImpl, logger }) => {
+const requestProductPage = async (
+  target,
+  redirectCount,
+  { fetchImpl, logger, dispatcherFactory },
+) => {
   const addresses = target.addresses.slice(0, MAX_ADDRESS_ATTEMPTS);
-  const addressCandidates = [addresses, ...addresses.map((address) => [address])];
+  const addressCandidates = addresses.map((address) => [address]);
   const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   let lastError;
 
   for (const candidate of addressCandidates) {
     try {
-      return await requestPinnedAddresses(target, candidate, fetchImpl, signal);
+      return await requestPinnedAddresses(target, candidate, fetchImpl, signal, dispatcherFactory);
     } catch (error) {
       lastError = error;
       logUpstreamFailure({ logger, target, stage: 'connect', redirectCount, error });
@@ -706,13 +710,19 @@ export const parseProductUrl = async (
     logger = console,
     scrapingBeeApiKey = process.env.SCRAPINGBEE_API_KEY,
     scrapingBeeFetchImpl = undiciFetch,
+    dispatcherFactory = createPinnedDispatcher,
   } = {},
 ) => {
   await validatePublicUrl(productUrl, lookup);
 
   let product;
   try {
-    const html = await fetchProductPage(productUrl, { fetchImpl, lookup, logger });
+    const html = await fetchProductPage(productUrl, {
+      fetchImpl,
+      lookup,
+      logger,
+      dispatcherFactory,
+    });
     product = parseProductHtml(html);
   } catch (error) {
     const fallbackEligible =

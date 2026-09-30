@@ -215,6 +215,7 @@ test('falls back to schema.org itemprop product metadata', async () => {
 
 test('retries another validated public address after a connection failure', async () => {
   const calls = [];
+  const addressCandidates = [];
   const logs = [];
   const result = await parseProductUrl(
     { productUrl: 'https://shop.example/product/1' },
@@ -234,11 +235,20 @@ test('retries another validated public address after a connection failure', asyn
           <meta property="og:title" content="Retried Product">
           <meta property="product:price:amount" content="32000">`);
       },
+      dispatcherFactory: (addresses) => {
+        addressCandidates.push(addresses);
+        return { close: async () => {} };
+      },
       logger: { error: (...args) => logs.push(args) },
     },
   );
 
   assert.equal(calls.length, 2);
+  assert.deepEqual(addressCandidates, [
+    [{ address: '8.8.8.8', family: 4 }],
+    [{ address: '1.1.1.1', family: 4 }],
+  ]);
+  assert.notEqual(calls[0].dispatcher, calls[1].dispatcher);
   assert.equal(result.productName, 'Retried Product');
   assert.equal(result.price, 32000);
   assert.equal(logs.length, 1);
