@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CATEGORY_CODES } from '../../config/categories.js';
 import { newPasswordSchema, passwordCredentialSchema } from '../auth/password.schema.js';
+import { interestTagsSchema } from '../../config/interest-tags.js';
 
 const name = z
   .string()
@@ -48,7 +49,7 @@ export const updateMeDto = z.object({
     .object({
       nickname: name.optional(),
       profileImageUrl: z.string().url().max(500).nullable().optional(),
-      interestTags: z.array(z.string().max(50)).max(20).optional(),
+      interestTags: interestTagsSchema.optional(),
       phoneNumber,
       birthDate,
       gender: z.enum(['FEMALE', 'MALE']).optional(),
