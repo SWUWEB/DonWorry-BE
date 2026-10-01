@@ -1,7 +1,15 @@
 import * as temptationsService from './temptations.service.js';
 
+const PRISMA_TO_API_WAIT_TYPE_MAP = {
+  ONE_HOUR: '1H',
+  ONE_DAY: '1D',
+  THREE_DAYS: '3D',
+  ONE_WEEK: '1W',
+};
+
 /**
- * Prisma 모델의 BigInt 필드를 JSON 직렬화가 가능한 문자열로 변환하는 유틸 함수
+ * Prisma 모델의 BigInt 필드를 JSON 직렬화가 가능한 문자열로 변환하고
+ * selectedWaitType을 API 응답 형식('1H', '1D' 등)으로 변환하는 유틸 함수
  * @param {Object} decision - 변환할 재판단 기록 객체
  * @returns {Object|null} 직렬화된 객체 또는 null
  */
@@ -11,6 +19,9 @@ const serializeWishlistDecision = (decision) => {
     ...decision,
     id: decision.id.toString(),
     wishlistItemId: decision.wishlistItemId.toString(),
+    selectedWaitType: decision.selectedWaitType
+      ? PRISMA_TO_API_WAIT_TYPE_MAP[decision.selectedWaitType] || decision.selectedWaitType
+      : decision.selectedWaitType,
     selectedWaitUntil: decision.selectedWaitUntil ? decision.selectedWaitUntil.toISOString() : null,
     decidedAt: decision.decidedAt ? decision.decidedAt.toISOString() : null,
   };

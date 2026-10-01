@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { CATEGORY_CODES } from '../../config/categories.js';
+import { newPasswordSchema, passwordCredentialSchema } from '../auth/password.schema.js';
+import { interestTagsSchema } from '../../config/interest-tags.js';
 
 const name = z
   .string()
@@ -47,7 +49,7 @@ export const updateMeDto = z.object({
     .object({
       nickname: name.optional(),
       profileImageUrl: z.string().url().max(500).nullable().optional(),
-      interestTags: z.array(z.string().max(50)).max(20).optional(),
+      interestTags: interestTagsSchema.optional(),
       phoneNumber,
       birthDate,
       gender: z.enum(['FEMALE', 'MALE']).optional(),
@@ -67,19 +69,8 @@ export const updateMeDto = z.object({
 export const changePasswordDto = z.object({
   body: z
     .object({
-      currentPassword: z
-        .string({ error: '현재 비밀번호를 입력해주세요.' })
-        .min(1, '현재 비밀번호를 입력해주세요.'),
-      newPassword: z
-        .string({ error: '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.' })
-        .min(8, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .max(100, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .regex(/[A-Za-z]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .regex(/[0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .regex(/[^A-Za-z0-9]/, '8자 이상, 영문, 숫자, 특수문자를 모두 포함해주세요.')
-        .refine((value) => Buffer.byteLength(value, 'utf8') <= 72, {
-          message: '비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.',
-        }),
+      currentPassword: passwordCredentialSchema('현재 비밀번호를 입력해주세요.'),
+      newPassword: newPasswordSchema,
       newPasswordConfirm: z
         .string({ error: '새 비밀번호를 다시 입력해주세요.' })
         .min(1, '새 비밀번호를 다시 입력해주세요.'),
@@ -150,19 +141,37 @@ export const notificationSettingsDto = z.object({
 });
 
 export const deleteUserDto = z.object({
-  body: z.object({
-    password: z.string().min(1, '비밀번호를 입력해주세요.'),
-    reasonType: z
-      .enum([
-        'LOW_FREQUENCY',
-        'MISSING_FEATURE',
-        'INCONVENIENT',
-        'PRIVACY_CONCERN',
-        'SWITCHING_SERVICE',
-        'OTHER',
-      ])
-      .optional(),
-  }),
+  body: z
+    .object({
+      password: passwordCredentialSchema('비밀번호를 입력해주세요.').optional(),
+      authorizationCode: z.string().trim().min(1, '카카오 인가 코드를 입력해주세요.').optional(),
+      state: z.string().trim().min(1, '카카오 재인증 state를 입력해주세요.').optional(),
+      reasonType: z
+        .enum([
+          'LOW_FREQUENCY',
+          'MISSING_FEATURE',
+          'INCONVENIENT',
+          'PRIVACY_CONCERN',
+          'SWITCHING_SERVICE',
+          'OTHER',
+        ])
+        .optional(),
+    })
+    .strict()
+    .superRefine((body, context) => {
+      if (Boolean(body.password) === Boolean(body.authorizationCode)) {
+        context.addIssue({
+          code: 'custom',
+          message: '비밀번호 또는 카카오 인가 코드 중 하나만 입력해주세요.',
+        });
+      }
+      if (Boolean(body.state) !== Boolean(body.authorizationCode)) {
+        context.addIssue({
+          code: 'custom',
+          message: '카카오 인가 코드와 state를 함께 입력해주세요.',
+        });
+      }
+    }),
 });
 
 const YEAR_MONTH_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;

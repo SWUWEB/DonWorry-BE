@@ -47,6 +47,7 @@ import {
   createWishlistItemDto,
   updateWishlistItemDto,
   wishlistItemIdDto,
+  getWishlistItemsQueryDto,
 } from '../features/wishlist-items/wishlist-items.dto.js';
 import { consumptionReportDetailDto } from '../features/reports/reports.dto.js';
 import { withZodDto, zodToOpenApiSchema } from './zod-openapi.js';
@@ -505,7 +506,7 @@ export const openApiDocument = {
                 type: 'array',
                 items: { type: 'string' },
                 nullable: true,
-                example: ['쇼핑', '카페'],
+                example: ['음식', '쇼핑'],
               },
               phoneNumber: { type: 'string', nullable: true, example: '010-1234-5678' },
               birthDate: { type: 'string', format: 'date', nullable: true, example: '1998-05-02' },
@@ -562,7 +563,8 @@ export const openApiDocument = {
                 type: 'array',
                 items: { type: 'string' },
                 nullable: true,
-                example: ['패션', '뷰티'],
+                description: '관심 소비 영역 목록 (0~3개 선택, 빈 배열 허용, 중복 불가)',
+                example: ['쇼핑', '뷰티'],
               },
               phoneNumber: { type: 'string', nullable: true, example: '010-1234-5678' },
               birthDate: { type: 'string', format: 'date', nullable: true, example: '1998-05-02' },
@@ -636,7 +638,7 @@ export const openApiDocument = {
                 type: 'array',
                 nullable: true,
                 items: { type: 'string' },
-                example: ['식비', '쇼핑'],
+                example: ['음식', '쇼핑'],
               },
               savingGoalText: { type: 'string', nullable: true, example: '여행' },
               targetSavingAmount: { type: 'string', nullable: true, example: '500000' },
@@ -655,7 +657,8 @@ export const openApiDocument = {
               interestTags: {
                 type: 'array',
                 items: { type: 'string' },
-                example: ['식비', '쇼핑'],
+                description: '관심 소비 영역 목록 (1~3개 선택 필수, 중복 불가)',
+                example: ['음식', '쇼핑'],
               },
               savingGoalText: { type: 'string', example: '여행' },
               targetSavingAmount: { type: 'string', example: '500000' },
@@ -905,13 +908,15 @@ export const openApiDocument = {
           },
           remainingAmount: {
             type: 'string',
-            example: '700000',
-            description: '수입 기준 잔액',
+            example: '200000',
+            description: '예산 기준 잔액',
           },
           usageRate: {
             type: 'integer',
-            example: 30,
-            description: '수입 대비 총 사용률(%)',
+            minimum: 0,
+            maximum: 100,
+            example: 60,
+            description: '예산 대비 총 사용률(%)',
           },
           categoryBudgets: {
             type: 'array',
@@ -922,7 +927,7 @@ export const openApiDocument = {
                 budgetAmount: { type: 'string', example: '400000' },
                 spentAmount: { type: 'string', example: '287000' },
                 remainingAmount: { type: 'string', example: '113000' },
-                usageRate: { type: 'integer', example: 72 },
+                usageRate: { type: 'integer', minimum: 0, maximum: 100, example: 72 },
               },
             },
             description: '카테고리별 예산 상세 목록',
@@ -1063,7 +1068,7 @@ export const openApiDocument = {
                 maximum: 100,
                 example: 72,
                 description:
-                  '목표 금액 대비 누적 참은 소비 금액의 달성률(소수점 이하 버림, 최대 100)',
+                  '목표 금액 대비 KST 기준 이번 달 참은 소비 금액의 달성률(소수점 반올림, 최대 100)',
               },
               message: { type: 'string', example: '목표가 바로 앞이에요! 조금만 더 힘내요.' },
               messageLevel: {
@@ -1466,6 +1471,8 @@ export const openApiDocument = {
     '/api/v1/auth/signup': {
       post: {
         ...publicJsonOperation('Auth', '회원가입', signupDto),
+        description:
+          '새 비밀번호는 8~100자이며 영문·숫자·문장부호 또는 기호를 포함하고, UTF-8 기준 72바이트 이하여야 합니다.',
         responses: {
           201: {
             description: 'Signup completed',
@@ -1502,6 +1509,8 @@ export const openApiDocument = {
     '/api/v1/auth/login': {
       post: {
         ...publicJsonOperation('Auth', '로그인', loginDto),
+        description:
+          '비밀번호 입력은 UTF-8 기준 72바이트 이하여야 합니다. 기존에 더 긴 비밀번호를 설정했다면 이메일로 비밀번호를 재설정해야 합니다.',
         responses: {
           200: {
             description: 'Login completed',
@@ -1849,7 +1858,7 @@ export const openApiDocument = {
       patch: {
         ...publicJsonOperation('Auth', '비밀번호 재설정 완료', passwordResetConfirmDto),
         description:
-          '이메일로 발급된 인증 코드를 확인해 비밀번호를 변경하고, 해당 사용자의 기존 리프레시 토큰을 모두 폐기합니다.',
+          '이메일로 발급된 인증 코드를 확인해 비밀번호를 변경하고, 해당 사용자의 기존 리프레시 토큰을 모두 폐기합니다. 새 비밀번호는 8~100자이며 영문·숫자·문장부호 또는 기호를 포함하고, UTF-8 기준 72바이트 이하여야 합니다.',
         responses: {
           200: {
             description: 'Password reset completed',
@@ -2101,6 +2110,8 @@ export const openApiDocument = {
       },
       delete: {
         ...securedJsonOperation('Users', '회원 탈퇴', deleteUserDto),
+        description:
+          '비밀번호가 있는 계정은 password를 전달합니다. 카카오 전용 계정은 POST /api/v1/users/me/withdrawal/kakao/authorization에서 받은 URL로 재인증한 후 authorizationCode와 state를 함께 전달합니다. DonWorry access token은 Authorization: Bearer 헤더로 전달합니다. 카카오 연결 계정은 탈퇴 시 앱 연결 해제도 처리합니다.',
         responses: {
           200: {
             description: '회원 탈퇴 성공',
@@ -2121,7 +2132,7 @@ export const openApiDocument = {
             },
           },
           400: {
-            description: '비밀번호 불일치 또는 요청 값 검증 실패',
+            description: '비밀번호 불일치, 카카오 계정 불일치 또는 요청 값 검증 실패',
             content: {
               'application/json': {
                 schema: {
@@ -2139,6 +2150,14 @@ export const openApiDocument = {
                       message: '비밀번호가 올바르지 않습니다.',
                     },
                   },
+                  mismatchedKakaoAccount: {
+                    summary: '다른 카카오 계정으로 재인증',
+                    value: {
+                      success: false,
+                      code: 'USER4002',
+                      message: '현재 계정과 다른 카카오 계정입니다.',
+                    },
+                  },
                   validationFailed: {
                     summary: '요청 값 검증 실패',
                     value: {
@@ -2146,8 +2165,8 @@ export const openApiDocument = {
                       code: 'COMMON4001',
                       message: 'Invalid request',
                       errors: {
-                        formErrors: [],
-                        fieldErrors: { body: ['비밀번호를 입력해주세요.'] },
+                        formErrors: ['비밀번호 또는 카카오 인가 코드 중 하나만 입력해주세요.'],
+                        fieldErrors: {},
                       },
                     },
                   },
@@ -2156,12 +2175,131 @@ export const openApiDocument = {
             },
           },
           401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없음',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          409: {
+            description: '탈퇴 처리 진행 중',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4092',
+                  message: '회원 탈퇴 처리가 진행 중입니다.',
+                },
+              },
+            },
+          },
+          502: {
+            description: '카카오 인증 또는 앱 연결 해제 실패',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'AUTH5021',
+                  message: '카카오 로그인 서비스와 통신하지 못했습니다.',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/users/me/withdrawal/kakao/authorization': {
+      post: {
+        ...securedOperation('Users', '카카오 탈퇴 재인증 URL 발급'),
+        description:
+          '카카오 전용 계정에서 탈퇴 직전에 호출합니다. 반환된 URL은 prompt=login과 일회용 state를 포함합니다. 카카오톡 인앱 브라우저 사용자는 외부 브라우저에서 DonWorry 로그인 후 이 API를 호출해야 합니다.',
+        responses: {
+          200: {
+            description: '카카오 탈퇴 재인증 URL 발급 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: '카카오 탈퇴 재인증 URL 발급 성공' },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        authorizationUrl: { type: 'string', format: 'uri' },
+                        expiresInSeconds: { type: 'integer', example: 300 },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: '카카오 전용 계정이 아님',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4002',
+                  message: '카카오 전용 계정만 재인증 URL을 발급할 수 있습니다.',
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: {
+            description: '사용자를 찾을 수 없음',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4041',
+                  message: '사용자를 찾을 수 없습니다.',
+                },
+              },
+            },
+          },
+          409: {
+            description: '탈퇴 처리 진행 중',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  success: false,
+                  code: 'USER4092',
+                  message: '회원 탈퇴 처리가 진행 중입니다.',
+                },
+              },
+            },
+          },
+          502: {
+            description: '카카오 탈퇴 환경 설정 오류',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+              },
+            },
+          },
         },
       },
     },
     '/api/v1/users/me/password': {
       patch: {
         ...securedJsonOperation('Users', '비밀번호 변경', changePasswordDto),
+        description:
+          '현재 비밀번호는 UTF-8 기준 72바이트 이하여야 합니다. 새 비밀번호는 8~100자이며 영문·숫자·문장부호 또는 기호를 포함하고, UTF-8 기준 72바이트 이하여야 합니다. 기존에 더 긴 비밀번호를 설정했다면 이메일로 비밀번호를 재설정해야 합니다.',
         responses: {
           200: {
             description: '비밀번호가 변경되었습니다.',
@@ -2681,7 +2819,7 @@ export const openApiDocument = {
       get: {
         ...securedOperation('Home', '응원 메시지 조회'),
         description:
-          '누적 참은 소비 금액으로 목표 달성률을 계산하고, 동일 사용자·동일 날짜에 동일한 메시지를 반환합니다. 날짜 기준은 KST입니다.',
+          '이번 달(월간, KST 기준) 참은 소비 금액으로 목표 달성률을 계산하고, 동일 사용자·동일 날짜에 동일한 메시지를 반환합니다. 월 경계는 KST를 기준으로 산정됩니다.',
         responses: {
           200: {
             description: '응원 메시지 조회 성공',
@@ -2771,7 +2909,7 @@ export const openApiDocument = {
                 productUrl: 'https://example.com/products/americano',
                 reason: '친구와 시간을 보내고 싶어서',
                 riskScore: 3,
-                category_code: 'CAFE_DESSERT',
+                categoryCode: 'CAFE_DESSERT',
                 interventionAnswers: [
                   {
                     questionId: 1,
@@ -3096,9 +3234,6 @@ export const openApiDocument = {
         },
       },
     },
-    '/api/v1/reports/consumption/summary': {
-      get: securedOperation('Reports', '간단 소비 분석 리포트 조회'),
-    },
     '/api/v1/reports/consumption/detail': {
       get: {
         ...withZodDto(
@@ -3268,8 +3403,32 @@ export const openApiDocument = {
     },
     '/api/v1/wishlist-items': {
       get: {
-        ...securedOperation('WishlistItems', '위시리스트 목록 조회'),
+        ...withZodDto(
+          securedOperation('WishlistItems', '위시리스트 목록 조회'),
+          getWishlistItemsQueryDto,
+        ),
         responses: {
+          400: {
+            description: '잘못된 쿼리 스트링 요청 (검증 실패)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ValidationErrorResponse',
+                },
+                example: {
+                  success: false,
+                  code: 'COMMON4001',
+                  message: 'Invalid request',
+                  errors: {
+                    formErrors: [],
+                    fieldErrors: {
+                      query: ['유효한 카테고리 코드가 아닙니다.'],
+                    },
+                  },
+                },
+              },
+            },
+          },
           401: { $ref: '#/components/responses/Unauthorized' },
           200: {
             description: '위시리스트 목록 조회 성공',
@@ -3279,6 +3438,7 @@ export const openApiDocument = {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean', example: true },
+                    totalCount: { type: 'integer', example: 6, description: '전체 유혹 개수' },
                     data: {
                       type: 'array',
                       items: {
@@ -3318,7 +3478,12 @@ export const openApiDocument = {
                             nullable: true,
                             example: '개발 작업용 스펙 업그레이드',
                           },
-                          waitType: { type: 'string', example: 'ONE_WEEK' },
+                          waitType: {
+                            type: 'string',
+                            enum: ['1H', '1D', '3D', '1W'],
+                            example: '1W',
+                            description: '대기 기간 옵션 (1H: 1시간, 1D: 1일, 3D: 3일, 1W: 1주일)',
+                          },
                           waitUntil: {
                             type: 'string',
                             format: 'date-time',
@@ -3349,6 +3514,16 @@ export const openApiDocument = {
       post: {
         ...securedJsonOperation('WishlistItems', '위시리스트 추가', createWishlistItemDto),
         responses: {
+          400: {
+            description: '유효성 검증 실패 (잘못된 바디 요청)',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ValidationErrorResponse',
+                },
+              },
+            },
+          },
           401: { $ref: '#/components/responses/Unauthorized' },
           201: {
             description: '위시리스트 추가 성공',
@@ -3395,7 +3570,11 @@ export const openApiDocument = {
                           nullable: true,
                           example: '개발 작업용 스펙 업그레이드',
                         },
-                        waitType: { type: 'string', example: 'ONE_WEEK' },
+                        waitType: {
+                          type: 'string',
+                          enum: ['1H', '1D', '3D', '1W'],
+                          example: '1W',
+                        },
                         waitUntil: {
                           type: 'string',
                           format: 'date-time',
@@ -3473,7 +3652,11 @@ export const openApiDocument = {
                           nullable: true,
                           example: '개발 작업용 스펙 업그레이드',
                         },
-                        waitType: { type: 'string', example: 'ONE_WEEK' },
+                        waitType: {
+                          type: 'string',
+                          enum: ['1H', '1D', '3D', '1W'],
+                          example: '1W',
+                        },
                         waitUntil: {
                           type: 'string',
                           format: 'date-time',
@@ -3579,7 +3762,11 @@ export const openApiDocument = {
                           nullable: true,
                           example: '필기 및 드로잉용',
                         },
-                        waitType: { type: 'string', example: 'ONE_DAY' },
+                        waitType: {
+                          type: 'string',
+                          enum: ['1H', '1D', '3D', '1W'],
+                          example: '1D',
+                        },
                         waitUntil: {
                           type: 'string',
                           format: 'date-time',
@@ -3704,7 +3891,11 @@ export const openApiDocument = {
     },
     '/api/v1/temptations/{temptationId}/decisions': {
       post: {
-        ...securedJsonOperation('Temptations', '재판단 기록 추가', createWishlistDecisionDto),
+        ...securedJsonOperation(
+          'Temptations',
+          '재판단 기록 추가 (BUY 또는 SKIP 선택 시 소비 기록[CONSUMED/SKIPPED]이 백엔드에서 자동 생성됩니다)',
+          createWishlistDecisionDto,
+        ),
         responses: {
           201: {
             description: '재판단 기록 추가 성공',
@@ -3716,15 +3907,26 @@ export const openApiDocument = {
                     success: { type: 'boolean', example: true },
                     data: {
                       type: 'object',
+                      required: ['id', 'wishlistItemId', 'decisionType', 'decidedAt'],
                       properties: {
                         id: { type: 'string', example: '6' },
                         wishlistItemId: { type: 'string', example: '2' },
                         decisionType: { type: 'string', example: 'DELAY' },
-                        selectedWaitType: { type: 'string', example: 'ONE_DAY' },
+                        selectedWaitType: {
+                          type: 'string',
+                          enum: ['1H', '1D', '3D', '1W', null],
+                          nullable: true,
+                          example: '1D',
+                          description:
+                            '연장 시 선택한 대기 기간 옵션 (DELAY일 때 필수, 그 외 null)',
+                        },
                         selectedWaitUntil: {
                           type: 'string',
                           format: 'date-time',
+                          nullable: true,
                           example: '2026-08-01T14:37:35.850Z',
+                          description:
+                            '연장 시 변경된 대기 완료 일시 (DELAY일 때 필수, 그 외 null)',
                         },
                         decidedAt: {
                           type: 'string',
@@ -3760,6 +3962,14 @@ export const openApiDocument = {
                       success: false,
                       code: 'WISH4003',
                       message: '아직 고민 시간이 끝나지 않아 추가 연장을 할 수 없습니다.',
+                    },
+                  },
+                  MISSING_PRICE: {
+                    summary: '결정 진행 시 가격 정보 없음 (WISH4004)',
+                    value: {
+                      success: false,
+                      code: 'WISH4004',
+                      message: '가격 정보가 없는 항목은 결정을 진행할 수 없습니다.',
                     },
                   },
                 },

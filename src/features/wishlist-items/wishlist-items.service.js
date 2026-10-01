@@ -79,14 +79,44 @@ export const createWishlistItem = async (userId, itemData) => {
   });
 };
 
-export const getWishlistItems = async (userId) => {
-  return await prisma.wishlistItem.findMany({
-    where: {
-      userId,
-      status: 'WAITING',
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+export const getWishlistItems = async (userId, queryParams = {}) => {
+  const { query, categoryCode, sort = 'CREATED_DESC', page = 1, limit = 10 } = queryParams;
+
+  const where = {
+    userId,
+    status: 'WAITING',
+  };
+
+  if (query) {
+    where.productName = { contains: query };
+  }
+
+  if (categoryCode && categoryCode !== 'ALL') {
+    where.categoryCode = categoryCode;
+  }
+
+  let orderBy = { createdAt: 'desc' };
+  if (sort === 'NAME_ASC') {
+    orderBy = { productName: 'asc' };
+  } else if (sort === 'DEADLINE_ASC') {
+    orderBy = { waitUntil: 'asc' };
+  }
+
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.max(1, parseInt(limit, 10) || 10);
+  const skip = (pageNum - 1) * limitNum;
+
+  const [items, totalCount] = await Promise.all([
+    prisma.wishlistItem.findMany({
+      where,
+      orderBy,
+      skip,
+      take: limitNum,
+    }),
+    prisma.wishlistItem.count({ where }),
+  ]);
+
+  return { items, totalCount };
 };
 
 const getValidatedItem = async (userId, validatedParams) => {
@@ -123,10 +153,7 @@ export const getWishlistItemById = async (userId, validatedParams) => {
 };
 
 export const updateWishlistItem = async (userId, validatedParams, updateData) => {
-  // 1. DB 존재 여부(404) 및 작성자 권한(403)을 먼저 검증
   const existing = await getValidatedItem(userId, validatedParams);
-
-  // 2. 업데이트할 데이터 구성
   const dataToUpdate = {};
 
   if (updateData?.categoryCode !== undefined) dataToUpdate.categoryCode = updateData.categoryCode;
@@ -144,7 +171,6 @@ export const updateWishlistItem = async (userId, validatedParams, updateData) =>
     dataToUpdate.waitType = WAIT_TYPE_MAP[updateData.waitType];
   }
 
-  // 3. 수정할 값이 비어있는지 확인 (400 Bad Request)
   if (Object.keys(dataToUpdate).length === 0) {
     throw new HttpError(400, '수정할 값이 없습니다.', {
       errorCode: ERROR_CODES.WISH4001,

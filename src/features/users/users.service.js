@@ -1,12 +1,12 @@
 import { prisma } from '../../prisma/client.js';
 import { HttpError } from '../../utils/http-error.js';
 import { ERROR_CODES } from '../../config/error-codes.js';
-import { createHmac } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { randomInt } from 'node:crypto';
 import { env } from '../../config/env.js';
 import { sendEmailChangeVerificationCode } from '../auth/auth.mailer.js';
+import { calculateAchievementRate } from '../../utils/achievement-rate.js';
 
 const passwordSaltRounds = 12;
 const emailChangeTokenType = 'EMAIL_CHANGE';
@@ -521,10 +521,10 @@ export const getSavingGoal = async (userId) => {
   });
   const targetSavingAmount = Number(user.targetSavingAmount);
   const savedAmount = Number(skippedRecords._sum.price || 0);
-  const achievementRate =
-    targetSavingAmount > 0
-      ? Math.min(100, Math.round((savedAmount / targetSavingAmount) * 100))
-      : 0;
+  const achievementRate = calculateAchievementRate(
+    skippedRecords._sum.price ?? 0,
+    user.targetSavingAmount,
+  );
 
   return {
     targetSavingAmount: targetSavingAmount.toString(),
@@ -583,48 +583,7 @@ export const deleteSavingGoal = async (userId) => {
   };
 };
 
-export const deleteUser = async (userId, password, reasonType) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true, passwordHash: true },
-  });
-  if (!user || !user.passwordHash) {
-    throw new HttpError(400, '비밀번호가 올바르지 않습니다.', {
-      errorCode: ERROR_CODES.USER4001,
-    });
-  }
-
-  const isPasswordMatched = await bcrypt.compare(password, user.passwordHash);
-  if (!isPasswordMatched) {
-    throw new HttpError(400, '비밀번호가 올바르지 않습니다.', {
-      errorCode: ERROR_CODES.USER4001,
-    });
-  }
-  await prisma.$transaction(async (tx) => {
-    await tx.withdrawalAudit.create({
-      data: {
-        userEmailHash: createHmac('sha256', process.env.JWT_ACCESS_SECRET)
-          .update(user.email)
-          .digest('hex'),
-        reasonType: reasonType ?? null,
-      },
-    });
-    await tx.authToken.deleteMany({
-      where: { userId },
-    });
-    const deletedUser = await tx.user.deleteMany({
-      where: {
-        id: userId,
-        passwordHash: user.passwordHash,
-      },
-    });
-    if (deletedUser.count !== 1) {
-      throw new HttpError(400, '비밀번호가 올바르지 않습니다.', {
-        errorCode: ERROR_CODES.USER4001,
-      });
-    }
-  });
-};
+export { deleteUser, startKakaoWithdrawal } from './users.withdrawal.service.js';
 
 export const updateNotificationSettings = async (userId, body) => {
   const MAX_RETRIES = 2;
@@ -762,7 +721,9 @@ export const getBudget = async (userId, yearMonth) => {
       const spentAmount = spentMap[categoryKey] || 0;
       const remainingAmount = budgetAmount - spentAmount;
       const usageRate =
-        budgetAmount > 0 ? Math.min(100, Math.round((spentAmount / budgetAmount) * 100)) : 0;
+        budgetAmount > 0
+          ? Math.max(0, Math.min(100, Math.round((spentAmount / budgetAmount) * 100)))
+          : 0;
       return {
         ...item,
         budgetAmount: budgetAmount.toString(),
@@ -773,10 +734,11 @@ export const getBudget = async (userId, yearMonth) => {
     });
   }
   const totalMonthlyIncome = Number(budget.monthlyIncome || 0);
-  const totalRemainingAmount = totalMonthlyIncome - totalSpentAmount;
+  const totalMonthlyBudget = Number(budget.monthlyBudget || 0);
+  const totalRemainingAmount = totalMonthlyBudget - totalSpentAmount;
   const totalUsageRate =
-    totalMonthlyIncome > 0
-      ? Math.min(100, Math.round((totalSpentAmount / totalMonthlyIncome) * 100))
+    totalMonthlyBudget > 0
+      ? Math.max(0, Math.min(100, Math.round((totalSpentAmount / totalMonthlyBudget) * 100)))
       : 0;
 
   const hourlyWage = user.hourlyWage !== null ? Number(user.hourlyWage) : null;

@@ -1,9 +1,5 @@
-import { notImplemented, ok } from '../../utils/api-response.js';
+import { ok } from '../../utils/api-response.js';
 import { getConsumptionReportDetail } from './reports.service.js';
-
-export const createNotImplementedController = (featureName) => (_req, res) => {
-  return notImplemented(res, featureName);
-};
 
 export const getConsumptionReportDetailController = async (req, res, next) => {
   try {

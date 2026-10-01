@@ -2,28 +2,52 @@
 import { isIP } from 'node:net';
 
 import * as cheerio from 'cheerio';
-import { Agent } from 'undici';
+import { Agent, fetch as undiciFetch } from 'undici';
 
 import { ERROR_CODES } from '../../config/error-codes.js';
 import { HttpError } from '../../utils/http-error.js';
 
-const PRODUCT_NAME_META_KEYS = new Set(['og:title', 'twitter:title']);
-const PRODUCT_PRICE_META_KEYS = new Set(['product:price:amount', 'og:price:amount', 'price']);
-const PRODUCT_NAME_KEYS = ['productName', 'name', 'title'];
+const PRODUCT_NAME_META_KEYS = new Set([
+  'og:title',
+  'twitter:title',
+  'product:name',
+  'parsely-title',
+]);
+const PRODUCT_PRICE_META_KEYS = new Set([
+  'product:price:amount',
+  'og:price:amount',
+  'og:price:standard_amount',
+  'product:sale_price:amount',
+  'price',
+]);
+const PRODUCT_NAME_KEYS = ['productName', 'goodsName', 'itemName', 'displayName', 'name', 'title'];
 const PRODUCT_PRICE_KEYS = [
   'salePrice',
+  'discountPrice',
   'discountedPrice',
   'finalPrice',
+  'finalSalePrice',
   'sellingPrice',
+  'currentPrice',
   'price',
   'lowPrice',
+  'minPrice',
 ];
-const STATE_MARKERS = ['__PRELOADED_STATE__', '__INITIAL_STATE__', '__APOLLO_STATE__'];
+const STATE_MARKERS = [
+  '__PRELOADED_STATE__',
+  '__INITIAL_STATE__',
+  '__APOLLO_STATE__',
+  '__NUXT__',
+  '__PRODUCT_DETAIL__',
+];
 const MAX_STRUCTURED_DATA_DEPTH = 15;
 const MAX_STRUCTURED_DATA_NODES = 10_000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
+const MAX_ADDRESS_ATTEMPTS = 3;
 const REQUEST_TIMEOUT_MS = 10_000;
+const SCRAPINGBEE_ENDPOINT = 'https://app.scrapingbee.com/api/v1/';
+const SCRAPINGBEE_TIMEOUT_MS = 30_000;
 
 const createBadRequest = (message) =>
   new HttpError(400, message, {
@@ -92,7 +116,7 @@ const isPrivateAddress = (address) => {
   return true;
 };
 
-const validatePublicUrl = async (productUrl) => {
+const validatePublicUrl = async (productUrl, lookup = dnsLookup) => {
   let url;
   try {
     url = new URL(productUrl);
@@ -122,7 +146,7 @@ const validatePublicUrl = async (productUrl) => {
 
   let addresses;
   try {
-    addresses = await dnsLookup(hostname, { all: true, verbatim: true });
+    addresses = await lookup(hostname, { all: true, verbatim: true });
   } catch {
     throw createProductUrlError(
       502,
@@ -152,6 +176,20 @@ const createPinnedDispatcher = (addresses) =>
       },
     },
   });
+
+const logUpstreamFailure = ({ logger, target, stage, redirectCount, status, error }) => {
+  logger.error('[product-url] upstream request failed', {
+    hostname: target.url.hostname,
+    stage,
+    redirectCount,
+    ...(status !== undefined && { status }),
+    ...(error && {
+      errorName: error.name,
+      errorCode: error.code ?? error.cause?.code,
+      causeCode: error.cause?.code,
+    }),
+  });
+};
 
 const normalizeText = (value) => {
   if (typeof value !== 'string') return null;
@@ -335,6 +373,39 @@ const extractMetaContent = ($, keys) => {
   return result;
 };
 
+const extractAttributeOrText = ($, selector, attributes, normalizer) => {
+  let result = null;
+
+  $(selector).each((_, element) => {
+    if (result !== null) return;
+    for (const attribute of attributes) {
+      const normalized = normalizer($(element).attr(attribute));
+      if (normalized !== null) {
+        result = normalized;
+        return;
+      }
+    }
+    result = normalizer($(element).text());
+  });
+
+  return result;
+};
+
+const extractDomProduct = ($) => ({
+  productName: extractAttributeOrText(
+    $,
+    '[itemprop="name"], [data-product-name], [data-item-name]',
+    ['content', 'data-product-name', 'data-item-name'],
+    normalizeText,
+  ),
+  price: extractAttributeOrText(
+    $,
+    '[itemprop="price"], [data-product-price], [data-sale-price], [data-price]',
+    ['content', 'value', 'data-product-price', 'data-sale-price', 'data-price'],
+    normalizePrice,
+  ),
+});
+
 const readLimitedResponseBody = async (response) => {
   const contentLength = Number(response.headers?.get?.('content-length'));
   if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
@@ -444,39 +515,100 @@ const readLimitedResponseBody = async (response) => {
 
   return result + decoder.decode();
 };
-const fetchProductPage = async (productUrl) => {
-  let target = await validatePublicUrl(productUrl);
+const requestHeaders = {
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+  'Cache-Control': 'no-cache',
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+};
+
+const requestPinnedAddresses = async (target, addresses, fetchImpl, signal, dispatcherFactory) => {
+  const dispatcher = dispatcherFactory(addresses);
+  try {
+    const response = await fetchImpl(target.url, {
+      method: 'GET',
+      redirect: 'manual',
+      dispatcher,
+      signal,
+      headers: requestHeaders,
+    });
+    return { response, close: () => dispatcher.close() };
+  } catch (error) {
+    await dispatcher.close();
+    throw error;
+  }
+};
+
+const requestProductPage = async (
+  target,
+  redirectCount,
+  { fetchImpl, logger, dispatcherFactory },
+) => {
+  const addresses = target.addresses.slice(0, MAX_ADDRESS_ATTEMPTS);
+  const addressCandidates = addresses.map((address) => [address]);
+  const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  let lastError;
+
+  for (const candidate of addressCandidates) {
+    try {
+      return await requestPinnedAddresses(target, candidate, fetchImpl, signal, dispatcherFactory);
+    } catch (error) {
+      lastError = error;
+      logUpstreamFailure({ logger, target, stage: 'connect', redirectCount, error });
+    }
+  }
+
+  if (lastError?.name === 'TimeoutError' || lastError?.name === 'AbortError') {
+    throw createProductUrlError(
+      504,
+      ERROR_CODES.PRODUCT_URL5041,
+      '외부 상품 페이지 응답 시간이 초과되었습니다.',
+    );
+  }
+  throw createProductUrlError(
+    502,
+    ERROR_CODES.PRODUCT_URL5021,
+    '외부 상품 페이지에 접근할 수 없습니다.',
+  );
+};
+
+const fetchProductPage = async (productUrl, dependencies) => {
+  const { lookup } = dependencies;
+  let target = await validatePublicUrl(productUrl, lookup);
 
   for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
-    const dispatcher = createPinnedDispatcher(target.addresses);
+    const request = await requestProductPage(target, redirectCount, dependencies);
     try {
-      const response = await fetch(target.url, {
-        method: 'GET',
-        redirect: 'manual',
-        dispatcher,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        headers: {
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Cache-Control': 'no-cache',
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        },
-      });
+      const { response } = request;
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers?.get?.('location');
         if (!location || redirectCount === MAX_REDIRECTS) {
+          logUpstreamFailure({
+            logger: dependencies.logger,
+            target,
+            stage: 'redirect',
+            redirectCount,
+            status: response.status,
+          });
           throw createProductUrlError(
             502,
             ERROR_CODES.PRODUCT_URL5021,
             '외부 상품 페이지에 접근할 수 없습니다.',
           );
         }
-        target = await validatePublicUrl(new URL(location, target.url).href);
+        target = await validatePublicUrl(new URL(location, target.url).href, lookup);
         continue;
       }
 
       if (!response.ok) {
+        logUpstreamFailure({
+          logger: dependencies.logger,
+          target,
+          stage: 'response',
+          redirectCount,
+          status: response.status,
+        });
         throw createProductUrlError(
           502,
           ERROR_CODES.PRODUCT_URL5021,
@@ -484,40 +616,80 @@ const fetchProductPage = async (productUrl) => {
         );
       }
       return await readLimitedResponseBody(response);
-    } catch (error) {
-      if (error instanceof HttpError) throw error;
-      if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
-        throw createProductUrlError(
-          504,
-          ERROR_CODES.PRODUCT_URL5041,
-          '외부 상품 페이지 응답 시간이 초과되었습니다.',
-        );
-      }
-      throw createProductUrlError(
-        502,
-        ERROR_CODES.PRODUCT_URL5021,
-        '외부 상품 페이지에 접근할 수 없습니다.',
-      );
     } finally {
-      await dispatcher.close();
+      await request.close();
     }
   }
 
   throw createBadRequest('상품 정보를 불러오지 못했습니다.');
 };
 
-export const parseProductUrl = async ({ productUrl }) => {
-  const html = await fetchProductPage(productUrl);
+const fetchProductPageWithScrapingBee = async (
+  productUrl,
+  { scrapingBeeApiKey, scrapingBeeFetchImpl, logger },
+) => {
+  const endpoint = new URL(SCRAPINGBEE_ENDPOINT);
+  endpoint.searchParams.set('url', productUrl);
+  endpoint.searchParams.set('render_js', 'true');
+  endpoint.searchParams.set('premium_proxy', 'true');
+  endpoint.searchParams.set('country_code', 'kr');
+
+  let response;
+  try {
+    response = await scrapingBeeFetchImpl(endpoint, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${scrapingBeeApiKey}` },
+      signal: AbortSignal.timeout(SCRAPINGBEE_TIMEOUT_MS),
+    });
+  } catch (error) {
+    logger.error('[product-url] scraping fallback failed', {
+      hostname: new URL(productUrl).hostname,
+      stage: 'connect',
+      errorName: error.name,
+      errorCode: error.code ?? error.cause?.code,
+    });
+    throw createProductUrlError(
+      error.name === 'TimeoutError' || error.name === 'AbortError' ? 504 : 502,
+      error.name === 'TimeoutError' || error.name === 'AbortError'
+        ? ERROR_CODES.PRODUCT_URL5041
+        : ERROR_CODES.PRODUCT_URL5021,
+      error.name === 'TimeoutError' || error.name === 'AbortError'
+        ? '외부 상품 페이지 응답 시간이 초과되었습니다.'
+        : '외부 상품 페이지에 접근할 수 없습니다.',
+    );
+  }
+
+  if (!response.ok) {
+    logger.error('[product-url] scraping fallback failed', {
+      hostname: new URL(productUrl).hostname,
+      stage: 'response',
+      status: response.status,
+    });
+    throw createProductUrlError(
+      502,
+      ERROR_CODES.PRODUCT_URL5021,
+      '외부 상품 페이지에 접근할 수 없습니다.',
+    );
+  }
+
+  return readLimitedResponseBody(response);
+};
+
+const parseProductHtml = (html) => {
   const $ = cheerio.load(html);
   const structuredData = extractScriptProduct($);
+  const domProduct = extractDomProduct($);
 
   const productName =
     structuredData.productName ||
     extractMetaContent($, PRODUCT_NAME_META_KEYS) ||
+    domProduct.productName ||
     normalizeText($('h1').first().text()) ||
     normalizeText($('title').first().text());
   const price =
-    structuredData.price ?? normalizePrice(extractMetaContent($, PRODUCT_PRICE_META_KEYS));
+    structuredData.price ??
+    normalizePrice(extractMetaContent($, PRODUCT_PRICE_META_KEYS)) ??
+    domProduct.price;
 
   if (!productName || price === null) {
     throw createProductUrlError(
@@ -527,9 +699,56 @@ export const parseProductUrl = async ({ productUrl }) => {
     );
   }
 
+  return { productName, price };
+};
+
+export const parseProductUrl = async (
+  { productUrl },
+  {
+    fetchImpl = undiciFetch,
+    lookup = dnsLookup,
+    logger = console,
+    scrapingBeeApiKey = process.env.SCRAPINGBEE_API_KEY,
+    scrapingBeeFetchImpl = undiciFetch,
+    dispatcherFactory = createPinnedDispatcher,
+  } = {},
+) => {
+  await validatePublicUrl(productUrl, lookup);
+
+  let product;
+  try {
+    const html = await fetchProductPage(productUrl, {
+      fetchImpl,
+      lookup,
+      logger,
+      dispatcherFactory,
+    });
+    product = parseProductHtml(html);
+  } catch (error) {
+    const fallbackEligible =
+      scrapingBeeApiKey &&
+      error instanceof HttpError &&
+      [
+        ERROR_CODES.PRODUCT_URL4221,
+        ERROR_CODES.PRODUCT_URL5021,
+        ERROR_CODES.PRODUCT_URL5041,
+      ].includes(error.errorCode);
+    if (!fallbackEligible) throw error;
+
+    logger.warn('[product-url] using scraping fallback', {
+      hostname: new URL(productUrl).hostname,
+      directErrorCode: error.errorCode,
+    });
+    const html = await fetchProductPageWithScrapingBee(productUrl, {
+      scrapingBeeApiKey,
+      scrapingBeeFetchImpl,
+      logger,
+    });
+    product = parseProductHtml(html);
+  }
+
   return {
-    productName,
-    price,
+    ...product,
     occurredAt: new Date().toISOString(),
   };
 };

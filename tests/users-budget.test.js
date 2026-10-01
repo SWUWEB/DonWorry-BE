@@ -23,7 +23,10 @@ const deleteTestData = async () => {
     where: { OR: [{ email: testEmail }, { loginId: testLoginId }] },
     select: { id: true },
   });
-  if (user) await prisma.monthlyBudget.deleteMany({ where: { userId: user.id } });
+  if (user) {
+    await prisma.monthlyBudget.deleteMany({ where: { userId: user.id } });
+    await prisma.consumptionRecord.deleteMany({ where: { userId: user.id } });
+  }
   await prisma.user.deleteMany({ where: { OR: [{ email: testEmail }, { loginId: testLoginId }] } });
 };
 
@@ -77,4 +80,84 @@ test('PUT /api/v1/users/me/budget: 전체 카테고리 예산 리스트를 저�
   assert.equal(categoryBudgets.length, 2);
   assert.equal(categoryBudgets.find((c) => c.categoryCode === 'FOOD_SNACK').budgetAmount, '150');
   assert.equal(categoryBudgets.find((c) => c.categoryCode === 'CAFE_DESSERT').budgetAmount, '250');
+});
+
+test('GET /api/v1/users/me/budget: monthlyBudget 기준으로 remainingAmount/usageRate를 계산한다', async () => {
+  const user = await prisma.user.create({
+    data: { email: testEmail, loginId: testLoginId, nickname: 'budget-concurrency-test' },
+  });
+  const token = jwt.sign(
+    { purpose: 'access', userId: user.id.toString() },
+    process.env.JWT_ACCESS_SECRET,
+    { expiresIn: '1h' },
+  );
+
+  await prisma.monthlyBudget.create({
+    data: {
+      userId: user.id,
+      yearMonth,
+      monthlyIncome: 1000000n,
+      monthlyBudget: 500000n,
+      categoryBudgets: [],
+    },
+  });
+
+  await prisma.consumptionRecord.create({
+    data: {
+      userId: user.id,
+      type: 'CONSUMED',
+      productName: 'test-item',
+      price: 300000,
+      occurredAt: new Date(`${yearMonth}-15T00:00:00+09:00`),
+    },
+  });
+
+  const res = await request(app)
+    .get(`/api/v1/users/me/budget?yearMonth=${yearMonth}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.spentAmount, '300000');
+  assert.equal(res.body.data.remainingAmount, '200000');
+  assert.equal(res.body.data.usageRate, 60);
+});
+
+test('GET /api/v1/users/me/budget: 예산 초과 시 remainingAmount는 음수, usageRate는 100으로 고정된다', async () => {
+  const user = await prisma.user.create({
+    data: { email: testEmail, loginId: testLoginId, nickname: 'budget-concurrency-test' },
+  });
+  const token = jwt.sign(
+    { purpose: 'access', userId: user.id.toString() },
+    process.env.JWT_ACCESS_SECRET,
+    { expiresIn: '1h' },
+  );
+
+  await prisma.monthlyBudget.create({
+    data: {
+      userId: user.id,
+      yearMonth,
+      monthlyIncome: 1000000n,
+      monthlyBudget: 500000n,
+      categoryBudgets: [],
+    },
+  });
+
+  await prisma.consumptionRecord.create({
+    data: {
+      userId: user.id,
+      type: 'CONSUMED',
+      productName: 'overbudget-test-item',
+      price: 600000,
+      occurredAt: new Date(`${yearMonth}-15T00:00:00+09:00`),
+    },
+  });
+
+  const res = await request(app)
+    .get(`/api/v1/users/me/budget?yearMonth=${yearMonth}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.spentAmount, '600000');
+  assert.equal(res.body.data.remainingAmount, '-100000');
+  assert.equal(res.body.data.usageRate, 100);
 });

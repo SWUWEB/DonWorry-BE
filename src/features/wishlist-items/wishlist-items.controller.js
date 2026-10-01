@@ -1,12 +1,15 @@
-import { notImplemented } from '../../utils/api-response.js';
 import * as wishlistItemsService from './wishlist-items.service.js';
 
-export const createNotImplementedController = (featureName) => (_req, res) => {
-  return notImplemented(res, featureName);
+const PRISMA_TO_API_WAIT_TYPE_MAP = {
+  ONE_HOUR: '1H',
+  ONE_DAY: '1D',
+  THREE_DAYS: '3D',
+  ONE_WEEK: '1W',
 };
 
 /**
- * Prisma 모델의 BigInt 필드를 JSON 직렬화가 가능한 문자열로 변환하는 유틸 함수
+ * Prisma 모델의 BigInt 필드를 JSON 직렬화가 가능한 문자열로 변환하고
+ * waitType을 API 응답 형식('1H', '1D' 등)으로 변환하는 유틸 함수
  * @param {Object} item - 변환할 위시리스트 아이템 객체
  * @returns {Object|null} 직렬화된 객체 또는 null
  */
@@ -17,6 +20,9 @@ const serializeWishlistItem = (item) => {
     id: item.id.toString(),
     userId: item.userId.toString(),
     price: item.price ? item.price.toString() : null,
+    waitType: item.waitType
+      ? PRISMA_TO_API_WAIT_TYPE_MAP[item.waitType] || item.waitType
+      : item.waitType,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
@@ -41,10 +47,15 @@ export const createItem = async (req, res, next) => {
 export const getItems = async (req, res, next) => {
   try {
     const loggedInUserId = BigInt(req.user.userId);
-    const items = await wishlistItemsService.getWishlistItems(loggedInUserId);
+    const queryParams = req.validated?.query || req.query;
+    const { items, totalCount } = await wishlistItemsService.getWishlistItems(
+      loggedInUserId,
+      queryParams,
+    );
 
     return res.status(200).json({
       success: true,
+      totalCount,
       data: items.map(serializeWishlistItem),
     });
   } catch (error) {

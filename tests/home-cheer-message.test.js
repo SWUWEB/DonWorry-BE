@@ -18,6 +18,19 @@ const { prisma } = await import('../src/prisma/client.js');
 const app = createApp();
 const testEmail = 'home-cheer-message-test@example.com';
 const testLoginId = 'homecheer1';
+const RealDate = Date;
+const fixedNow = new RealDate('2026-08-13T03:00:00.000Z');
+
+class FixedDate extends RealDate {
+  constructor(...args) {
+    if (args.length === 0) super(fixedNow.getTime());
+    else super(...args);
+  }
+
+  static now() {
+    return fixedNow.getTime();
+  }
+}
 
 const createAccessToken = (user) =>
   jwt.sign({ purpose: 'access', userId: user.id.toString() }, process.env.JWT_ACCESS_SECRET, {
@@ -35,7 +48,13 @@ const deleteTestData = async () => {
   });
 };
 
-test.beforeEach(deleteTestData);
+test.beforeEach(async () => {
+  globalThis.Date = FixedDate;
+  await deleteTestData();
+});
+test.afterEach(() => {
+  globalThis.Date = RealDate;
+});
 test.after(async () => {
   await deleteTestData();
   await prisma.$disconnect();
@@ -57,7 +76,7 @@ test('achievement rate boundaries select the correct message level', () => {
   for (const [rate, expected] of cases) assert.equal(getMessageLevel(rate), expected);
 });
 
-test('achievement rate is floored and capped at 100', () => {
+test('achievement rate is rounded and capped at 100', () => {
   assert.equal(
     buildCheerMessage({
       userId: 1n,
@@ -65,7 +84,7 @@ test('achievement rate is floored and capped at 100', () => {
       skippedAmount: 149,
       now: new Date('2026-08-13T03:00:00Z'),
     }).achievementRate,
-    49,
+    50,
   );
   assert.equal(
     buildCheerMessage({ userId: 1n, targetAmount: 100, skippedAmount: 130 }).achievementRate,
@@ -75,8 +94,43 @@ test('achievement rate is floored and capped at 100', () => {
 
 test('achievement rate preserves BigInt and decimal precision', () => {
   assert.equal(calculateAchievementRate('4503599627370496.50', 9007199254740993n), 50);
-  assert.equal(calculateAchievementRate('8999999999999999.99', 9000000000000000n), 99);
+  assert.equal(calculateAchievementRate('8999999999999999.99', 9000000000000000n), 100);
   assert.equal(calculateAchievementRate('100.99', 100n), 100);
+});
+
+test('saving goal, home summary, and cheer message use the same rounded achievement rate', async () => {
+  const user = await prisma.user.create({
+    data: {
+      email: testEmail,
+      loginId: testLoginId,
+      nickname: 'home-cheer-test',
+      targetSavingAmount: 300,
+    },
+  });
+  await prisma.consumptionRecord.create({
+    data: {
+      userId: user.id,
+      type: 'SKIPPED',
+      productName: '참은 소비',
+      price: 149,
+      occurredAt: new Date(),
+    },
+  });
+  const token = createAccessToken(user);
+  const authorization = { Authorization: `Bearer ${token}` };
+
+  const [savingGoal, homeSummary, cheerMessage] = await Promise.all([
+    request(app).get('/api/v1/users/me/saving-goal').set(authorization),
+    request(app).get('/api/v1/home/summary').set(authorization),
+    request(app).get('/api/v1/home/cheer-message').set(authorization),
+  ]);
+
+  assert.equal(savingGoal.status, 200);
+  assert.equal(homeSummary.status, 200);
+  assert.equal(cheerMessage.status, 200);
+  assert.equal(savingGoal.body.data.achievementRate, 50);
+  assert.equal(homeSummary.body.data.goalAchievement.rate, 50);
+  assert.equal(cheerMessage.body.data.achievementRate, 50);
 });
 
 test('same user, KST date, and level always select the same message', () => {
@@ -125,22 +179,23 @@ test('getCheerMessage reads the goal and sums positive SKIPPED records', async (
   assert.equal(result.achievementRate, 50);
   assert.equal(result.messageLevel, 'LEVEL_3');
   assert.equal(typeof result.message, 'string');
-  assert.deepEqual(calls, [
-    [
-      'findUnique',
-      {
-        where: { id: 3n },
-        select: { targetSavingAmount: true },
-      },
-    ],
-    [
-      'aggregate',
-      {
-        where: { userId: 3n, type: 'SKIPPED', price: { gt: 0 } },
-        _sum: { price: true },
-      },
-    ],
-  ]);
+  // validate calls and that aggregation is filtered by month range (KST)
+  assert.equal(calls.length, 2);
+  const findCall = calls[0];
+  const aggCall = calls[1];
+  assert.equal(findCall[0], 'findUnique');
+  assert.deepEqual(findCall[1], { where: { id: 3n }, select: { targetSavingAmount: true } });
+  assert.equal(aggCall[0], 'aggregate');
+  const where = aggCall[1].where;
+  assert.equal(where.userId, 3n);
+  assert.equal(where.type, 'SKIPPED');
+  assert.deepEqual(where.price, { gt: 0 });
+  assert.ok(
+    where.occurredAt && where.occurredAt.gte instanceof Date && where.occurredAt.lt instanceof Date,
+  );
+  // expected month range for 2026-08-13T03:00:00Z is 2026-07-31T15:00:00Z .. 2026-08-31T15:00:00Z
+  assert.equal(where.occurredAt.gte.getTime(), new Date('2026-07-31T15:00:00Z').getTime());
+  assert.equal(where.occurredAt.lt.getTime(), new Date('2026-08-31T15:00:00Z').getTime());
 });
 
 test('getCheerMessage returns GOAL4041 when a goal is not set', async () => {
@@ -161,6 +216,22 @@ test('GET /api/v1/home/cheer-message requires authentication', async () => {
 });
 
 test('GET /api/v1/home/cheer-message sums only SKIPPED records and does not mutate data', async () => {
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const getKstMonthRange = (date, offset = 0) => {
+    const kst = new Date(date.getTime() + KST_OFFSET_MS);
+    const year = kst.getUTCFullYear();
+    const month = kst.getUTCMonth() + offset;
+    return {
+      startAt: new Date(Date.UTC(year, month, 1) - KST_OFFSET_MS),
+      endAt: new Date(Date.UTC(year, month + 1, 1) - KST_OFFSET_MS),
+    };
+  };
+
+  const now = new Date();
+  assert.equal(now.toISOString(), '2026-08-13T03:00:00.000Z');
+  const currentMonthStart = getKstMonthRange(now, 0).startAt;
+  const previousMonthStart = getKstMonthRange(now, -1).startAt;
+
   const user = await prisma.user.create({
     data: {
       email: testEmail,
@@ -177,21 +248,21 @@ test('GET /api/v1/home/cheer-message sums only SKIPPED records and does not muta
         type: 'SKIPPED',
         productName: '참은 소비 1',
         price: 20000,
-        occurredAt: new Date('2026-01-01T00:00:00Z'),
+        occurredAt: previousMonthStart,
       },
       {
         userId: user.id,
         type: 'SKIPPED',
         productName: '참은 소비 2',
         price: 30000,
-        occurredAt: new Date('2026-08-01T00:00:00Z'),
+        occurredAt: currentMonthStart,
       },
       {
         userId: user.id,
         type: 'CONSUMED',
         productName: '소비',
         price: 80000,
-        occurredAt: new Date('2026-08-01T00:00:00Z'),
+        occurredAt: currentMonthStart,
       },
     ],
   });
@@ -211,8 +282,8 @@ test('GET /api/v1/home/cheer-message sums only SKIPPED records and does not muta
 
   assert.equal(first.status, 200);
   assert.deepEqual(first.body, second.body);
-  assert.equal(first.body.data.achievementRate, 50);
-  assert.equal(first.body.data.messageLevel, 'LEVEL_3');
+  assert.equal(first.body.data.achievementRate, 30);
+  assert.equal(first.body.data.messageLevel, 'LEVEL_2');
   const afterUser = await prisma.user.findUnique({ where: { id: user.id } });
   const afterRecords = await prisma.consumptionRecord.findMany({
     where: { userId: user.id },
@@ -236,6 +307,11 @@ test('GET /api/v1/home/cheer-message returns GOAL4041 when goal is absent', asyn
 test('Swagger documents cheer message success, auth, and goal errors', async () => {
   const response = await request(app).get('/api-docs.json');
   const operation = response.body.paths['/api/v1/home/cheer-message'].get;
+  const rateSchema =
+    response.body.components.schemas.CheerMessageResponse.properties.data.properties
+      .achievementRate;
+  assert.match(rateSchema.description, /KST 기준 이번 달.*소수점 반올림/);
+  assert.equal(rateSchema.maximum, 100);
   assert.equal(
     operation.responses['200'].content['application/json'].schema.$ref,
     '#/components/schemas/CheerMessageResponse',

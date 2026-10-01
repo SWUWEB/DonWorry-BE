@@ -21,6 +21,21 @@ export const createWishlistItemDto = z.object({
   }),
 });
 
+export const getWishlistItemsQueryDto = z.object({
+  query: z.object({
+    query: z.string().optional(),
+    categoryCode: z
+      .string()
+      .optional()
+      .refine((val) => val === undefined || val === 'ALL' || CATEGORY_CODE_SET.has(val), {
+        message: '유효한 카테고리 코드가 아닙니다.',
+      }),
+    sort: z.enum(['CREATED_DESC', 'NAME_ASC', 'DEADLINE_ASC']).default('CREATED_DESC'),
+    page: z.coerce.number().int().positive().default(1),
+    limit: z.coerce.number().int().positive().default(10),
+  }),
+});
+
 export const updateWishlistItemDto = wishlistItemIdDto.extend({
   body: z.object({
     categoryCode: z
