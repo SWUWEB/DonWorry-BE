@@ -1,8 +1,14 @@
 name: Task
-description: 기능/버그/리팩토링/문서/테스트/CI/설정 작업
-title: '[TASK] '
+description: 기능/리팩토링/문서/테스트/CI/설정 작업
 labels: ['task']
 body:
+  - type: markdown
+    attributes:
+      value: |
+        제목은 브랜치 타입에 맞는 접두사로 시작해 주세요.
+        `feat` → `[Feature]`, `fix` → `[Fix]`, `refactor` → `[Refactor]`, `docs` → `[Docs]`,
+        `test` → `[Test]`, `chore` → `[Chore]`, `ci` → `[CI]`, `hotfix` → `[Hotfix]`
+
   - type: dropdown
     id: branch_type
     attributes:
