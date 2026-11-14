@@ -17,6 +17,8 @@ compose() {
     "$@"
 }
 
+# The variables in this command expand inside the MySQL container.
+# shellcheck disable=SC2016
 question_count="$(compose exec --no-TTY mysql sh -c \
   'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -Nse \
   "SELECT COUNT(*) FROM intervention_questions WHERE is_active = 1;" \

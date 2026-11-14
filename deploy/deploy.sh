@@ -42,6 +42,8 @@ compose() {
 }
 
 rollback() {
+  trap - ERR
+
   if [[ -z "${previous_image}" ]]; then
     echo "No previous image is available for rollback." >&2
     return
@@ -51,6 +53,22 @@ rollback() {
   write_release_file "${previous_image}"
   compose up --detach --no-deps app
   compose up --detach --no-deps caddy
+}
+
+cleanup_release_images() {
+  local repository
+  local image
+  repository="${next_image%:*}"
+
+  while IFS= read -r image; do
+    if [[ "${image}" == "${next_image}" || "${image}" == "${previous_image}" ]]; then
+      continue
+    fi
+
+    docker image rm "${image}" >/dev/null 2>&1 || true
+  done < <(docker image ls "${repository}" --format '{{.Repository}}:{{.Tag}}')
+
+  docker image prune --force >/dev/null 2>&1 || true
 }
 
 trap rollback ERR
@@ -66,15 +84,19 @@ for attempt in {1..12}; do
   if compose exec --no-TTY app node -e \
     "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
     compose up --detach --no-deps caddy
+    "${deploy_dir}/verify.sh" "${production_url}"
     trap - ERR
-    docker image prune --force >/dev/null 2>&1 || true
+    cleanup_release_images
     echo "Deployment completed successfully."
     exit 0
   fi
 
   echo "Application health check attempt ${attempt}/12 failed."
-  sleep 5
+  if [[ "${attempt}" -lt 12 ]]; then
+    sleep 5
+  fi
 done
 
 echo "Application health check failed." >&2
+rollback
 exit 1

@@ -2,7 +2,8 @@
 set -Eeuo pipefail
 
 readonly runtime_user="${SUDO_USER:-${USER}}"
-readonly runtime_home="$(getent passwd "${runtime_user}" | cut -d: -f6)"
+runtime_home="$(getent passwd "${runtime_user}" | cut -d: -f6)"
+readonly runtime_home
 
 if ! command -v docker >/dev/null 2>&1; then
   curl --fail --silent --show-error --location https://get.docker.com | sudo sh
