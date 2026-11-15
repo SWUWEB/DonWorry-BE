@@ -23,7 +23,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
+    "@prisma/client": "^6.12.0",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.0.0",
     "cors": "^2.8.6",
@@ -32,15 +32,15 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
-    "nodemailer": "^9.0.3",
-    "prisma": "^6.19.3",
+    "nodemailer": "^10.5.0",
+    "prisma": "^6.12.0",
     "swagger-ui-express": "^5.0.1",
-    "undici": "6.27.0",
+    "undici": "^6.29.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "eslint": "^8.57.1",
-    "nodemon": "^3.1.14",
+    "nodemon": "3.1.11",
     "prettier": "^3.8.3",
     "supertest": "^7.2.2"
   }

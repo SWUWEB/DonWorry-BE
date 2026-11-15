@@ -1,16 +1,16 @@
 ## 📌 작업 요약
 
-- 요약: develop 브랜치의 누적 변경사항을 main으로 릴리즈 배포
+- 요약:
+  <!-- 이번 배포에 포함된 실제 기능, 수정 사항, 운영 변경사항을 작성 -->
 - 관련 이슈: #
 
 ## 🌿 브랜치 정보
 
-- **Source**: `develop` (기본)
-- **Target**: `main` (릴리즈)
+- **Source**: `develop`
+- **Target**: `main`
 
 ## ✅ 체크리스트
 
-- [ ] 브랜치 컨벤션 준수 (`feat/fix/refactor/docs/chore/test/ci/hotfix`)
 - [ ] 커밋 컨벤션 준수 (`feat/fix/refactor/docs/style/test/ci/chore`)
 - [ ] self-review 완료
 - [ ] 테스트 및 로컬 실행 확인 완료

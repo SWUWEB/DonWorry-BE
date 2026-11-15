@@ -109,6 +109,13 @@ Node.js Express 기반 DonWorry 백엔드 API 서버입니다.
 
 모든 비즈니스 API는 /api/v1 하위에 둡니다.
 
+## 운영 배포
+
+- 운영 서버는 AWS Lightsail에서 API, MySQL, Caddy를 Docker Compose로 실행합니다.
+- `main` 브랜치에 변경사항을 병합하면 GitHub Actions `CD`가 운영 서버에 배포합니다.
+- 운영 URL은 GitHub `production` 환경의 `PRODUCTION_URL` 변수와 배포 결과에서 확인합니다.
+- 서버 초기 설정, 환경 변수, 배포 검증 및 백업 절차는 [AWS 운영 배포 가이드](docs/aws-deployment.md)를 참고하세요.
+
 ## Swagger
 
 - Swagger UI: http://localhost:3000/api-docs
