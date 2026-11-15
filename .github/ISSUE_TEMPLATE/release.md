@@ -29,4 +29,4 @@ develop 브랜치에 누적된 변경사항을 main으로 릴리즈 배포합니
 - [ ] release PR 생성 (develop → main)
 - [ ] 리뷰/체크 통과
 - [ ] main 머지
-- [ ] GitHub Actions `CD` 성공 확인 (마이그레이션, Cloud Run 배포, `/health` 응답 검사 포함)
+- [ ] GitHub Actions `CD` 성공 확인 (AWS Lightsail 이미지 배포, 마이그레이션, seed 데이터, 백업, 외부 HTTPS `/health` 검사 포함)
