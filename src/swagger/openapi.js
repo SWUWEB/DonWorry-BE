@@ -3139,10 +3139,16 @@ export const openApiDocument = {
                     message: { type: 'string', example: 'url 파싱에 성공했습니다.' },
                     data: {
                       type: 'object',
-                      required: ['productName', 'price', 'occurredAt'],
+                      required: ['productName', 'price', 'productImageUrl', 'occurredAt'],
                       properties: {
                         productName: { type: 'string', example: '투썸플레이스 신봉점' },
                         price: { type: 'number', example: 6100 },
+                        productImageUrl: {
+                          type: 'string',
+                          nullable: true,
+                          example: 'https://image.example.com/products/123.jpg',
+                          description: '상품 대표 이미지 URL. 추출 실패 시 null(기본 이미지 표시)',
+                        },
                         occurredAt: {
                           type: 'string',
                           format: 'date-time',

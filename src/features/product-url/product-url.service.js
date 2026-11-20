@@ -20,6 +20,7 @@ const PRODUCT_PRICE_META_KEYS = new Set([
   'product:sale_price:amount',
   'price',
 ]);
+const MAX_IMAGE_URL_LENGTH = 500;
 const PRODUCT_NAME_KEYS = ['productName', 'goodsName', 'itemName', 'displayName', 'name', 'title'];
 const PRODUCT_PRICE_KEYS = [
   'salePrice',
@@ -406,6 +407,64 @@ const extractDomProduct = ($) => ({
   ),
 });
 
+const normalizeImageUrl = (value, baseUrl) => {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  const raw =
+    candidate && typeof candidate === 'object'
+      ? (candidate.url ?? candidate.contentUrl)
+      : candidate;
+  const text = normalizeText(raw);
+  if (!text) return null;
+
+  try {
+    const url = new URL(text, baseUrl);
+    if (!/^https?:$/.test(url.protocol)) return null;
+    return url.href.length <= MAX_IMAGE_URL_LENGTH ? url.href : null;
+  } catch {
+    return null;
+  }
+};
+
+const findJsonLdProductImage = (node, baseUrl, depth = 0) => {
+  if (!node || typeof node !== 'object' || depth > MAX_STRUCTURED_DATA_DEPTH) return null;
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findJsonLdProductImage(item, baseUrl, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const type = node['@type'];
+  const isProduct = Array.isArray(type) ? type.includes('Product') : type === 'Product';
+  if (isProduct) {
+    const image = normalizeImageUrl(node.image, baseUrl);
+    if (image) return image;
+  }
+
+  for (const value of Object.values(node)) {
+    const found = findJsonLdProductImage(value, baseUrl, depth + 1);
+    if (found) return found;
+  }
+  return null;
+};
+
+const extractProductImage = ($, baseUrl) => {
+  let jsonLdImage = null;
+  $('script[type="application/ld+json"]').each((_, element) => {
+    if (jsonLdImage) return;
+    const parsed = parseJson($(element).text() || '');
+    if (parsed) jsonLdImage = findJsonLdProductImage(parsed, baseUrl);
+  });
+  if (jsonLdImage) return jsonLdImage;
+
+  return normalizeImageUrl(
+    extractMetaContent($, new Set(['og:image', 'og:image:secure_url'])),
+    baseUrl,
+  );
+};
+
 const readLimitedResponseBody = async (response) => {
   const contentLength = Number(response.headers?.get?.('content-length'));
   if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
@@ -675,7 +734,7 @@ const fetchProductPageWithScrapingBee = async (
   return readLimitedResponseBody(response);
 };
 
-const parseProductHtml = (html) => {
+const parseProductHtml = (html, baseUrl) => {
   const $ = cheerio.load(html);
   const structuredData = extractScriptProduct($);
   const domProduct = extractDomProduct($);
@@ -699,7 +758,7 @@ const parseProductHtml = (html) => {
     );
   }
 
-  return { productName, price };
+  return { productName, price, productImageUrl: extractProductImage($, baseUrl) };
 };
 
 export const parseProductUrl = async (
@@ -723,7 +782,7 @@ export const parseProductUrl = async (
       logger,
       dispatcherFactory,
     });
-    product = parseProductHtml(html);
+    product = parseProductHtml(html, productUrl);
   } catch (error) {
     const fallbackEligible =
       scrapingBeeApiKey &&
@@ -744,7 +803,7 @@ export const parseProductUrl = async (
       scrapingBeeFetchImpl,
       logger,
     });
-    product = parseProductHtml(html);
+    product = parseProductHtml(html, productUrl);
   }
 
   return {
