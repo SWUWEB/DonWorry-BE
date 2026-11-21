@@ -19,6 +19,19 @@ const { serializeConsumptionRecord } =
   await import('../src/features/consumption-records/consumption-records.controller.js');
 
 const app = createApp();
+const RealDate = Date;
+const fixedNow = new RealDate('2026-07-10T03:30:00.000Z');
+
+class FixedDate extends RealDate {
+  constructor(...args) {
+    if (args.length === 0) super(fixedNow.getTime());
+    else super(...args);
+  }
+
+  static now() {
+    return fixedNow.getTime();
+  }
+}
 
 const testEmail = 'consumption-record-test@example.com';
 const testLoginId = 'consumption1';
@@ -141,7 +154,12 @@ const deleteConsumptionTestData = async () => {
 };
 
 test.beforeEach(async () => {
+  globalThis.Date = FixedDate;
   await deleteConsumptionTestData();
+});
+
+test.afterEach(() => {
+  globalThis.Date = RealDate;
 });
 
 test.after(async () => {
@@ -256,6 +274,49 @@ test('POST /api/v1/consumption-records rejects invalid calendar date occurredAt'
   assert.equal(response.body.success, false);
   assert.equal(response.body.code, 'CONSUMPTION_RECORD4001');
   assert.ok(response.body.errors);
+});
+
+test('POST /api/v1/consumption-records rejects a future occurredAt', async () => {
+  const user = await createTestUser();
+  const response = await request(app)
+    .post('/api/v1/consumption-records')
+    .set('Authorization', `Bearer ${createAccessToken(user)}`)
+    .send({
+      type: 'CONSUMED',
+      productName: '미래 소비',
+      price: 3000,
+      occurredAt: '2026-07-10T12:30:01+09:00',
+    });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'CONSUMPTION_RECORD4004');
+});
+
+test('POST /api/v1/consumption-records applies the KST seven-day boundary', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const allowedResponse = await request(app)
+    .post('/api/v1/consumption-records')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({
+      type: 'CONSUMED',
+      productName: '허용 경계 소비',
+      price: 3000,
+      occurredAt: '2026-07-04T00:00:00+09:00',
+    });
+  const rejectedResponse = await request(app)
+    .post('/api/v1/consumption-records')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({
+      type: 'CONSUMED',
+      productName: '만료 경계 소비',
+      price: 3000,
+      occurredAt: '2026-07-03T23:59:59+09:00',
+    });
+
+  assert.equal(allowedResponse.status, 201);
+  assert.equal(rejectedResponse.status, 400);
+  assert.equal(rejectedResponse.body.code, 'CONSUMPTION_RECORD4005');
 });
 
 test('POST /api/v1/consumption-records rejects unsupported categoryCode', async () => {
@@ -438,6 +499,21 @@ test('GET /api-docs.json documents consumption record detail fields and risk sco
     schemas.ConsumptionRecordDetailResult.allOf[0].$ref,
     '#/components/schemas/ConsumptionRecordResult',
   );
+});
+
+test('GET /api-docs.json documents consumption record date policies', async () => {
+  const response = await request(app).get('/api-docs.json');
+  const post = response.body.paths['/api/v1/consumption-records'].post;
+  const put = response.body.paths['/api/v1/consumption-records/{consumptionRecordId}'].put;
+  const examples =
+    response.body.components.responses.ConsumptionRecordBadRequest.content['application/json']
+      .examples;
+
+  assert.match(post.requestBody.description, /최근 7일/);
+  assert.match(put.description, /현재 달/);
+  assert.equal(examples.futureOccurredAt.value.code, 'CONSUMPTION_RECORD4004');
+  assert.equal(examples.occurredAtTooOld.value.code, 'CONSUMPTION_RECORD4005');
+  assert.equal(examples.previousMonthRecord.value.code, 'CONSUMPTION_RECORD4006');
 });
 
 test('serializeConsumptionRecord returns null for an out-of-contract legacy riskScore', () => {
@@ -1032,6 +1108,48 @@ test('PUT /api/v1/consumption-records/:id rejects invalid occurredAt with a cons
   assert.equal(response.body.success, false);
   assert.equal(response.body.code, 'CONSUMPTION_RECORD4001');
   assert.ok(response.body.errors);
+});
+
+test('PUT /api/v1/consumption-records/:id rejects an update to a previous KST month record', async () => {
+  const user = await createTestUser();
+  const record = await createTestRecord(user, {
+    occurredAt: new Date('2026-06-30T14:59:59.000Z'),
+  });
+  const response = await request(app)
+    .put(`/api/v1/consumption-records/${record.id}`)
+    .set('Authorization', `Bearer ${createAccessToken(user)}`)
+    .send({ productName: '수정 불가 소비' });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'CONSUMPTION_RECORD4006');
+});
+
+test('PUT /api/v1/consumption-records/:id rejects moving a current record to an older month', async () => {
+  const user = await createTestUser();
+  const record = await createTestRecord(user, {
+    occurredAt: new Date('2026-07-09T03:30:00.000Z'),
+  });
+  const response = await request(app)
+    .put(`/api/v1/consumption-records/${record.id}`)
+    .set('Authorization', `Bearer ${createAccessToken(user)}`)
+    .send({ occurredAt: '2026-06-30T12:30:00+09:00' });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'CONSUMPTION_RECORD4005');
+});
+
+test('PUT /api/v1/consumption-records/:id allows a current KST month record at the month boundary', async () => {
+  const user = await createTestUser();
+  const record = await createTestRecord(user, {
+    occurredAt: new Date('2026-06-30T15:00:00.000Z'),
+  });
+  const response = await request(app)
+    .put(`/api/v1/consumption-records/${record.id}`)
+    .set('Authorization', `Bearer ${createAccessToken(user)}`)
+    .send({ productName: '수정 가능 소비' });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.productName, '수정 가능 소비');
 });
 
 test('PUT /api/v1/consumption-records/:id rejects duplicate intervention question ids', async () => {

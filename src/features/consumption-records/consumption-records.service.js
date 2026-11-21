@@ -4,6 +4,9 @@ import { CATEGORY_CODE_SET, CATEGORY_MAP } from '../../config/categories.js';
 import { prisma } from '../../prisma/client.js';
 import { calculateWorkHoursNeeded } from '../../utils/work-hours.js';
 
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const DATE_ENTRY_LOOKBACK_DAYS = 7;
+
 const isValidIsoDatetime = (value) => {
   const match =
     /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?(Z|([+-])([0-9]{2}):([0-9]{2}))$/.exec(
@@ -70,7 +73,43 @@ const resolveOccurredAt = (occurredAt) => {
   return date;
 };
 
-export const createConsumptionRecord = async ({ userId, data }) => {
+const getKstDayStart = (date) => {
+  const kst = new Date(date.getTime() + KST_OFFSET_MS);
+  return new Date(
+    Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) - KST_OFFSET_MS,
+  );
+};
+
+const getKstMonthKey = (date) => {
+  const kst = new Date(date.getTime() + KST_OFFSET_MS);
+  return `${kst.getUTCFullYear()}-${kst.getUTCMonth()}`;
+};
+
+const assertOccurredAtIsAllowed = (occurredAt, now) => {
+  if (occurredAt > now) {
+    throw new HttpError(400, '소비 발생 시각은 현재 시각 이후일 수 없습니다.', {
+      errorCode: ERROR_CODES.CONSUMPTION_RECORD4004,
+    });
+  }
+
+  const earliestAllowedAt = getKstDayStart(now);
+  earliestAllowedAt.setUTCDate(earliestAllowedAt.getUTCDate() - (DATE_ENTRY_LOOKBACK_DAYS - 1));
+  if (occurredAt < earliestAllowedAt) {
+    throw new HttpError(400, '소비 발생 일자는 KST 기준 오늘을 포함한 최근 7일 이내여야 합니다.', {
+      errorCode: ERROR_CODES.CONSUMPTION_RECORD4005,
+    });
+  }
+};
+
+const assertRecordIsInCurrentKstMonth = (occurredAt, now) => {
+  if (getKstMonthKey(occurredAt) !== getKstMonthKey(now)) {
+    throw new HttpError(400, 'KST 기준 이전 달의 소비 기록은 수정할 수 없습니다.', {
+      errorCode: ERROR_CODES.CONSUMPTION_RECORD4006,
+    });
+  }
+};
+
+export const createConsumptionRecord = async ({ userId, data, now = new Date() }) => {
   const {
     type,
     productName,
@@ -94,6 +133,7 @@ export const createConsumptionRecord = async ({ userId, data }) => {
   }
 
   const occurred = resolveOccurredAt(occurredAt);
+  assertOccurredAtIsAllowed(occurred, now);
 
   const answersData = Array.isArray(interventionAnswers)
     ? interventionAnswers.map((a) => ({
@@ -250,7 +290,7 @@ const assertActiveQuestionsExist = async (tx, answersData) => {
   }
 };
 
-const buildUpdateData = (data) => {
+const buildUpdateData = (data, now) => {
   const updateData = {};
 
   if (data.type !== undefined) updateData.type = data.type;
@@ -258,7 +298,11 @@ const buildUpdateData = (data) => {
   if (data.price !== undefined) updateData.price = data.price;
   if (data.productUrl !== undefined) updateData.productUrl = data.productUrl;
   if (data.reason !== undefined) updateData.reason = data.reason;
-  if (data.occurredAt !== undefined) updateData.occurredAt = resolveOccurredAt(data.occurredAt);
+  if (data.occurredAt !== undefined) {
+    updateData.occurredAt = resolveOccurredAt(data.occurredAt);
+    assertOccurredAtIsAllowed(updateData.occurredAt, now);
+    assertRecordIsInCurrentKstMonth(updateData.occurredAt, now);
+  }
   if (data.riskScore !== undefined) updateData.riskScore = data.riskScore;
 
   const categoryValue = data.categoryCode !== undefined ? data.categoryCode : data.category_code;
@@ -281,7 +325,6 @@ const buildUpdateData = (data) => {
   return updateData;
 };
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const CONSUMPTION_HISTORY_DAYS = 28;
 
 const getConsumptionHistoryRange = (now) => {
@@ -403,12 +446,24 @@ export const getConsumptionRecord = async ({ userId, consumptionRecordId, now = 
   };
 };
 
-export const updateConsumptionRecord = async ({ userId, consumptionRecordId, data }) => {
-  const updateData = buildUpdateData(data);
+export const updateConsumptionRecord = async ({
+  userId,
+  consumptionRecordId,
+  data,
+  now = new Date(),
+}) => {
   const answersData = normalizeInterventionAnswers(data.interventionAnswers);
   const where = { id: BigInt(consumptionRecordId), userId: BigInt(userId) };
 
   return prisma.$transaction(async (tx) => {
+    const existingRecord = await tx.consumptionRecord.findUnique({
+      where: { id: BigInt(consumptionRecordId) },
+      select: { id: true, userId: true, occurredAt: true },
+    });
+    assertRecordOwner(existingRecord, userId);
+    assertRecordIsInCurrentKstMonth(existingRecord.occurredAt, now);
+
+    const updateData = buildUpdateData(data, now);
     await assertActiveQuestionsExist(tx, answersData);
 
     if (data.price !== undefined) {
