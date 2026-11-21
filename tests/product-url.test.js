@@ -602,3 +602,22 @@ test('resolves a relative image URL against the redirected URL', async () => {
     },
   );
 });
+
+test('uses the first valid JSON-LD image when earlier array items are empty', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const html = `
+    <script type="application/ld+json">
+      {
+        "@type": "Product",
+        "name": "Array Image Product",
+        "image": ["", "https://cdn.example.com/product.jpg"],
+        "offers": { "@type": "Offer", "price": 11000 }
+      }
+    </script>`;
+
+  const response = await withMockedFetch(html, () => requestParse(accessToken, publicProductUrl));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.productImageUrl, 'https://cdn.example.com/product.jpg');
+});

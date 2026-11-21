@@ -408,11 +408,14 @@ const extractDomProduct = ($) => ({
 });
 
 const normalizeImageUrl = (value, baseUrl) => {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  const raw =
-    candidate && typeof candidate === 'object'
-      ? (candidate.url ?? candidate.contentUrl)
-      : candidate;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const image = normalizeImageUrl(item, baseUrl);
+      if (image) return image;
+    }
+    return null;
+  }
+  const raw = value && typeof value === 'object' ? (value.url ?? value.contentUrl) : value;
   const text = normalizeText(raw);
   if (!text) return null;
 
