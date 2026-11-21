@@ -470,7 +470,12 @@ test('documents the project response contract and both bad request shapes', asyn
   assert.ok(successSchema.properties.message);
   assert.ok(successSchema.properties.data);
   assert.deepEqual(successSchema.required, ['success', 'message', 'data']);
-  assert.deepEqual(successSchema.properties.data.required, ['productName', 'price', 'occurredAt']);
+  assert.deepEqual(successSchema.properties.data.required, [
+    'productName',
+    'price',
+    'productImageUrl',
+    'occurredAt',
+  ]);
   assert.equal(successSchema.properties.data.properties.occurredAt.format, 'date-time');
   assert.deepEqual(badRequestSchema.anyOf, [
     { $ref: '#/components/schemas/ValidationErrorResponse' },
@@ -492,4 +497,127 @@ test('documents the project response contract and both bad request shapes', asyn
     operation.responses['504'].content['application/json'].example.code,
     'PRODUCT_URL5041',
   );
+});
+
+test('prefers JSON-LD Product image over og:image', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const html = `
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": "JSON-LD Product",
+        "image": ["https://cdn.example.com/product-main.jpg"],
+        "offers": { "@type": "Offer", "price": 15000 }
+      }
+    </script>
+    <meta property="og:image" content="https://cdn.example.com/site-banner.jpg">`;
+
+  const response = await withMockedFetch(html, () => requestParse(accessToken, publicProductUrl));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.productImageUrl, 'https://cdn.example.com/product-main.jpg');
+});
+
+test('extracts og:image when Product JSON-LD image is absent', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const html = `
+    <meta property="og:title" content="OG Image Product">
+    <meta property="product:price:amount" content="9900">
+    <meta property="og:image" content="https://cdn.example.com/og-item.jpg">`;
+
+  const response = await withMockedFetch(html, () => requestParse(accessToken, publicProductUrl));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.productImageUrl, 'https://cdn.example.com/og-item.jpg');
+});
+
+test('resolves a relative image URL against the product URL', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const html = `
+    <meta property="og:title" content="Relative Image Product">
+    <meta property="product:price:amount" content="12000">
+    <meta property="og:image" content="/img/a.jpg">`;
+
+  const response = await withMockedFetch(html, () => requestParse(accessToken, publicProductUrl));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.productImageUrl, 'https://8.8.8.8/img/a.jpg');
+});
+
+test('returns null productImageUrl when no image metadata exists', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const html = `
+    <meta property="og:title" content="No Image Product">
+    <meta property="product:price:amount" content="4500">`;
+
+  const response = await withMockedFetch(html, () => requestParse(accessToken, publicProductUrl));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.productName, 'No Image Product');
+  assert.equal(response.body.data.price, 4500);
+  assert.equal(response.body.data.productImageUrl, null);
+});
+
+test('uses the next valid og:image candidate when the first one is unusable', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const html = `
+    <meta property="og:title" content="Fallback Image Product">
+    <meta property="product:price:amount" content="7000">
+    <meta property="og:image" content="data:image/png;base64,AAAA">
+    <meta property="og:image:secure_url" content="https://cdn.example.com/secure.jpg">`;
+
+  const response = await withMockedFetch(html, () => requestParse(accessToken, publicProductUrl));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.productImageUrl, 'https://cdn.example.com/secure.jpg');
+});
+
+test('resolves a relative image URL against the redirected URL', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  let fetchCount = 0;
+
+  await withMockedFetchImpl(
+    async () => {
+      fetchCount += 1;
+      if (fetchCount === 1) {
+        return mockFetchResponse('', 302, { location: 'https://1.1.1.1/products/1' });
+      }
+      return mockFetchResponse(`
+        <meta property="og:title" content="Redirected Product">
+        <meta property="product:price:amount" content="8800">
+        <meta property="og:image" content="/images/main.jpg">`);
+    },
+    async () => {
+      const response = await requestParse(accessToken, publicProductUrl);
+
+      assert.equal(response.status, 200);
+      assert.equal(response.body.data.productImageUrl, 'https://1.1.1.1/images/main.jpg');
+    },
+  );
+});
+
+test('uses the first valid JSON-LD image when earlier array items are empty', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const html = `
+    <script type="application/ld+json">
+      {
+        "@type": "Product",
+        "name": "Array Image Product",
+        "image": ["", "https://cdn.example.com/product.jpg"],
+        "offers": { "@type": "Offer", "price": 11000 }
+      }
+    </script>`;
+
+  const response = await withMockedFetch(html, () => requestParse(accessToken, publicProductUrl));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.productImageUrl, 'https://cdn.example.com/product.jpg');
 });

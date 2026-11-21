@@ -20,6 +20,7 @@ const PRODUCT_PRICE_META_KEYS = new Set([
   'product:sale_price:amount',
   'price',
 ]);
+const MAX_IMAGE_URL_LENGTH = 500;
 const PRODUCT_NAME_KEYS = ['productName', 'goodsName', 'itemName', 'displayName', 'name', 'title'];
 const PRODUCT_PRICE_KEYS = [
   'salePrice',
@@ -406,6 +407,78 @@ const extractDomProduct = ($) => ({
   ),
 });
 
+const normalizeImageUrl = (value, baseUrl, depth = 0) => {
+  if (depth > MAX_STRUCTURED_DATA_DEPTH) return null;
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const image = normalizeImageUrl(item, baseUrl, depth + 1);
+      if (image) return image;
+    }
+    return null;
+  }
+  const raw = value && typeof value === 'object' ? (value.url ?? value.contentUrl) : value;
+  const text = normalizeText(raw);
+  if (!text) return null;
+
+  try {
+    const url = new URL(text, baseUrl);
+    if (!/^https?:$/.test(url.protocol)) return null;
+    return url.href.length <= MAX_IMAGE_URL_LENGTH ? url.href : null;
+  } catch {
+    return null;
+  }
+};
+
+const findJsonLdProductImage = (node, baseUrl, depth = 0) => {
+  if (!node || typeof node !== 'object' || depth > MAX_STRUCTURED_DATA_DEPTH) return null;
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findJsonLdProductImage(item, baseUrl, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const type = node['@type'];
+  const isProduct = Array.isArray(type) ? type.includes('Product') : type === 'Product';
+  if (isProduct) {
+    const image = normalizeImageUrl(node.image, baseUrl);
+    if (image) return image;
+  }
+
+  for (const value of Object.values(node)) {
+    const found = findJsonLdProductImage(value, baseUrl, depth + 1);
+    if (found) return found;
+  }
+  return null;
+};
+
+const extractMetaImage = ($, baseUrl) => {
+  let result = null;
+  $('meta').each((_, element) => {
+    if (result) return;
+    const key = ($(element).attr('property') || $(element).attr('name'))?.trim().toLowerCase();
+    if (key !== 'og:image' && key !== 'og:image:secure_url') return;
+
+    result = normalizeImageUrl($(element).attr('content'), baseUrl);
+  });
+  return result;
+};
+
+const extractProductImage = ($, baseUrl) => {
+  let jsonLdImage = null;
+  $('script[type="application/ld+json"]').each((_, element) => {
+    if (jsonLdImage) return;
+    const parsed = parseJson($(element).text() || '');
+    if (parsed) jsonLdImage = findJsonLdProductImage(parsed, baseUrl);
+  });
+  if (jsonLdImage) return jsonLdImage;
+
+  return extractMetaImage($, baseUrl);
+};
+
 const readLimitedResponseBody = async (response) => {
   const contentLength = Number(response.headers?.get?.('content-length'));
   if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
@@ -615,7 +688,7 @@ const fetchProductPage = async (productUrl, dependencies) => {
           '외부 상품 페이지에 접근할 수 없습니다.',
         );
       }
-      return await readLimitedResponseBody(response);
+      return { html: await readLimitedResponseBody(response), finalUrl: target.url.href };
     } finally {
       await request.close();
     }
@@ -672,10 +745,14 @@ const fetchProductPageWithScrapingBee = async (
     );
   }
 
-  return readLimitedResponseBody(response);
+  const html = await readLimitedResponseBody(response);
+  return {
+    html,
+    finalUrl: response.headers?.get?.('spb-resolved-url') || productUrl,
+  };
 };
 
-const parseProductHtml = (html) => {
+const parseProductHtml = (html, baseUrl) => {
   const $ = cheerio.load(html);
   const structuredData = extractScriptProduct($);
   const domProduct = extractDomProduct($);
@@ -699,7 +776,7 @@ const parseProductHtml = (html) => {
     );
   }
 
-  return { productName, price };
+  return { productName, price, productImageUrl: extractProductImage($, baseUrl) };
 };
 
 export const parseProductUrl = async (
@@ -717,13 +794,13 @@ export const parseProductUrl = async (
 
   let product;
   try {
-    const html = await fetchProductPage(productUrl, {
+    const { html, finalUrl } = await fetchProductPage(productUrl, {
       fetchImpl,
       lookup,
       logger,
       dispatcherFactory,
     });
-    product = parseProductHtml(html);
+    product = parseProductHtml(html, finalUrl);
   } catch (error) {
     const fallbackEligible =
       scrapingBeeApiKey &&
@@ -739,12 +816,12 @@ export const parseProductUrl = async (
       hostname: new URL(productUrl).hostname,
       directErrorCode: error.errorCode,
     });
-    const html = await fetchProductPageWithScrapingBee(productUrl, {
+    const { html, finalUrl } = await fetchProductPageWithScrapingBee(productUrl, {
       scrapingBeeApiKey,
       scrapingBeeFetchImpl,
       logger,
     });
-    product = parseProductHtml(html);
+    product = parseProductHtml(html, finalUrl);
   }
 
   return {
