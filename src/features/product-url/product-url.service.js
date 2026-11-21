@@ -407,10 +407,12 @@ const extractDomProduct = ($) => ({
   ),
 });
 
-const normalizeImageUrl = (value, baseUrl) => {
+const normalizeImageUrl = (value, baseUrl, depth = 0) => {
+  if (depth > MAX_STRUCTURED_DATA_DEPTH) return null;
+
   if (Array.isArray(value)) {
     for (const item of value) {
-      const image = normalizeImageUrl(item, baseUrl);
+      const image = normalizeImageUrl(item, baseUrl, depth + 1);
       if (image) return image;
     }
     return null;
