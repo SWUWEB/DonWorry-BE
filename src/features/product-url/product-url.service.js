@@ -450,6 +450,18 @@ const findJsonLdProductImage = (node, baseUrl, depth = 0) => {
   return null;
 };
 
+const extractMetaImage = ($, baseUrl) => {
+  let result = null;
+  $('meta').each((_, element) => {
+    if (result) return;
+    const key = ($(element).attr('property') || $(element).attr('name'))?.trim().toLowerCase();
+    if (key !== 'og:image' && key !== 'og:image:secure_url') return;
+
+    result = normalizeImageUrl($(element).attr('content'), baseUrl);
+  });
+  return result;
+};
+
 const extractProductImage = ($, baseUrl) => {
   let jsonLdImage = null;
   $('script[type="application/ld+json"]').each((_, element) => {
@@ -459,10 +471,7 @@ const extractProductImage = ($, baseUrl) => {
   });
   if (jsonLdImage) return jsonLdImage;
 
-  return normalizeImageUrl(
-    extractMetaContent($, new Set(['og:image', 'og:image:secure_url'])),
-    baseUrl,
-  );
+  return extractMetaImage($, baseUrl);
 };
 
 const readLimitedResponseBody = async (response) => {
@@ -674,7 +683,7 @@ const fetchProductPage = async (productUrl, dependencies) => {
           '외부 상품 페이지에 접근할 수 없습니다.',
         );
       }
-      return await readLimitedResponseBody(response);
+      return { html: await readLimitedResponseBody(response), finalUrl: target.url.href };
     } finally {
       await request.close();
     }
@@ -776,13 +785,13 @@ export const parseProductUrl = async (
 
   let product;
   try {
-    const html = await fetchProductPage(productUrl, {
+    const { html, finalUrl } = await fetchProductPage(productUrl, {
       fetchImpl,
       lookup,
       logger,
       dispatcherFactory,
     });
-    product = parseProductHtml(html, productUrl);
+    product = parseProductHtml(html, finalUrl);
   } catch (error) {
     const fallbackEligible =
       scrapingBeeApiKey &&

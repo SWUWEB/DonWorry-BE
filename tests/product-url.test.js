@@ -562,3 +562,43 @@ test('returns null productImageUrl when no image metadata exists', async () => {
   assert.equal(response.body.data.price, 4500);
   assert.equal(response.body.data.productImageUrl, null);
 });
+
+test('uses the next valid og:image candidate when the first one is unusable', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  const html = `
+    <meta property="og:title" content="Fallback Image Product">
+    <meta property="product:price:amount" content="7000">
+    <meta property="og:image" content="data:image/png;base64,AAAA">
+    <meta property="og:image:secure_url" content="https://cdn.example.com/secure.jpg">`;
+
+  const response = await withMockedFetch(html, () => requestParse(accessToken, publicProductUrl));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.productImageUrl, 'https://cdn.example.com/secure.jpg');
+});
+
+test('resolves a relative image URL against the redirected URL', async () => {
+  const user = await createTestUser();
+  const accessToken = createAccessToken(user);
+  let fetchCount = 0;
+
+  await withMockedFetchImpl(
+    async () => {
+      fetchCount += 1;
+      if (fetchCount === 1) {
+        return mockFetchResponse('', 302, { location: 'https://1.1.1.1/products/1' });
+      }
+      return mockFetchResponse(`
+        <meta property="og:title" content="Redirected Product">
+        <meta property="product:price:amount" content="8800">
+        <meta property="og:image" content="/images/main.jpg">`);
+    },
+    async () => {
+      const response = await requestParse(accessToken, publicProductUrl);
+
+      assert.equal(response.status, 200);
+      assert.equal(response.body.data.productImageUrl, 'https://1.1.1.1/images/main.jpg');
+    },
+  );
+});
