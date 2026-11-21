@@ -745,7 +745,11 @@ const fetchProductPageWithScrapingBee = async (
     );
   }
 
-  return readLimitedResponseBody(response);
+  const html = await readLimitedResponseBody(response);
+  return {
+    html,
+    finalUrl: response.headers?.get?.('spb-resolved-url') || productUrl,
+  };
 };
 
 const parseProductHtml = (html, baseUrl) => {
@@ -812,12 +816,12 @@ export const parseProductUrl = async (
       hostname: new URL(productUrl).hostname,
       directErrorCode: error.errorCode,
     });
-    const html = await fetchProductPageWithScrapingBee(productUrl, {
+    const { html, finalUrl } = await fetchProductPageWithScrapingBee(productUrl, {
       scrapingBeeApiKey,
       scrapingBeeFetchImpl,
       logger,
     });
-    product = parseProductHtml(html, productUrl);
+    product = parseProductHtml(html, finalUrl);
   }
 
   return {
