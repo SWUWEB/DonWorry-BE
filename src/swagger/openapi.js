@@ -1379,6 +1379,30 @@ export const openApiDocument = {
                   },
                 },
               },
+              futureOccurredAt: {
+                summary: '미래 소비 발생 시각',
+                value: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4004',
+                  message: '소비 발생 시각은 현재 시각 이후일 수 없습니다.',
+                },
+              },
+              occurredAtTooOld: {
+                summary: '허용 기간을 지난 소비 발생 일자',
+                value: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4005',
+                  message: '소비 발생 일자는 KST 기준 오늘을 포함한 최근 7일 이내여야 합니다.',
+                },
+              },
+              previousMonthRecord: {
+                summary: '이전 달 소비 기록 수정',
+                value: {
+                  success: false,
+                  code: 'CONSUMPTION_RECORD4006',
+                  message: 'KST 기준 이전 달의 소비 기록은 수정할 수 없습니다.',
+                },
+              },
             },
           },
         },
@@ -2898,7 +2922,8 @@ export const openApiDocument = {
         ),
         requestBody: {
           required: true,
-          description: 'occurredAt을 생략하면 서버의 현재 시각을 소비 발생 시각으로 저장합니다.',
+          description:
+            'occurredAt을 생략하면 서버의 현재 시각을 소비 발생 시각으로 저장합니다. 발생 시각은 현재 시각 이후일 수 없으며, KST 기준 오늘을 포함한 최근 7일 이내여야 합니다.',
           content: {
             'application/json': {
               schema: zodToOpenApiSchema(createConsumptionRecordDto.shape.body),
@@ -2983,6 +3008,8 @@ export const openApiDocument = {
       },
       put: {
         ...securedJsonOperation('ConsumptionRecords', '소비 기록 수정', updateConsumptionRecordDto),
+        description:
+          'KST 기준 현재 달에 발생한 소비 기록만 수정할 수 있습니다. occurredAt을 변경하는 경우 현재 시각 이후일 수 없으며, KST 기준 오늘을 포함한 최근 7일 이내여야 합니다.',
         responses: {
           200: {
             description: 'Consumption record updated',
